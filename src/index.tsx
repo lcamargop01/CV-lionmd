@@ -59,13 +59,12 @@ async function ensureSchema(db: D1Database) {
   ).run().catch(() => {})
   // Backfill is_orderly based on organization name only (authoritative rule)
   // and fix any non-ASYNC orderly rows to use their correct visit-type rate
+  // Backfill is_orderly for ALL visit types from OrderlyMeds (not just ASYNC_TEXT_EMAIL)
   await db.prepare(
-    `UPDATE consults SET is_orderly=1 WHERE is_orderly=0 AND LOWER(organization_name) LIKE '%orderly%' AND visit_type='ASYNC_TEXT_EMAIL'`
+    `UPDATE consults SET is_orderly=1 WHERE is_orderly=0 AND LOWER(organization_name) LIKE '%orderly%'`
   ).run().catch(() => {})
-  // Ensure NO_SHOW from OrderlyMeds has $0 fee
-  await db.prepare(
-    `UPDATE consults SET carevalidate_fee=0, contractor_fee=0 WHERE is_orderly=1 AND visit_type='NO_SHOW' AND (carevalidate_fee != 0 OR contractor_fee != 0)`
-  ).run().catch(() => {})
+  // NOTE: NO_SHOW from OrderlyMeds uses the ORDERLY rate ($17/$10), same as all other orderly rows.
+  // Do NOT zero out these fees here — computeFee and recalculate handle this correctly.
 }
 
 // ──────────────────────────────────────────────
@@ -488,14 +487,32 @@ app.post('/api/upload/chunk', async (c) => {
 // CONSULTS — accepts period_key OR session_id
 // ──────────────────────────────────────────────
 app.get('/api/consults', async (c) => {
-  const period_key = c.req.query('period_key')
-  const session_id = c.req.query('session_id')
+  const period_key  = c.req.query('period_key')
+  const session_id  = c.req.query('session_id')
   const doctor_name = c.req.query('doctor_name')
-  const visit_type = c.req.query('visit_type')
-  const page = c.req.query('page') || '1'
-  const limit = c.req.query('limit') || '50'
-  const search = c.req.query('search')
-  const offset = (parseInt(page) - 1) * parseInt(limit)
+  const visit_type  = c.req.query('visit_type')
+  const page        = c.req.query('page')  || '1'
+  const limit       = c.req.query('limit') || '50'
+  const search      = c.req.query('search')
+  const offset      = (parseInt(page) - 1) * parseInt(limit)
+
+  // Sorting — whitelist allowed columns to prevent SQL injection
+  const SORT_COLS: Record<string, string> = {
+    decision_date:    'c.decision_date',
+    patient_name:     'c.patient_name',
+    organization_name:'c.organization_name',
+    doctor_name:      'c.doctor_name',
+    visit_type:       'c.visit_type',
+    carevalidate_fee: 'c.carevalidate_fee',
+    contractor_fee:   'c.contractor_fee',
+    case_id_short:    'c.case_id_short',
+    decision_status:  'c.decision_status',
+  }
+  const rawSortBy  = c.req.query('sort_by')  || 'decision_date'
+  const rawSortDir = c.req.query('sort_dir') || 'desc'
+  const sortCol = SORT_COLS[rawSortBy] ?? 'c.decision_date'
+  const sortDir = rawSortDir.toLowerCase() === 'asc' ? 'ASC' : 'DESC'
+  const orderBy = `${sortCol} ${sortDir}, c.id ${sortDir}`
 
   let where = 'WHERE 1=1'
   const params: any[] = []
@@ -506,7 +523,7 @@ app.get('/api/consults', async (c) => {
     where += ' AND c.session_id=?'; params.push(session_id)
   }
   if (doctor_name) { where += ' AND c.doctor_name=?'; params.push(doctor_name) }
-  if (visit_type) { where += ' AND c.visit_type=?'; params.push(visit_type) }
+  if (visit_type)  { where += ' AND c.visit_type=?';  params.push(visit_type)  }
   if (search) {
     where += ' AND (c.patient_name LIKE ? OR c.case_id_short LIKE ? OR c.organization_name LIKE ?)'
     params.push(`%${search}%`, `%${search}%`, `%${search}%`)
@@ -523,7 +540,7 @@ app.get('/api/consults', async (c) => {
      LEFT JOIN contractors ct ON c.contractor_id = ct.id
      LEFT JOIN upload_sessions s ON c.session_id = s.id
      ${where}
-     ORDER BY c.decision_date DESC, c.id DESC
+     ORDER BY ${orderBy}
      LIMIT ? OFFSET ?`
   ).bind(...params, parseInt(limit), offset).all()
 
@@ -546,15 +563,35 @@ app.get('/api/consults/:id', async (c) => {
 app.put('/api/consults/:id', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json()
+
+  // Fetch current row first so we only overwrite fields that are explicitly provided
+  const current = await c.env.DB.prepare('SELECT * FROM consults WHERE id=?').bind(id).first() as any
+  if (!current) return c.json({ error: 'Not found' }, 404)
+
   const {
     doctor_name, patient_name, organization_name, visit_type, decision_date, decision_status,
     carevalidate_fee, contractor_fee, notes, is_override, override_fee, is_orderly, is_flagged, flag_reason
   } = body
 
-  // Recompute is_orderly if org name changed
-  const orderly = (is_orderly !== undefined)
+  // Merge: use provided value if present, otherwise keep existing value
+  const newDoctorName    = doctor_name    !== undefined ? (doctor_name    || null) : current.doctor_name
+  const newPatientName   = patient_name   !== undefined ? (patient_name   || null) : current.patient_name
+  const newOrgName       = organization_name !== undefined ? (organization_name || null) : current.organization_name
+  const newVisitType     = visit_type     !== undefined ? (visit_type     || null) : current.visit_type
+  const newDecisionDate  = decision_date  !== undefined ? (decision_date  || null) : current.decision_date
+  const newDecisionStatus = decision_status !== undefined ? (decision_status || 'Approved') : (current.decision_status || 'Approved')
+  const newCVFee         = carevalidate_fee !== undefined ? (carevalidate_fee ?? 0) : current.carevalidate_fee
+  const newCTFee         = contractor_fee  !== undefined ? (contractor_fee  ?? 0) : current.contractor_fee
+  const newNotes         = notes          !== undefined ? (notes          || null) : current.notes
+  const newIsOverride    = is_override    !== undefined ? (is_override    ? 1 : 0) : current.is_override
+  const newOverrideFee   = override_fee   !== undefined ? (override_fee   || null) : current.override_fee
+  const newIsFlagged     = is_flagged     !== undefined ? (is_flagged     ? 1 : 0) : current.is_flagged
+  const newFlagReason    = flag_reason    !== undefined ? (flag_reason    || null) : current.flag_reason
+
+  // Recompute is_orderly: explicit > org name check > keep existing
+  const newIsOrderly = is_orderly !== undefined
     ? (is_orderly ? 1 : 0)
-    : (organization_name?.toLowerCase().includes('orderly') ? 1 : 0)
+    : (newOrgName?.toLowerCase().includes('orderly') ? 1 : current.is_orderly)
 
   await c.env.DB.prepare(`
     UPDATE consults SET
@@ -565,11 +602,11 @@ app.put('/api/consults/:id', async (c) => {
       is_orderly=?, is_flagged=?, flag_reason=?
     WHERE id=?
   `).bind(
-    doctor_name || null, patient_name || null, organization_name || null, visit_type || null,
-    decision_date || null, decision_status || 'Approved',
-    carevalidate_fee ?? 0, contractor_fee ?? 0,
-    notes || null, is_override ? 1 : 0, override_fee || null,
-    orderly, is_flagged ? 1 : 0, flag_reason || null,
+    newDoctorName, newPatientName, newOrgName, newVisitType,
+    newDecisionDate, newDecisionStatus,
+    newCVFee, newCTFee,
+    newNotes, newIsOverride, newOverrideFee,
+    newIsOrderly, newIsFlagged, newFlagReason,
     id
   ).run()
 
