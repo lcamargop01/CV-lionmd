@@ -380,11 +380,12 @@ function renderDashboard() {
   const t = s.totals || {}
   const margin = (t.total_margin || 0)
   const marginPct = t.total_carevalidate > 0 ? ((margin / t.total_carevalidate) * 100).toFixed(1) : 0
+  const pk = state.currentPeriod.period_key
 
   $('mainContent').innerHTML = `
     <div class="space-y-6">
       <!-- Stats Row -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div class="stat-card card flex items-center gap-4">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:rgba(201,168,76,0.1)">
             <i class="fas fa-file-medical text-yellow-500 text-xl"></i>
@@ -413,12 +414,21 @@ function renderDashboard() {
           </div>
         </div>
         <div class="stat-card card flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50">
+            <i class="fas fa-percent text-blue-500 text-xl"></i>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-blue-600" id="dashChrisComm"><span class="text-sm text-gray-400">...</span></div>
+            <div class="text-xs text-gray-500 font-medium">Chris Garcia Commission</div>
+          </div>
+        </div>
+        <div class="stat-card card flex items-center gap-4">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-green-50">
             <i class="fas fa-chart-line text-green-500 text-xl"></i>
           </div>
           <div>
-            <div class="text-2xl font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}">${fmt(margin)}</div>
-            <div class="text-xs text-gray-500 font-medium">Net Margin (${marginPct}%)</div>
+            <div class="text-2xl font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}" id="dashNetMargin">${fmt(margin)}</div>
+            <div class="text-xs text-gray-500 font-medium" id="dashMarginLabel">Net Margin (${marginPct}%)</div>
           </div>
         </div>
       </div>
@@ -469,6 +479,7 @@ function renderDashboard() {
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Orderly</th>
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">CV Pays Us</th>
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">We Pay</th>
+                <th class="text-right pb-3 text-blue-500 font-semibold px-3 whitespace-nowrap">Chris Comm</th>
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Margin</th>
                 <th class="text-center pb-3 text-gray-500 font-semibold px-3">Actions</th>
               </tr>
@@ -483,7 +494,8 @@ function renderDashboard() {
                   <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.orderly_count)}</td>
                   <td class="py-3 px-3 text-right font-medium text-blue-600">${fmt(d.total_carevalidate)}</td>
                   <td class="py-3 px-3 text-right font-medium text-purple-600">${fmt(d.total_contractor)}</td>
-                  <td class="py-3 px-3 text-right font-medium ${d.margin >= 0 ? 'text-green-600' : 'text-red-600'}">${fmt(d.margin)}</td>
+                  <td class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="${d.contractor_id || ''}">—</td>
+                  <td class="py-3 px-3 text-right font-medium ${d.margin >= 0 ? 'text-green-600' : 'text-red-600'}" data-doctor-margin="${d.contractor_id || ''}">${fmt(d.margin)}</td>
                   <td class="py-3 px-3 text-center">
                     ${d.contractor_id ? `
                       <button onclick="openPaystubModal('${escHtml(state.currentPeriod.period_key)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
@@ -502,6 +514,51 @@ function renderDashboard() {
   // Charts
   renderVisitTypeChart(s.byVisitType || [])
   renderContractorBars(s.byDoctor || [])
+
+  // Async-load Chris Garcia commission and update dashboard
+  api(`/api/commission/${pk}`).then(comm => {
+    const total = comm.commission_total || 0
+    const el = $('dashChrisComm')
+    if (el) el.textContent = fmt(total)
+
+    // Update net margin = CV - Contractor - Commission
+    const adjMargin = (t.total_carevalidate || 0) - (t.total_contractor || 0) - total
+    const adjPct = (t.total_carevalidate || 0) > 0 ? ((adjMargin / t.total_carevalidate) * 100).toFixed(1) : 0
+    const mEl = $('dashNetMargin')
+    if (mEl) {
+      mEl.textContent = fmt(adjMargin)
+      mEl.className = `text-2xl font-bold ${adjMargin >= 0 ? 'text-green-600' : 'text-red-600'}`
+    }
+    const mlEl = $('dashMarginLabel')
+    if (mlEl) mlEl.textContent = `Net Margin (${adjPct}%)`
+
+    // Per-doctor commission from breakdown array
+    const commByContractor = {}
+    ;(comm.by_contractor || []).forEach(c => { commByContractor[c.contractor_id] = c.commission })
+
+    document.querySelectorAll('[data-doctor-comm]').forEach(cell => {
+      const cid = parseInt(cell.dataset.doctorComm)
+      if (!cid) return
+      const c = commByContractor[cid] || 0
+      cell.textContent = c > 0 ? fmt(c) : '—'
+
+      // Recalculate margin cell
+      const mCell = document.querySelector(`[data-doctor-margin="${cid}"]`)
+      if (!mCell) return
+      const row = cell.closest('tr')
+      if (!row) return
+      const cells = row.querySelectorAll('td')
+      // cells[5]=CV, cells[6]=We Pay, so we get from data
+      const dRow = (s.byDoctor || []).find(d => d.contractor_id === cid)
+      if (!dRow) return
+      const adjRowMargin = (dRow.total_carevalidate || 0) - (dRow.total_contractor || 0) - c
+      mCell.textContent = fmt(adjRowMargin)
+      mCell.className = `py-3 px-3 text-right font-medium ${adjRowMargin >= 0 ? 'text-green-600' : 'text-red-600'}`
+    })
+  }).catch(() => {
+    const el = $('dashChrisComm')
+    if (el) el.textContent = '—'
+  })
 }
 
 function renderVisitTypeChart(data) {
@@ -1066,12 +1123,15 @@ function renderConsultsTable(rows, total, page) {
 function renderPayroll() {
   if (!state.currentPeriod || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
   const s = state.currentSummary
+  const pk = state.currentPeriod.period_key
+  const chrisInfo = state.contractors.find(c => c.contractor_type === 'chris_garcia')
+
   $('mainContent').innerHTML = `
     <div class="space-y-4">
       <div class="flex justify-between items-center">
         <p class="text-sm text-gray-500">Payroll for <strong>${state.currentPeriod.period_label}</strong> — click any contractor to view/export paystub</p>
         <div class="flex gap-3">
-          <button onclick="recalculatePeriods('${escHtml(state.currentPeriod.period_key)}')" class="px-4 py-2.5 rounded-xl font-medium text-sm border border-gray-200 hover:bg-gray-50 text-gray-600">
+          <button onclick="recalculatePeriods('${escHtml(pk)}')" class="px-4 py-2.5 rounded-xl font-medium text-sm border border-gray-200 hover:bg-gray-50 text-gray-600">
             <i class="fas fa-sync-alt mr-2"></i>Recalculate Period
           </button>
           <button onclick="exportGusto()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
@@ -1079,61 +1139,98 @@ function renderPayroll() {
           </button>
         </div>
       </div>
+
+      <!-- Chris Garcia Commission Card -->
+      <div class="card border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white p-5">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-500 shrink-0">
+              <i class="fas fa-percent text-white text-sm"></i>
+            </div>
+            <div>
+              <div class="font-bold text-gray-800">${chrisInfo ? chrisInfo.name : 'Christopher Garcia'}</div>
+              <div class="text-xs text-gray-400 flex items-center gap-1 mt-0.5">Commission Earner · ${contractorTypeBadge('chris_garcia')}</div>
+              <p class="text-xs text-blue-600 mt-1">Earns commission on CV payments — Regular Async/Orderly 25% · Regular Sync 16.67% · Owner 25%</p>
+            </div>
+          </div>
+          <button onclick="${chrisInfo ? `openPaystubModal('${escHtml(pk)}', ${chrisInfo.id}, '${escHtml(chrisInfo.name || 'Christopher Garcia')}')` : "showToast('No Chris Garcia contractor found','error')"}"
+            class="px-4 py-2 bg-blue-500 text-white text-xs font-semibold rounded-xl hover:bg-blue-600 transition-colors whitespace-nowrap shrink-0 ml-3">
+            <i class="fas fa-file-invoice-dollar mr-1.5"></i>Commission Statement
+          </button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="bg-white rounded-xl p-3 text-center border border-blue-100 md:col-span-1 col-span-2">
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Total Commission</div>
+            <div class="text-2xl font-bold text-blue-600" id="chrisTotal"><span class="spinner inline-block w-5 h-5"></span></div>
+          </div>
+          <div class="bg-white rounded-xl p-3 text-center border border-purple-100">
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Async + Orderly</div>
+            <div class="font-bold text-purple-600" id="chrisAsyncComm">—</div>
+            <div class="text-xs text-gray-400" id="chrisAsyncBase">25% of —</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 text-center border border-blue-100">
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Sync (Regular)</div>
+            <div class="font-bold text-blue-600" id="chrisSyncComm">—</div>
+            <div class="text-xs text-gray-400" id="chrisSyncBase">16.67% of —</div>
+          </div>
+          <div class="bg-white rounded-xl p-3 text-center border border-amber-100">
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Owners (All)</div>
+            <div class="font-bold text-amber-600" id="chrisOwnerComm">—</div>
+            <div class="text-xs text-gray-400" id="chrisOwnerBase">25% of —</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contractor Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        ${(s.byDoctor || []).filter(d => d.contractor_id).map(d => {
+        ${(s.byDoctor || []).filter(d => {
+          if (!d.contractor_id) return false
+          const ct = state.contractors.find(c=>c.id===d.contractor_id)
+          return ct?.contractor_type !== 'chris_garcia'
+        }).map(d => {
           const cInfo = state.contractors.find(c=>c.id===d.contractor_id)
           const cType = cInfo?.contractor_type || 'regular'
-          const isChris = cType === 'chris_garcia'
-          // Chris Garcia card shows commission badge instead of case stats
+          const isOwner = cType === 'owner'
           return `
-          <div class="card p-5 hover:shadow-md transition-all cursor-pointer ${isChris ? 'border-2 border-blue-200 bg-blue-50/30' : ''}" onclick="openPaystubModal('${escHtml(state.currentPeriod.period_key)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')">
+          <div class="card p-5 hover:shadow-md transition-all cursor-pointer" onclick="openPaystubModal('${escHtml(pk)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')">
             <div class="flex items-start justify-between mb-3">
               <div>
                 <div class="font-semibold text-gray-800">${d.doctor_name}</div>
                 <div class="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
                   ${d.company || 'Lion MD'}
                   ${contractorTypeBadge(cType)}
-                  ${d.ein_ssn ? '· EIN/SSN: ' + d.ein_ssn : ''}
+                  ${d.ein_ssn ? '· ' + d.ein_ssn : ''}
                 </div>
               </div>
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:${isChris ? 'rgba(59,130,246,0.12)' : 'rgba(139,92,246,0.1)'}">
-                <i class="fas ${isChris ? 'fa-percent text-blue-500' : 'fa-user-md text-purple-500'}"></i>
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:${isOwner ? 'rgba(245,158,11,0.1)' : 'rgba(139,92,246,0.1)'}">
+                <i class="fas fa-user-md ${isOwner ? 'text-amber-500' : 'text-purple-500'}"></i>
               </div>
             </div>
-            ${isChris ? `
-            <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-3">
-              <div class="text-xs text-blue-500 font-semibold uppercase tracking-wider mb-1">Commission Earner</div>
-              <div class="text-xs text-blue-700">25% of Regular/Owner Async+Orderly CV · 16.67% of Regular Sync CV · 25% of Owner CV</div>
-            </div>
-            <div class="grid grid-cols-1 gap-3 mb-3">
-              <div class="bg-blue-50 rounded-lg p-2 text-center" id="chrisCommCard_${d.contractor_id}">
-                <div class="font-bold text-blue-600" id="chrisCommAmt_${d.contractor_id}"><span class="spinner inline-block w-4 h-4"></span></div>
-                <div class="text-xs text-gray-400">Est. Commission</div>
-              </div>
-            </div>` : `
             <div class="grid grid-cols-2 gap-3 mb-3">
               <div class="bg-gray-50 rounded-lg p-2 text-center">
                 <div class="font-bold text-gray-700">${fmtNum(d.case_count)}</div>
                 <div class="text-xs text-gray-400">Cases</div>
               </div>
-              <div class="bg-purple-50 rounded-lg p-2 text-center">
-                <div class="font-bold text-purple-600">${fmt(d.total_contractor)}</div>
+              <div class="${isOwner ? 'bg-amber-50' : 'bg-purple-50'} rounded-lg p-2 text-center">
+                <div class="font-bold ${isOwner ? 'text-amber-600' : 'text-purple-600'}">${fmt(d.total_contractor)}</div>
                 <div class="text-xs text-gray-400">Total Pay</div>
               </div>
             </div>
-            <div class="flex gap-2 text-xs">
+            <div class="flex gap-2 text-xs mb-3 flex-wrap">
               ${d.async_count > 0 ? `<span class="status-badge badge-async">${fmtNum(d.async_count)} Async</span>` : ''}
               ${d.sync_count > 0 ? `<span class="status-badge badge-sync">${fmtNum(d.sync_count)} Sync</span>` : ''}
               ${d.orderly_count > 0 ? `<span class="status-badge badge-orderly">${fmtNum(d.orderly_count)} Orderly</span>` : ''}
-            </div>`}
-            <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-              <button onclick="event.stopPropagation(); openPaystubModal('${escHtml(state.currentPeriod.period_key)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
-                class="flex-1 text-xs py-2 ${isChris ? 'bg-blue-500 text-white hover:bg-blue-600' : 'btn-outline'} rounded-lg font-medium">
-                <i class="fas fa-file-pdf mr-1"></i>${isChris ? 'Commission Statement' : 'Paystub'}
+            </div>
+            <div class="pt-3 border-t border-gray-100">
+              <button onclick="event.stopPropagation(); openPaystubModal('${escHtml(pk)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')"
+                class="w-full text-xs py-2 btn-outline rounded-lg font-medium">
+                <i class="fas fa-file-pdf mr-1"></i>Paystub
               </button>
             </div>
-          </div>`}).join('')}
+          </div>`
+        }).join('')}
       </div>
+
       ${(s.byDoctor || []).filter(d => !d.contractor_id).length > 0 ? `
         <div class="card p-4">
           <h4 class="text-sm font-semibold text-yellow-700 mb-3 flex items-center gap-2">
@@ -1152,17 +1249,17 @@ function renderPayroll() {
     </div>
     ${paystubModalHtml()}`
 
-  // Async-load Chris Garcia commission amount into the card
-  const chrisContractor = (s.byDoctor || []).find(d => {
-    const ct = state.contractors.find(c=>c.id===d.contractor_id)
-    return ct?.contractor_type === 'chris_garcia'
-  })
-  if (chrisContractor) {
-    api(`/api/commission/${state.currentPeriod.period_key}`).then(comm => {
-      const el = $(`chrisCommAmt_${chrisContractor.contractor_id}`)
-      if (el) el.textContent = fmt(comm.commission_total)
-    }).catch(() => {})
-  }
+  // Async-load commission figures into the Chris card
+  api(`/api/commission/${pk}`).then(comm => {
+    const set = (id, val) => { const el = $(id); if (el) el.textContent = val }
+    set('chrisTotal',     fmt(comm.commission_total))
+    set('chrisAsyncComm', fmt(comm.commission_async_orderly))
+    set('chrisAsyncBase', `25% of ${fmt(comm.grand_async_orderly_cv)}`)
+    set('chrisSyncComm',  fmt(comm.commission_sync))
+    set('chrisSyncBase',  `16.67% of ${fmt(comm.grand_sync_cv)}`)
+    set('chrisOwnerComm', fmt(comm.commission_owner))
+    set('chrisOwnerBase', `25% of ${fmt(comm.grand_owner_cv)}`)
+  }).catch(() => { const el = $('chrisTotal'); if (el) el.textContent = 'Error' })
 }
 
 // ════════════════════════════════════════════════════
