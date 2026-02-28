@@ -544,13 +544,13 @@ function renderUpload() {
         <p class="text-sm text-gray-500 mb-5">You can upload <strong>multiple Excel files for the same month</strong> — duplicates (same Case ID) are automatically skipped.</p>
 
         <!-- Drop zone -->
-        <div class="upload-zone rounded-xl p-8 text-center cursor-pointer mb-4" id="dropZone">
+        <div class="upload-zone rounded-xl p-8 text-center cursor-pointer mb-4" id="dropZone" onclick="openFilePicker(event)">
           <input type="file" id="fileInput" class="hidden" accept=".xlsx,.xls" multiple onchange="handleFiles(this.files)"/>
           <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style="background:rgba(201,168,76,0.1)">
             <i class="fas fa-file-excel text-yellow-500 text-2xl"></i>
           </div>
           <p class="font-semibold text-gray-700">Drop one or more Excel files here</p>
-          <p class="text-sm text-gray-400 mt-1">or <span class="text-yellow-600 underline cursor-pointer" onclick="$('fileInput').click()">click to browse</span> · .xlsx files only</p>
+          <p class="text-sm text-gray-400 mt-1">or <span class="text-yellow-600 underline">click to browse</span> · .xlsx files only</p>
         </div>
 
         <!-- File queue -->
@@ -626,9 +626,8 @@ function renderUpload() {
       </div>
     </div>`
 
-  // Setup drag-and-drop
+  // Setup drag-and-drop (no click listener here — handled by inline onclick)
   const dz = $('dropZone')
-  dz.addEventListener('click', () => $('fileInput').click())
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over') })
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'))
   dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); handleFiles(e.dataTransfer.files) })
@@ -669,13 +668,30 @@ function renderFileQueue() {
     </div>`).join('')
 }
 
+function openFilePicker(e) {
+  // prevent double-fire if click came from inside the zone on a child element
+  e.stopPropagation()
+  $('fileInput').click()
+}
+
 async function handleFiles(fileList) {
   const files = Array.from(fileList)
+  // Reset the input so the same file can be re-added after removal
+  if ($('fileInput')) $('fileInput').value = ''
+
   for (const file of files) {
     if (!file.name.match(/\.xlsx?$/i)) { showToast(`${file.name} is not an Excel file`, 'warning'); continue }
-    // Check not already queued
     if (fileQueue.some(q => q.file.name === file.name)) { showToast(`${file.name} already in queue`, 'info'); continue }
-    showLoading(`Reading ${file.name}…`, false)
+
+    // Show inline spinner inside the drop zone, NOT the full-screen loading overlay
+    // (full-screen overlay blocks FileReader callbacks in some browsers)
+    const dz = $('dropZone')
+    if (dz) dz.innerHTML = `
+      <div class="flex flex-col items-center gap-3 py-2">
+        <div class="spinner"></div>
+        <p class="text-sm text-gray-500">Reading <strong>${file.name}</strong>…</p>
+      </div>`
+
     try {
       const rows = await readExcelFile(file)
       const id = ++uploadQueueIdCounter
@@ -683,9 +699,11 @@ async function handleFiles(fileList) {
       showToast(`Added: ${file.name} (${fmtNum(rows.length)} records)`, 'success')
     } catch(e) {
       showToast(`Error reading ${file.name}: ${e.message}`, 'error')
-    } finally { hideLoading() }
+    } finally {
+      // Restore the drop zone
+      renderUpload()
+    }
   }
-  renderFileQueue()
 }
 
 function removeFromQueue(id) {
@@ -696,7 +714,7 @@ function removeFromQueue(id) {
 function clearQueue() {
   fileQueue = []
   if ($('fileInput')) $('fileInput').value = ''
-  renderFileQueue()
+  renderUpload()
 }
 
 function readExcelFile(file) {
