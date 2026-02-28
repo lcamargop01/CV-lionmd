@@ -749,6 +749,8 @@ function readExcelFile(file) {
   })
 }
 
+const CHUNK_SIZE = 2000  // rows per HTTP request (~600KB each, well under limits)
+
 async function processUploadQueue() {
   if (fileQueue.length === 0) return
   const month = parseInt($('uploadMonth').value)
@@ -767,28 +769,70 @@ async function processUploadQueue() {
     const item = fileQueue[i]
     const statusEl = $(`qstatus_${item.id}`)
     if (statusEl) { statusEl.textContent = 'Uploading…'; statusEl.className = 'text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-semibold' }
+
     try {
-      const payload = {
-        filename: item.file.name,
-        source_label: item.file.name,
-        period_label: label,
-        period_month: month,
-        period_year: year,
-        rows: item.rows
+      const allRows = item.rows
+      const totalChunks = Math.ceil(allRows.length / CHUNK_SIZE) || 1
+      let sessionId = null
+      let fileAdded = 0
+      let fileSkipped = 0
+
+      for (let c = 0; c < totalChunks; c++) {
+        const chunk = allRows.slice(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE)
+        const isLastChunk = (c === totalChunks - 1)
+
+        // Progress within this file
+        const fileProgress = Math.round((c / totalChunks) * 80)
+        const overallProgress = Math.round(((i / fileQueue.length) + (c / totalChunks) / fileQueue.length) * 85) + 5
+        setProgress(overallProgress)
+        if (statusEl) statusEl.textContent = `Chunk ${c+1}/${totalChunks}…`
+
+        let result
+        if (c === 0) {
+          // First chunk: create session
+          result = await api('/api/upload', {
+            method: 'POST',
+            body: JSON.stringify({
+              filename: item.file.name,
+              source_label: item.file.name,
+              period_label: label,
+              period_month: month,
+              period_year: year,
+              rows: chunk,
+              is_last_chunk: isLastChunk
+            })
+          })
+          sessionId = result.session_id
+          lastPeriodKey = result.period_key
+        } else {
+          // Subsequent chunks: append to existing session
+          result = await api('/api/upload/chunk', {
+            method: 'POST',
+            body: JSON.stringify({
+              session_id: sessionId,
+              rows: chunk,
+              is_last_chunk: isLastChunk
+            })
+          })
+        }
+
+        fileAdded += result.new_cases_added || 0
+        fileSkipped += result.skipped_duplicates || 0
       }
-      const result = await api('/api/upload', { method: 'POST', body: JSON.stringify(payload) })
-      lastPeriodKey = result.period_key
-      totalAdded += result.new_cases_added || 0
-      totalSkipped += result.skipped_duplicates || 0
+
+      totalAdded += fileAdded
+      totalSkipped += fileSkipped
+
       if (statusEl) {
-        const skipped = result.skipped_duplicates > 0 ? ` (${result.skipped_duplicates} dupes skipped)` : ''
-        statusEl.textContent = `✓ ${fmtNum(result.new_cases_added)} added${skipped}`
+        const skipped = fileSkipped > 0 ? ` (${fmtNum(fileSkipped)} dupes skipped)` : ''
+        statusEl.textContent = `✓ ${fmtNum(fileAdded)} added${skipped}`
         statusEl.className = 'text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold'
       }
     } catch(e) {
       if (statusEl) { statusEl.textContent = '✗ Error'; statusEl.className = 'text-xs px-2 py-1 bg-red-100 text-red-600 rounded-full font-semibold' }
       showToast(`Error uploading ${item.file.name}: ${e.message}`, 'error')
     }
+
     setProgress(Math.round(((i+1) / fileQueue.length) * 90))
   }
 
