@@ -537,11 +537,7 @@ function renderUpload() {
         <h3 class="font-semibold text-gray-700 mb-1 flex items-center gap-2">
           <i class="fas fa-upload text-yellow-500"></i> Upload CareValidate Reports
         </h3>
-        <p class="text-sm text-gray-500 mb-5">You can upload <strong>multiple Excel files for the same month</strong>. 
-          <span class="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-semibold">
-            <i class="fas fa-check-circle"></i> Duplicate Case IDs are automatically skipped across all files for the same period
-          </span>
-        </p>
+        <p class="text-sm text-gray-500 mb-5">You can upload <strong>multiple Excel files for the same month</strong>. All rows from every file are imported exactly as provided.</p>
 
         <!-- Drop zone -->
         <div class="upload-zone rounded-xl p-8 text-center cursor-pointer mb-4" id="dropZone" onclick="openFilePicker(event)">
@@ -781,7 +777,6 @@ async function processUploadQueue() {
 
   let lastPeriodKey = null
   let totalAdded = 0
-  let totalSkipped = 0
 
   for (let i = 0; i < fileQueue.length; i++) {
     const item = fileQueue[i]
@@ -793,7 +788,6 @@ async function processUploadQueue() {
       const totalChunks = Math.ceil(allRows.length / CHUNK_SIZE) || 1
       let sessionId = null
       let fileAdded = 0
-      let fileSkipped = 0
 
       for (let c = 0; c < totalChunks; c++) {
         const chunk = allRows.slice(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE)
@@ -835,15 +829,12 @@ async function processUploadQueue() {
         }
 
         fileAdded += result.new_cases_added || 0
-        fileSkipped += result.skipped_duplicates || 0
       }
 
       totalAdded += fileAdded
-      totalSkipped += fileSkipped
 
       if (statusEl) {
-        const skipped = fileSkipped > 0 ? ` · ${fmtNum(fileSkipped)} dupes skipped` : ''
-        statusEl.textContent = `✓ ${fmtNum(fileAdded)} added${skipped}`
+        statusEl.textContent = `✓ ${fmtNum(fileAdded)} rows imported`
         statusEl.className = 'text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold'
       }
     } catch(e) {
@@ -860,8 +851,7 @@ async function processUploadQueue() {
   if (lastPeriodKey) await selectPeriod(lastPeriodKey)
   setProgress(100)
 
-  const skippedMsg = totalSkipped > 0 ? ` · ${fmtNum(totalSkipped)} duplicates skipped` : ''
-  showToast(`✅ ${fmtNum(totalAdded)} new cases added for ${label}${skippedMsg}`, 'success')
+  showToast(`✅ ${fmtNum(totalAdded)} rows imported for ${label}`, 'success')
   fileQueue = []
   hideLoading()
   navigate('dashboard')

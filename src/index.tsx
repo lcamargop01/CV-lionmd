@@ -218,68 +218,19 @@ async function loadMaps(db: D1Database) {
 }
 
 // ──────────────────────────────────────────────
-// Shared helper: load ALL case_ids already stored for a period
-// Returns a Set<string> of existing case_ids across ALL sessions in the period
-// ──────────────────────────────────────────────
-async function loadPeriodCaseIds(db: D1Database, periodKey: string): Promise<Set<string>> {
-  const existing = new Set<string>()
-  // Paginate to handle large result sets (D1 has 1000-row SELECT limit per call)
-  let offset = 0
-  const PAGE = 999
-  while (true) {
-    const rows = await db.prepare(
-      `SELECT c.case_id FROM consults c
-       LEFT JOIN upload_sessions s ON c.session_id = s.id
-       WHERE s.period_key=? AND c.case_id IS NOT NULL AND c.case_id != ''
-       LIMIT ? OFFSET ?`
-    ).bind(periodKey, PAGE, offset).all()
-    for (const r of rows.results as any[]) {
-      if (r.case_id) existing.add(r.case_id as string)
-    }
-    if (rows.results.length < PAGE) break
-    offset += PAGE
-  }
-  return existing
-}
-
-// ──────────────────────────────────────────────
-// Shared helper: load ALL case_ids already stored for a single session
-// Used for chunk uploads to avoid intra-file duplicates in subsequent chunks
-// ──────────────────────────────────────────────
-async function loadSessionCaseIds(db: D1Database, sessionId: number): Promise<Set<string>> {
-  const existing = new Set<string>()
-  let offset = 0
-  const PAGE = 999
-  while (true) {
-    const rows = await db.prepare(
-      `SELECT case_id FROM consults WHERE session_id=? AND case_id IS NOT NULL AND case_id != ''
-       LIMIT ? OFFSET ?`
-    ).bind(sessionId, PAGE, offset).all()
-    for (const r of rows.results as any[]) {
-      if (r.case_id) existing.add(r.case_id as string)
-    }
-    if (rows.results.length < PAGE) break
-    offset += PAGE
-  }
-  return existing
-}
-
-// ──────────────────────────────────────────────
-// Shared helper: insert a batch of rows into DB, skipping any case_ids in skipIds
-// Mutates skipIds by adding newly inserted case_ids (prevents intra-chunk dupes)
-// Returns { added, skipped, cvTotal, ctTotal }
+// Shared helper: insert ALL rows into DB — no deduplication
+// Every row from every file is inserted exactly as provided.
+// Returns { added, cvTotal, ctTotal }
 // ──────────────────────────────────────────────
 async function insertRows(
   db: D1Database,
   sessionId: number,
   rows: any[],
   ratesMap: Record<string, { cv: number; ct: number }>,
-  contractorMap: Record<string, number>,
-  skipIds: Set<string>
+  contractorMap: Record<string, number>
 ) {
   let totalCV = 0
   let totalCT = 0
-  let skipped = 0
   const batchSize = 100
 
   const stmt = db.prepare(
@@ -289,17 +240,8 @@ async function insertRows(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
 
-  // Filter out duplicates before batching
-  const newRows = rows.filter((row: any) => {
-    const cid = (row.case_id || '').trim()
-    if (!cid) return true // rows without case_id are always inserted
-    if (skipIds.has(cid)) { skipped++; return false }
-    skipIds.add(cid) // mark as seen so subsequent chunks won't re-insert
-    return true
-  })
-
-  for (let i = 0; i < newRows.length; i += batchSize) {
-    const batch = newRows.slice(i, i + batchSize)
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize)
     const statements = batch.map((row: any) => {
       const fees = computeFee(row.visit_type, ratesMap, row.raw_fee, row.organization_name)
       const orderly = isOrderlyRow(row.organization_name, row.raw_fee) ? 1 : 0
@@ -317,15 +259,14 @@ async function insertRows(
     await db.batch(statements)
   }
 
-  return { added: newRows.length, skipped, cvTotal: totalCV, ctTotal: totalCT }
+  return { added: rows.length, cvTotal: totalCV, ctTotal: totalCT }
 }
 
 // ──────────────────────────────────────────────
 // POST /api/upload  — Step 1: create session + insert first chunk
 // Body: { filename, source_label, period_label, period_month, period_year, rows[], is_last_chunk }
-// Returns: { session_id, period_key, new_cases_added, skipped_duplicates, done }
-// Deduplication: loads ALL case_ids for this period (across all prior sessions)
-// and skips any row whose case_id already exists in this period.
+// Returns: { session_id, period_key, new_cases_added, done }
+// NO deduplication — every row is inserted exactly as provided.
 // ──────────────────────────────────────────────
 app.post('/api/upload', async (c) => {
   await ensureSchema(c.env.DB)
@@ -337,9 +278,6 @@ app.post('/api/upload', async (c) => {
   const pk = periodKey(period_month, period_year)
   const { ratesMap, contractorMap } = await loadMaps(c.env.DB)
 
-  // Load ALL existing case_ids for this period to skip duplicates
-  const skipIds = await loadPeriodCaseIds(c.env.DB, pk)
-
   // Create new session for this file
   const sessionResult = await c.env.DB.prepare(
     `INSERT INTO upload_sessions (filename, period_label, period_month, period_year, period_key, source_label)
@@ -347,9 +285,7 @@ app.post('/api/upload', async (c) => {
   ).bind(filename, period_label, period_month, period_year, pk, source_label || filename).run()
   const sessionId = sessionResult.meta.last_row_id as number
 
-  // Store skipIds snapshot for this session on the context so chunks can reuse it
-  // (We can't pass state between requests, so chunks fetch session-level ids separately)
-  const result = await insertRows(c.env.DB, sessionId, rows, ratesMap, contractorMap, skipIds)
+  const result = await insertRows(c.env.DB, sessionId, rows, ratesMap, contractorMap)
 
   // If this is the only / last chunk, finalise totals now
   if (is_last_chunk !== false) {
@@ -362,7 +298,6 @@ app.post('/api/upload', async (c) => {
     session_id: sessionId,
     period_key: pk,
     new_cases_added: result.added,
-    skipped_duplicates: result.skipped,
     total_carevalidate_amount: result.cvTotal,
     total_contractor_amount: result.ctTotal,
     done: is_last_chunk !== false
@@ -372,9 +307,8 @@ app.post('/api/upload', async (c) => {
 // ──────────────────────────────────────────────
 // POST /api/upload/chunk  — Step 2+: append rows to existing session
 // Body: { session_id, rows[], is_last_chunk }
-// Returns: { new_cases_added, skipped_duplicates, done }
-// Deduplication: loads ALL case_ids for the parent period PLUS any already in
-// this session (from previous chunks) and skips rows that duplicate any of them.
+// Returns: { new_cases_added, done }
+// NO deduplication — every row is inserted exactly as provided.
 // ──────────────────────────────────────────────
 app.post('/api/upload/chunk', async (c) => {
   const body = await c.req.json()
@@ -382,20 +316,9 @@ app.post('/api/upload/chunk', async (c) => {
 
   if (!session_id || !rows || !Array.isArray(rows)) return c.json({ error: 'Invalid payload' }, 400)
 
-  // Look up parent session to get period_key for cross-period dedup
-  const parentSession = await c.env.DB.prepare(
-    'SELECT period_key FROM upload_sessions WHERE id=?'
-  ).bind(session_id).first() as any
-
   const { ratesMap, contractorMap } = await loadMaps(c.env.DB)
 
-  // Build skipIds from:
-  //   1. ALL case_ids already in this period (other sessions + earlier chunks of this session)
-  const skipIds = parentSession?.period_key
-    ? await loadPeriodCaseIds(c.env.DB, parentSession.period_key)
-    : await loadSessionCaseIds(c.env.DB, session_id)
-
-  const result = await insertRows(c.env.DB, session_id, rows, ratesMap, contractorMap, skipIds)
+  const result = await insertRows(c.env.DB, session_id, rows, ratesMap, contractorMap)
 
   if (is_last_chunk) {
     // Recompute totals from DB (accurate after all chunks)
@@ -410,7 +333,6 @@ app.post('/api/upload/chunk', async (c) => {
   return c.json({
     session_id,
     new_cases_added: result.added,
-    skipped_duplicates: result.skipped,
     done: !!is_last_chunk
   })
 })
