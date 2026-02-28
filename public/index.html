@@ -143,23 +143,23 @@
   </div>
 
   <!-- Main Content -->
-  <div class="flex-1 flex flex-col" style="margin-left: 260px;">
+  <div class="flex-1 flex flex-col min-w-0 overflow-x-hidden" style="margin-left: 260px;">
     <!-- Top Bar -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30">
+    <div class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30 gap-3">
       <div class="flex items-center gap-3">
         <h2 id="pageTitle" class="text-lg font-semibold text-gray-800">Dashboard</h2>
         <span id="periodBadge" class="hidden px-3 py-1 rounded-full text-xs font-semibold text-white" style="background: var(--lion-gold);"></span>
       </div>
-      <div class="flex items-center gap-3">
-        <select id="sessionSelector" onchange="onSessionChange(this.value)" class="text-sm px-3 py-2">
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <select id="sessionSelector" onchange="onSessionChange(this.value)" class="text-sm px-2 py-1.5 max-w-[180px]">
           <option value="">Select Period...</option>
         </select>
-        <div id="roleTag" class="text-xs font-semibold px-3 py-1 rounded-full"></div>
+        <div id="roleTag" class="text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap"></div>
       </div>
     </div>
 
     <!-- Page Content -->
-    <main class="flex-1 p-6 overflow-auto" id="mainContent">
+    <main class="flex-1 p-6 overflow-auto min-w-0" id="mainContent">
       <!-- Injected by JS -->
     </main>
   </div>
@@ -446,17 +446,17 @@ function renderDashboard() {
           </div>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <table class="w-full text-sm" style="min-width:760px">
             <thead>
               <tr class="border-b border-gray-100">
                 <th class="text-left pb-3 text-gray-500 font-semibold px-3">Doctor / Contractor</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Cases</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Async</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Sync</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Orderly</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3">CV Pays Us</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3">We Pay</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Margin</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Cases</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Async</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Sync</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Orderly</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">CV Pays Us</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">We Pay</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Margin</th>
                 <th class="text-center pb-3 text-gray-500 font-semibold px-3">Actions</th>
               </tr>
             </thead>
@@ -778,18 +778,18 @@ async function renderConsults() {
       </div>
       <!-- Table -->
       <div class="overflow-x-auto">
-        <table class="w-full text-sm" id="consultsTable">
+        <table class="w-full text-sm" id="consultsTable" style="min-width:780px">
           <thead class="bg-gray-50">
             <tr>
-              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Case ID</th>
-              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Date</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Case ID</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Date</th>
               <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Patient</th>
               <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Organization</th>
               <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Doctor</th>
-              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Type</th>
-              <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs">CV Fee</th>
-              <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs">Contractor Fee</th>
-              <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs">Status</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Type</th>
+              <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">CV Fee</th>
+              <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Contractor Fee</th>
+              <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Status</th>
             </tr>
           </thead>
           <tbody id="consultsTbody">
@@ -1328,61 +1328,69 @@ async function deleteContractor(id, name) {
 // ════════════════════════════════════════════════════
 function renderRates() {
   $('mainContent').innerHTML = `
-    <div class="max-w-2xl space-y-4">
-      <div class="card p-5">
-        <div class="flex items-center gap-2 mb-2">
-          <i class="fas fa-info-circle text-blue-400"></i>
-          <p class="text-sm text-gray-600">
-            <strong>CareValidate Rate</strong> = what CareValidate pays Lion MD per case.<br>
-            <strong>Contractor Rate</strong> = what Lion MD pays each contractor per case.
-          </p>
-        </div>
+    <div class="max-w-3xl space-y-4">
+      <!-- Info banner -->
+      <div class="card p-4 flex items-start gap-3">
+        <i class="fas fa-info-circle text-blue-400 mt-0.5 flex-shrink-0"></i>
+        <p class="text-sm text-gray-600">
+          <strong>CareValidate Rate</strong> = what CareValidate pays Lion MD per case. &nbsp;·&nbsp;
+          <strong>Contractor Rate</strong> = what Lion MD pays each contractor per case.
+        </p>
       </div>
+
+      <!-- Rates table card -->
       <div class="card overflow-hidden">
         <div class="px-5 py-4 border-b border-gray-100">
           <h3 class="font-semibold text-gray-700">Payment Rates by Visit Type</h3>
           <p class="text-xs text-gray-400 mt-0.5">Changes take effect for new uploads only</p>
         </div>
+        <!-- Column headers -->
+        <div class="grid px-5 py-2 bg-gray-50 border-b border-gray-100" style="grid-template-columns:1fr 140px 140px 110px 80px;gap:12px;">
+          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Visit Type</span>
+          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">CV Pays Us</span>
+          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">We Pay Contractor</span>
+          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Margin</span>
+          <span></span>
+        </div>
         <div id="ratesTable">
           ${state.rates.map(r => `
-            <div class="flex items-center gap-4 px-5 py-4 border-b border-gray-50 hover:bg-gray-50" id="rate_${r.id}">
-              <div class="w-36">
-                <div class="font-semibold text-gray-700 text-sm">${r.label || visitTypeLabel(r.visit_type)}</div>
-                <div class="text-xs text-gray-400 font-mono">${r.visit_type}</div>
+            <div class="grid items-center px-5 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors" id="rate_${r.id}" style="grid-template-columns:1fr 140px 140px 110px 80px;gap:12px;">
+              <div>
+                <div class="font-semibold text-gray-800 text-sm">${r.label || visitTypeLabel(r.visit_type)}</div>
+                <div class="text-xs text-gray-400 font-mono mt-0.5">${r.visit_type}</div>
               </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-500 w-32">CareValidate pays us:</span>
-                <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                  <input type="number" id="cv_${r.id}" value="${r.carevalidate_rate}" step="0.01" min="0"
-                    class="w-24 pl-6" style="padding-left:1.5rem"/>
-                </div>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+                <input type="number" id="cv_${r.id}" value="${r.carevalidate_rate}" step="0.01" min="0"
+                  class="w-full" style="padding-left:1.6rem"/>
               </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-500 w-28">We pay contractor:</span>
-                <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                  <input type="number" id="ct_${r.id}" value="${r.contractor_rate}" step="0.01" min="0"
-                    class="w-24 pl-6" style="padding-left:1.5rem"/>
-                </div>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+                <input type="number" id="ct_${r.id}" value="${r.contractor_rate}" step="0.01" min="0"
+                  class="w-full" style="padding-left:1.6rem"/>
               </div>
-              <div class="flex items-center gap-2 ml-2">
-                <span class="text-xs text-green-600 font-semibold" id="margin_${r.id}">
-                  Margin: ${fmt(r.carevalidate_rate - r.contractor_rate)}
+              <div>
+                <span class="text-sm font-semibold" id="margin_${r.id}"
+                  style="color:${r.carevalidate_rate - r.contractor_rate >= 0 ? '#16a34a' : '#dc2626'}">
+                  ${fmt(r.carevalidate_rate - r.contractor_rate)}
                 </span>
               </div>
-              <button onclick="saveRate(${r.id})" class="ml-auto btn-primary px-4 py-2 rounded-lg text-xs font-semibold">
-                Save
-              </button>
+              <div>
+                <button onclick="saveRate(${r.id})" class="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold w-full">
+                  Save
+                </button>
+              </div>
             </div>`).join('')}
         </div>
       </div>
+
+      <!-- OrderlyMeds note -->
       <div class="card p-4 bg-amber-50 border border-amber-200">
         <div class="flex items-start gap-3">
-          <i class="fas fa-lightbulb text-amber-500 mt-0.5"></i>
+          <i class="fas fa-lightbulb text-amber-500 mt-0.5 flex-shrink-0"></i>
           <div class="text-sm text-amber-700">
-            <strong>OrderlyMeds Note:</strong> OrderlyMeds cases appear in the report with a flat fee of $17 (instead of the formula). 
-            These are automatically detected and use the OrderlyMeds rate row above.
+            <strong>OrderlyMeds Note:</strong> OrderlyMeds cases appear in the report with a flat $17 fee (instead of the formula).
+            These are automatically detected and use the <strong>OrderlyMeds</strong> rate row above.
           </div>
         </div>
       </div>
@@ -1394,8 +1402,9 @@ function renderRates() {
     const ctInput = $(`ct_${r.id}`)
     if (cvInput && ctInput) {
       const update = () => {
-        const m = parseFloat(cvInput.value) - parseFloat(ctInput.value)
-        $(`margin_${r.id}`).textContent = `Margin: ${fmt(m)}`
+        const m = parseFloat(cvInput.value || 0) - parseFloat(ctInput.value || 0)
+        const el = $(`margin_${r.id}`)
+        if (el) { el.textContent = fmt(m); el.style.color = m >= 0 ? '#16a34a' : '#dc2626' }
       }
       cvInput.addEventListener('input', update)
       ctInput.addEventListener('input', update)
