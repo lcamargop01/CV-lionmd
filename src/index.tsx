@@ -24,15 +24,14 @@ function computeFee(
   if (!visitType) return { cv: 0, ct: 0 }
   const vt = visitType.toUpperCase()
 
-  // OrderlyMeds flat rate ONLY applies to ASYNC_TEXT_EMAIL visits.
+  // OrderlyMeds flat rate applies to ALL visit types EXCEPT NO_SHOW.
   // NO_SHOW from OrderlyMeds → $0 (NO_SHOW rate wins).
-  // SYNC_* from OrderlyMeds → normal sync rate wins.
-  if (isOrderlyRow(orgName, rawFee) && vt === 'ASYNC_TEXT_EMAIL') {
+  if (isOrderlyRow(orgName, rawFee) && vt !== 'NO_SHOW') {
     const orderly = ratesMap['ORDERLY']
     return orderly ? { cv: orderly.cv, ct: orderly.ct } : { cv: rawFee ?? 0, ct: rawFee ?? 0 }
   }
 
-  // All other visit types (including NO_SHOW and SYNC_* from OrderlyMeds) use their normal rate
+  // NO_SHOW (including OrderlyMeds) and all other types use their normal rate
   const rate = ratesMap[vt]
   if (rate) return { cv: rate.cv, ct: rate.ct }
   return { cv: 0, ct: 0 }
