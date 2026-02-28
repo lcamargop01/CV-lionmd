@@ -217,12 +217,8 @@ function visitTypeLabel(vt) {
 }
 
 function visitTypeBadge(vt, fee, isOrderly) {
-  // Primary: use the is_orderly flag stored at upload time (org-name based)
+  // Use the is_orderly flag stored at upload time (org-name based, ASYNC only)
   if (isOrderly) return `<span class="status-badge badge-orderly">OrderlyMeds</span>`
-  // Fallback for legacy data: low fee heuristic
-  if (fee === 17 || (typeof fee === 'number' && fee > 0 && fee < 20 && vt === 'ASYNC_TEXT_EMAIL')) {
-    return `<span class="status-badge badge-orderly">OrderlyMeds</span>`
-  }
   if (vt === 'ASYNC_TEXT_EMAIL') return `<span class="status-badge badge-async">Async</span>`
   if (vt && vt.startsWith('SYNC')) return `<span class="status-badge badge-sync">${visitTypeLabel(vt)}</span>`
   return `<span class="status-badge" style="background:#f1f5f9;color:#64748b">${visitTypeLabel(vt)}</span>`

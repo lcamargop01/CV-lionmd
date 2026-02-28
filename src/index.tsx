@@ -8,11 +8,10 @@ type Bindings = {
 // ──────────────────────────────────────────────
 // Helper: detect if a row is an OrderlyMeds consult
 // Rule: organization_name contains 'orderly' (case-insensitive)
-// Fallback: rawFee <= 17 (old heuristic kept as safety net)
+// The rawFee fallback has been removed — org name is the authoritative signal.
 // ──────────────────────────────────────────────
 function isOrderlyRow(orgName?: string | null, rawFee?: number | null): boolean {
   if (orgName && orgName.toLowerCase().includes('orderly')) return true
-  if (typeof rawFee === 'number' && rawFee > 0 && rawFee <= 17) return true
   return false
 }
 
@@ -24,11 +23,16 @@ function computeFee(
 ): { cv: number; ct: number } {
   if (!visitType) return { cv: 0, ct: 0 }
   const vt = visitType.toUpperCase()
-  // OrderlyMeds: detected by org name (primary) or low raw fee (fallback)
-  if (isOrderlyRow(orgName, rawFee)) {
+
+  // OrderlyMeds flat rate ONLY applies to ASYNC_TEXT_EMAIL visits.
+  // NO_SHOW from OrderlyMeds → $0 (NO_SHOW rate wins).
+  // SYNC_* from OrderlyMeds → normal sync rate wins.
+  if (isOrderlyRow(orgName, rawFee) && vt === 'ASYNC_TEXT_EMAIL') {
     const orderly = ratesMap['ORDERLY']
     return orderly ? { cv: orderly.cv, ct: orderly.ct } : { cv: rawFee ?? 0, ct: rawFee ?? 0 }
   }
+
+  // All other visit types (including NO_SHOW and SYNC_* from OrderlyMeds) use their normal rate
   const rate = ratesMap[vt]
   if (rate) return { cv: rate.cv, ct: rate.ct }
   return { cv: 0, ct: 0 }
@@ -55,9 +59,14 @@ async function ensureSchema(db: D1Database) {
   await db.prepare(
     `UPDATE upload_sessions SET period_key = printf('%04d-%02d', period_year, period_month) WHERE period_key IS NULL OR period_key = ''`
   ).run().catch(() => {})
-  // Backfill is_orderly based on organization name (authoritative rule)
+  // Backfill is_orderly based on organization name only (authoritative rule)
+  // and fix any non-ASYNC orderly rows to use their correct visit-type rate
   await db.prepare(
-    `UPDATE consults SET is_orderly=1 WHERE is_orderly=0 AND LOWER(organization_name) LIKE '%orderly%'`
+    `UPDATE consults SET is_orderly=1 WHERE is_orderly=0 AND LOWER(organization_name) LIKE '%orderly%' AND visit_type='ASYNC_TEXT_EMAIL'`
+  ).run().catch(() => {})
+  // Ensure NO_SHOW from OrderlyMeds has $0 fee
+  await db.prepare(
+    `UPDATE consults SET carevalidate_fee=0, contractor_fee=0 WHERE is_orderly=1 AND visit_type='NO_SHOW' AND (carevalidate_fee != 0 OR contractor_fee != 0)`
   ).run().catch(() => {})
 }
 
