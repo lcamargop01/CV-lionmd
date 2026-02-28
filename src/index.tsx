@@ -6,14 +6,28 @@ type Bindings = {
 }
 
 // ──────────────────────────────────────────────
-// Helper: compute fee from visit type & rates map
+// Helper: detect if a row is an OrderlyMeds consult
+// Rule: organization_name contains 'orderly' (case-insensitive)
+// Fallback: rawFee <= 17 (old heuristic kept as safety net)
 // ──────────────────────────────────────────────
-function computeFee(visitType: string | null, ratesMap: Record<string, { cv: number; ct: number }>, rawFee?: number | null): { cv: number; ct: number } {
+function isOrderlyRow(orgName?: string | null, rawFee?: number | null): boolean {
+  if (orgName && orgName.toLowerCase().includes('orderly')) return true
+  if (typeof rawFee === 'number' && rawFee > 0 && rawFee <= 17) return true
+  return false
+}
+
+function computeFee(
+  visitType: string | null,
+  ratesMap: Record<string, { cv: number; ct: number }>,
+  rawFee?: number | null,
+  orgName?: string | null
+): { cv: number; ct: number } {
   if (!visitType) return { cv: 0, ct: 0 }
   const vt = visitType.toUpperCase()
-  if (rawFee === 17 || (typeof rawFee === 'number' && rawFee > 0 && rawFee < 20)) {
+  // OrderlyMeds: detected by org name (primary) or low raw fee (fallback)
+  if (isOrderlyRow(orgName, rawFee)) {
     const orderly = ratesMap['ORDERLY']
-    return orderly ? { cv: orderly.cv, ct: orderly.ct } : { cv: rawFee, ct: rawFee }
+    return orderly ? { cv: orderly.cv, ct: orderly.ct } : { cv: rawFee ?? 0, ct: rawFee ?? 0 }
   }
   const rate = ratesMap[vt]
   if (rate) return { cv: rate.cv, ct: rate.ct }
@@ -35,10 +49,15 @@ async function ensureSchema(db: D1Database) {
   await db.batch([
     db.prepare(`ALTER TABLE upload_sessions ADD COLUMN source_label TEXT`).bind(),
     db.prepare(`ALTER TABLE upload_sessions ADD COLUMN period_key TEXT`).bind(),
+    db.prepare(`ALTER TABLE consults ADD COLUMN is_orderly INTEGER DEFAULT 0`).bind(),
   ]).catch(() => {}) // ignore if columns already exist
-  // Backfill any rows missing period_key
+  // Backfill period_key for existing sessions
   await db.prepare(
     `UPDATE upload_sessions SET period_key = printf('%04d-%02d', period_year, period_month) WHERE period_key IS NULL OR period_key = ''`
+  ).run().catch(() => {})
+  // Backfill is_orderly based on organization name (authoritative rule)
+  await db.prepare(
+    `UPDATE consults SET is_orderly=1 WHERE is_orderly=0 AND LOWER(organization_name) LIKE '%orderly%'`
   ).run().catch(() => {})
 }
 
@@ -240,11 +259,12 @@ app.post('/api/upload', async (c) => {
     const stmt = c.env.DB.prepare(
       `INSERT INTO consults (session_id, case_id, case_id_short, organization_name, patient_name,
         doctor_name, decision_date, decision_status, visit_type, carevalidate_fee, contractor_fee,
-        contractor_id, is_flagged)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        contractor_id, is_flagged, is_orderly)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     const statements = batch.map((row: any) => {
-      const fees = computeFee(row.visit_type, ratesMap, row.raw_fee)
+      const fees = computeFee(row.visit_type, ratesMap, row.raw_fee, row.organization_name)
+      const orderly = isOrderlyRow(row.organization_name, row.raw_fee) ? 1 : 0
       totalCV += fees.cv
       totalCT += fees.ct
       const contractorId = contractorMap[(row.doctor_name || '').toLowerCase().trim()] || null
@@ -253,7 +273,7 @@ app.post('/api/upload', async (c) => {
         row.organization_name || '', row.patient_name || '',
         row.doctor_name || '', row.decision_date || '',
         row.decision_status || '', row.visit_type || '',
-        fees.cv, fees.ct, contractorId, row.is_flagged ? 1 : 0
+        fees.cv, fees.ct, contractorId, row.is_flagged ? 1 : 0, orderly
       )
     })
     await c.env.DB.batch(statements)
@@ -338,9 +358,9 @@ async function buildSummary(db: D1Database, where: string, params: any[]) {
     db.prepare(`
       SELECT c.doctor_name, ct.id as contractor_id, ct.company, ct.ein_ssn,
         COUNT(*) as case_count,
-        SUM(CASE WHEN c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
+        SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
         SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
-        SUM(CASE WHEN c.carevalidate_fee < 20 AND c.carevalidate_fee > 0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as orderly_count,
+        SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
         SUM(c.carevalidate_fee) as total_carevalidate,
         SUM(c.contractor_fee) as total_contractor,
         SUM(c.carevalidate_fee) - SUM(c.contractor_fee) as margin
@@ -420,12 +440,12 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
   const summary = await c.env.DB.prepare(`
     SELECT
       COUNT(*) as total_cases, SUM(contractor_fee) as total_pay,
-      SUM(CASE WHEN visit_type='ASYNC_TEXT_EMAIL' AND carevalidate_fee >= 20 THEN 1 ELSE 0 END) as async_count,
-      SUM(CASE WHEN visit_type='ASYNC_TEXT_EMAIL' AND carevalidate_fee >= 20 THEN contractor_fee ELSE 0 END) as async_pay,
+      SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
+      SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN contractor_fee ELSE 0 END) as async_pay,
       SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
       SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
-      SUM(CASE WHEN carevalidate_fee < 20 AND carevalidate_fee > 0 THEN 1 ELSE 0 END) as orderly_count,
-      SUM(CASE WHEN carevalidate_fee < 20 AND carevalidate_fee > 0 THEN contractor_fee ELSE 0 END) as orderly_pay
+      SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
+      SUM(CASE WHEN is_orderly=1 THEN contractor_fee ELSE 0 END) as orderly_pay
     FROM consults c
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE s.period_key=? AND c.contractor_id=?
@@ -450,12 +470,12 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
   ).bind(sid, cid).all()
   const summary = await c.env.DB.prepare(`
     SELECT COUNT(*) as total_cases, SUM(contractor_fee) as total_pay,
-      SUM(CASE WHEN visit_type='ASYNC_TEXT_EMAIL' AND carevalidate_fee >= 20 THEN 1 ELSE 0 END) as async_count,
-      SUM(CASE WHEN visit_type='ASYNC_TEXT_EMAIL' AND carevalidate_fee >= 20 THEN contractor_fee ELSE 0 END) as async_pay,
+      SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
+      SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN contractor_fee ELSE 0 END) as async_pay,
       SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
       SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
-      SUM(CASE WHEN carevalidate_fee < 20 AND carevalidate_fee > 0 THEN 1 ELSE 0 END) as orderly_count,
-      SUM(CASE WHEN carevalidate_fee < 20 AND carevalidate_fee > 0 THEN contractor_fee ELSE 0 END) as orderly_pay
+      SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
+      SUM(CASE WHEN is_orderly=1 THEN contractor_fee ELSE 0 END) as orderly_pay
     FROM consults WHERE session_id=? AND contractor_id=?
   `).bind(sid, cid).first()
   return c.json({ contractor, session, consults: consults.results, summary })
@@ -470,12 +490,12 @@ app.get('/api/export/gusto/period/:period_key', async (c) => {
     SELECT ct.name as contractor_name, ct.company, ct.ein_ssn, ct.email,
       s.period_label,
       COUNT(*) as total_cases, SUM(c.contractor_fee) as total_pay,
-      SUM(CASE WHEN c.visit_type='ASYNC_TEXT_EMAIL' AND c.carevalidate_fee >= 20 THEN 1 ELSE 0 END) as async_count,
-      SUM(CASE WHEN c.visit_type='ASYNC_TEXT_EMAIL' AND c.carevalidate_fee >= 20 THEN c.contractor_fee ELSE 0 END) as async_pay,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN c.contractor_fee ELSE 0 END) as async_pay,
       SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
       SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.contractor_fee ELSE 0 END) as sync_pay,
-      SUM(CASE WHEN c.carevalidate_fee < 20 AND c.carevalidate_fee > 0 THEN 1 ELSE 0 END) as orderly_count,
-      SUM(CASE WHEN c.carevalidate_fee < 20 AND c.carevalidate_fee > 0 THEN c.contractor_fee ELSE 0 END) as orderly_pay
+      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
+      SUM(CASE WHEN c.is_orderly=1 THEN c.contractor_fee ELSE 0 END) as orderly_pay
     FROM consults c
     LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
@@ -491,12 +511,12 @@ app.get('/api/export/gusto/:session_id', async (c) => {
   const rows = await c.env.DB.prepare(`
     SELECT ct.name as contractor_name, ct.company, ct.ein_ssn, ct.email, s.period_label,
       COUNT(*) as total_cases, SUM(c.contractor_fee) as total_pay,
-      SUM(CASE WHEN c.visit_type='ASYNC_TEXT_EMAIL' AND c.carevalidate_fee >= 20 THEN 1 ELSE 0 END) as async_count,
-      SUM(CASE WHEN c.visit_type='ASYNC_TEXT_EMAIL' AND c.carevalidate_fee >= 20 THEN c.contractor_fee ELSE 0 END) as async_pay,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN c.contractor_fee ELSE 0 END) as async_pay,
       SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
       SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.contractor_fee ELSE 0 END) as sync_pay,
-      SUM(CASE WHEN c.carevalidate_fee < 20 AND c.carevalidate_fee > 0 THEN 1 ELSE 0 END) as orderly_count,
-      SUM(CASE WHEN c.carevalidate_fee < 20 AND c.carevalidate_fee > 0 THEN c.contractor_fee ELSE 0 END) as orderly_pay
+      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
+      SUM(CASE WHEN c.is_orderly=1 THEN c.contractor_fee ELSE 0 END) as orderly_pay
     FROM consults c LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE c.session_id=? GROUP BY c.contractor_id ORDER BY ct.name

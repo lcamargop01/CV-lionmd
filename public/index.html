@@ -216,7 +216,10 @@ function visitTypeLabel(vt) {
   return map[vt] || vt
 }
 
-function visitTypeBadge(vt, fee) {
+function visitTypeBadge(vt, fee, isOrderly) {
+  // Primary: use the is_orderly flag stored at upload time (org-name based)
+  if (isOrderly) return `<span class="status-badge badge-orderly">OrderlyMeds</span>`
+  // Fallback for legacy data: low fee heuristic
   if (fee === 17 || (typeof fee === 'number' && fee > 0 && fee < 20 && vt === 'ASYNC_TEXT_EMAIL')) {
     return `<span class="status-badge badge-orderly">OrderlyMeds</span>`
   }
@@ -933,7 +936,7 @@ function renderConsultsTable(rows, total, page) {
       <td class="px-4 py-2.5 text-gray-700">${r.patient_name || ''}</td>
       <td class="px-4 py-2.5 text-gray-500 text-xs max-w-[140px] truncate">${r.organization_name || ''}</td>
       <td class="px-4 py-2.5 text-gray-700 font-medium">${r.doctor_name || '<span class="text-gray-300">—</span>'}</td>
-      <td class="px-4 py-2.5">${visitTypeBadge(r.visit_type, r.carevalidate_fee)}</td>
+      <td class="px-4 py-2.5">${visitTypeBadge(r.visit_type, r.carevalidate_fee, r.is_orderly)}</td>
       <td class="px-4 py-2.5 text-right font-medium text-blue-600">${fmt(r.carevalidate_fee)}</td>
       <td class="px-4 py-2.5 text-right font-medium text-purple-600">${fmt(r.contractor_fee)}</td>
       <td class="px-4 py-2.5 text-center"><span class="status-badge badge-approved">${r.decision_status || 'Approved'}</span></td>
@@ -1158,7 +1161,7 @@ function renderPaystubContent(data) {
                   <td class="px-3 py-2 text-gray-500">${(r.decision_date||'').substring(0,10)}</td>
                   <td class="px-3 py-2 text-gray-700">${r.patient_name}</td>
                   <td class="px-3 py-2 text-gray-500 max-w-[120px] truncate">${r.organization_name}</td>
-                  <td class="px-3 py-2">${visitTypeBadge(r.visit_type, r.carevalidate_fee)}</td>
+                  <td class="px-3 py-2">${visitTypeBadge(r.visit_type, r.carevalidate_fee, r.is_orderly)}</td>
                   <td class="px-3 py-2 text-right font-semibold text-purple-600">${fmt(r.contractor_fee)}</td>
                 </tr>`).join('')}
             </tbody>
@@ -1473,8 +1476,7 @@ function renderRates() {
         <div class="flex items-start gap-3">
           <i class="fas fa-lightbulb text-amber-500 mt-0.5 flex-shrink-0"></i>
           <div class="text-sm text-amber-700">
-            <strong>OrderlyMeds Note:</strong> OrderlyMeds cases appear in the report with a flat $17 fee (instead of the formula).
-            These are automatically detected and use the <strong>OrderlyMeds</strong> rate row above.
+            <strong>OrderlyMeds Note:</strong> If the organization name contains "OrderlyMeds", the consult is automatically classified as OrderlyMeds regardless of visit type or fee amount.
           </div>
         </div>
       </div>
@@ -1558,7 +1560,7 @@ async function renderCVDashboard() {
           ${(cvData.byVisitType || []).map(vt => `
             <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div class="flex items-center gap-3">
-                ${visitTypeBadge(vt.visit_type, null)}
+                ${visitTypeBadge(vt.visit_type, null, vt.visit_type === 'ORDERLY')}
                 <span class="text-gray-700 font-medium">${visitTypeLabel(vt.visit_type)}</span>
                 <span class="text-gray-400 text-sm">${fmtNum(vt.count)} cases</span>
               </div>
