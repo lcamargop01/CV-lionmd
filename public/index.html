@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lion MD Payroll Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    :root {
+      --lion-gold: #C9A84C;
+      --lion-dark: #1a1a2e;
+      --lion-navy: #16213e;
+      --lion-blue: #0f3460;
+      --lion-accent: #e94560;
+    }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f0f2f5; }
+    .sidebar { background: var(--lion-dark); min-height: 100vh; width: 260px; transition: width 0.3s; }
+    .sidebar-collapsed { width: 70px; }
+    .nav-item { transition: all 0.2s; border-left: 3px solid transparent; }
+    .nav-item:hover, .nav-item.active { background: rgba(201,168,76,0.12); border-left-color: var(--lion-gold); }
+    .nav-item.active span { color: var(--lion-gold); }
+    .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+    .btn-primary { background: var(--lion-gold); color: white; transition: all 0.2s; }
+    .btn-primary:hover { background: #b8943d; transform: translateY(-1px); }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-outline { border: 1.5px solid var(--lion-gold); color: var(--lion-gold); }
+    .btn-outline:hover { background: var(--lion-gold); color: white; }
+    .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+    .badge-approved { background: #d1fae5; color: #065f46; }
+    .badge-flagged { background: #fef3c7; color: #92400e; }
+    .badge-sync { background: #dbeafe; color: #1e40af; }
+    .badge-async { background: #f3e8ff; color: #6b21a8; }
+    .badge-orderly { background: #ffe4e6; color: #be123c; }
+    .table-row:hover { background: #fafaf0; }
+    .upload-zone { border: 2px dashed #cbd5e1; border-radius: 12px; transition: all 0.2s; }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--lion-gold); background: rgba(201,168,76,0.05); }
+    .stat-card { border-radius: 12px; padding: 20px; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+    .tab-active { border-bottom: 2px solid var(--lion-gold); color: var(--lion-gold); font-weight: 600; }
+    .spinner { border: 3px solid #f3f3f3; border-top: 3px solid var(--lion-gold); border-radius: 50%; width: 36px; height: 36px; animation: spin 0.8s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    input[type="number"] { -moz-appearance: textfield; }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .role-cv { --lion-gold: #2563eb; }
+    .tooltip { position: relative; }
+    .tooltip:hover::after { content: attr(data-tip); position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%); background: #1a1a2e; color: white; padding: 4px 8px; border-radius: 6px; font-size: 11px; white-space: nowrap; z-index: 100; }
+    select, input[type="text"], input[type="email"], input[type="number"] {
+      border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 14px;
+      transition: border-color 0.2s; outline: none;
+    }
+    select:focus, input[type="text"]:focus, input[type="email"]:focus, input[type="number"]:focus {
+      border-color: var(--lion-gold);
+    }
+    .progress-bar { background: linear-gradient(90deg, var(--lion-gold), #f59e0b); height: 6px; border-radius: 3px; transition: width 0.5s; }
+  </style>
+</head>
+<body class="bg-gray-100">
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay hidden">
+  <div class="spinner mb-3"></div>
+  <p class="text-gray-600 font-medium" id="loadingMsg">Processing...</p>
+  <div class="w-64 bg-gray-200 rounded-full h-2 mt-3 hidden" id="progressWrapper">
+    <div class="progress-bar" id="progressBar" style="width:0%"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed top-4 right-4 z-50 hidden">
+  <div class="flex items-center gap-3 bg-white border border-gray-200 shadow-lg rounded-xl px-5 py-4 min-w-[280px]">
+    <i id="toastIcon" class="fas fa-check-circle text-green-500 text-xl"></i>
+    <span id="toastMsg" class="text-gray-700 font-medium text-sm"></span>
+  </div>
+</div>
+
+<!-- Role Selector Modal (Login) -->
+<div id="roleModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center">
+  <div class="card p-8 w-full max-w-md mx-4">
+    <div class="text-center mb-6">
+      <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
+        <i class="fas fa-paw text-white text-3xl"></i>
+      </div>
+      <h1 class="text-2xl font-bold text-gray-800">Lion MD Payroll Portal</h1>
+      <p class="text-gray-500 text-sm mt-1">Select your access level to continue</p>
+    </div>
+    <div class="space-y-3">
+      <button onclick="setRole('admin')" class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-yellow-500 hover:bg-yellow-50 transition-all group">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:#1a1a2e;">
+          <i class="fas fa-crown text-yellow-400 text-xl"></i>
+        </div>
+        <div class="text-left">
+          <div class="font-semibold text-gray-800">Lion MD Admin</div>
+          <div class="text-xs text-gray-500">Full access — payroll, contractors, exports, rates</div>
+        </div>
+        <i class="fas fa-arrow-right ml-auto text-gray-300 group-hover:text-yellow-500 transition-colors"></i>
+      </button>
+      <button onclick="setRole('carevalidate')" class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-600">
+          <i class="fas fa-hospital text-white text-xl"></i>
+        </div>
+        <div class="text-left">
+          <div class="font-semibold text-gray-800">CareValidate</div>
+          <div class="text-xs text-gray-500">View only — see total owed to Lion MD</div>
+        </div>
+        <i class="fas fa-arrow-right ml-auto text-gray-300 group-hover:text-blue-500 transition-colors"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- App Layout -->
+<div id="app" class="flex hidden">
+
+  <!-- Sidebar -->
+  <div id="sidebar" class="sidebar flex flex-col fixed left-0 top-0 z-40 h-screen">
+    <div class="p-5 border-b border-white/10 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #C9A84C, #f59e0b);">
+        <i class="fas fa-paw text-white text-lg"></i>
+      </div>
+      <div id="sidebarTitle" class="overflow-hidden">
+        <div class="font-bold text-white text-sm">Lion MD</div>
+        <div class="text-xs text-gray-400">Payroll Portal</div>
+      </div>
+    </div>
+
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto" id="sidebarNav">
+      <!-- Nav items injected by JS based on role -->
+    </nav>
+
+    <div class="p-3 border-t border-white/10">
+      <button onclick="logout()" class="nav-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-gray-400 hover:text-white">
+        <i class="fas fa-sign-out-alt w-5 text-center flex-shrink-0"></i>
+        <span class="text-sm sidebar-text">Switch Role</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="flex-1 flex flex-col" style="margin-left: 260px;">
+    <!-- Top Bar -->
+    <div class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30">
+      <div class="flex items-center gap-3">
+        <h2 id="pageTitle" class="text-lg font-semibold text-gray-800">Dashboard</h2>
+        <span id="periodBadge" class="hidden px-3 py-1 rounded-full text-xs font-semibold text-white" style="background: var(--lion-gold);"></span>
+      </div>
+      <div class="flex items-center gap-3">
+        <select id="sessionSelector" onchange="onSessionChange(this.value)" class="text-sm px-3 py-2">
+          <option value="">Select Period...</option>
+        </select>
+        <div id="roleTag" class="text-xs font-semibold px-3 py-1 rounded-full"></div>
+      </div>
+    </div>
+
+    <!-- Page Content -->
+    <main class="flex-1 p-6 overflow-auto" id="mainContent">
+      <!-- Injected by JS -->
+    </main>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════
+let state = {
+  role: null, // 'admin' | 'carevalidate'
+  sessions: [],
+  currentSession: null,
+  currentSummary: null,
+  contractors: [],
+  rates: [],
+  currentPage: 'dashboard'
+}
+
+// ════════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════════
+const $ = id => document.getElementById(id)
+const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0)
+const fmtNum = (n) => new Intl.NumberFormat('en-US').format(n || 0)
+
+function showToast(msg, type = 'success') {
+  const icons = { success: 'fa-check-circle text-green-500', error: 'fa-times-circle text-red-500', info: 'fa-info-circle text-blue-500', warning: 'fa-exclamation-triangle text-yellow-500' }
+  $('toastIcon').className = `fas ${icons[type] || icons.success} text-xl`
+  $('toastMsg').textContent = msg
+  $('toast').classList.remove('hidden')
+  setTimeout(() => $('toast').classList.add('hidden'), 3500)
+}
+
+function showLoading(msg = 'Processing...', showProgress = false) {
+  $('loadingMsg').textContent = msg
+  $('loadingOverlay').classList.remove('hidden')
+  if (showProgress) { $('progressWrapper').classList.remove('hidden') }
+  else { $('progressWrapper').classList.add('hidden') }
+}
+
+function hideLoading() { $('loadingOverlay').classList.add('hidden') }
+
+function setProgress(pct) { $('progressBar').style.width = pct + '%' }
+
+async function api(path, options = {}) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options })
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `API error ${res.status}`) }
+  return res.json()
+}
+
+function visitTypeLabel(vt) {
+  const map = { ASYNC_TEXT_EMAIL: 'Async', SYNC_PHONE: 'Sync Phone', SYNC_VIDEO: 'Sync Video', SYNC_IN_PERSON: 'Sync In Person', NO_SHOW: 'No Show', ORDERLY: 'OrderlyMeds' }
+  return map[vt] || vt
+}
+
+function visitTypeBadge(vt, fee) {
+  if (fee === 17 || (typeof fee === 'number' && fee > 0 && fee < 20 && vt === 'ASYNC_TEXT_EMAIL')) {
+    return `<span class="status-badge badge-orderly">OrderlyMeds</span>`
+  }
+  if (vt === 'ASYNC_TEXT_EMAIL') return `<span class="status-badge badge-async">Async</span>`
+  if (vt && vt.startsWith('SYNC')) return `<span class="status-badge badge-sync">${visitTypeLabel(vt)}</span>`
+  return `<span class="status-badge" style="background:#f1f5f9;color:#64748b">${visitTypeLabel(vt)}</span>`
+}
+
+// ════════════════════════════════════════════════════
+// ROLE + AUTH
+// ════════════════════════════════════════════════════
+function setRole(role) {
+  state.role = role
+  $('roleModal').classList.add('hidden')
+  $('app').classList.remove('hidden')
+  buildNav()
+  loadInitialData()
+
+  const roleTag = $('roleTag')
+  if (role === 'admin') {
+    roleTag.textContent = '👑 Admin'
+    roleTag.className = 'text-xs font-semibold px-3 py-1 rounded-full bg-yellow-100 text-yellow-800'
+  } else {
+    roleTag.textContent = '🏥 CareValidate'
+    roleTag.className = 'text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-800'
+  }
+}
+
+function logout() {
+  state = { role: null, sessions: [], currentSession: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
+  $('roleModal').classList.remove('hidden')
+  $('app').classList.add('hidden')
+  $('sessionSelector').innerHTML = '<option value="">Select Period...</option>'
+}
+
+// ════════════════════════════════════════════════════
+// NAV
+// ════════════════════════════════════════════════════
+function buildNav() {
+  const adminNav = [
+    { id: 'dashboard', icon: 'fa-chart-pie', label: 'Dashboard' },
+    { id: 'upload', icon: 'fa-upload', label: 'Upload Report' },
+    { id: 'consults', icon: 'fa-table', label: 'Consult Records' },
+    { id: 'payroll', icon: 'fa-money-bill-wave', label: 'Contractor Payroll' },
+    { id: 'contractors', icon: 'fa-user-md', label: 'Contractors' },
+    { id: 'rates', icon: 'fa-sliders-h', label: 'Payment Rates' },
+    { id: 'carevalidate', icon: 'fa-eye', label: 'CareValidate View' },
+  ]
+  const cvNav = [
+    { id: 'cv_dashboard', icon: 'fa-chart-bar', label: 'Summary' },
+    { id: 'cv_detail', icon: 'fa-list', label: 'Detail View' },
+  ]
+
+  const items = state.role === 'admin' ? adminNav : cvNav
+  $('sidebarNav').innerHTML = items.map(item => `
+    <button onclick="navigate('${item.id}')" id="nav_${item.id}"
+      class="nav-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-gray-400 hover:text-white transition-all">
+      <i class="fas ${item.icon} w-5 text-center flex-shrink-0"></i>
+      <span class="text-sm sidebar-text">${item.label}</span>
+    </button>
+  `).join('')
+}
+
+function navigate(page) {
+  state.currentPage = page
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+  const navEl = $(`nav_${page}`)
+  if (navEl) navEl.classList.add('active')
+
+  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View' }
+  $('pageTitle').textContent = titles[page] || page
+
+  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail }
+  if (pages[page]) pages[page]()
+}
+
+// ════════════════════════════════════════════════════
+// INITIAL DATA
+// ════════════════════════════════════════════════════
+async function loadInitialData() {
+  showLoading('Loading data...')
+  try {
+    state.sessions = await api('/api/sessions')
+    state.contractors = await api('/api/contractors')
+    state.rates = await api('/api/rates')
+    populateSessionSelector()
+
+    if (state.sessions.length > 0) {
+      await selectSession(state.sessions[0].id)
+    }
+
+    navigate(state.role === 'admin' ? 'dashboard' : 'cv_dashboard')
+  } catch(e) {
+    showToast('Error loading data: ' + e.message, 'error')
+  } finally {
+    hideLoading()
+  }
+}
+
+function populateSessionSelector() {
+  const sel = $('sessionSelector')
+  sel.innerHTML = '<option value="">Select Period...</option>' + state.sessions.map(s =>
+    `<option value="${s.id}">${s.period_label}</option>`
+  ).join('')
+  if (state.currentSession) sel.value = state.currentSession.id
+}
+
+async function selectSession(id) {
+  if (!id) return
+  state.currentSession = state.sessions.find(s => s.id == id)
+  if (state.currentSession) {
+    $('sessionSelector').value = id
+    const badge = $('periodBadge')
+    badge.textContent = state.currentSession.period_label
+    badge.classList.remove('hidden')
+    showLoading('Loading summary...')
+    try {
+      state.currentSummary = await api(`/api/summary/${id}`)
+    } catch(e) { console.error(e) }
+    finally { hideLoading() }
+    navigate(state.currentPage)
+  }
+}
+
+async function onSessionChange(id) {
+  await selectSession(id)
+}
+
+// ════════════════════════════════════════════════════
+// DASHBOARD PAGE
+// ════════════════════════════════════════════════════
+function renderDashboard() {
+  if (!state.currentSession || !state.currentSummary) {
+    $('mainContent').innerHTML = `
+      <div class="flex flex-col items-center justify-center h-64 text-center">
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style="background:#f0f2f5">
+          <i class="fas fa-upload text-gray-300 text-2xl"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-600">No Data Yet</h3>
+        <p class="text-gray-400 text-sm mt-1 mb-4">Upload a CareValidate report to get started</p>
+        <button onclick="navigate('upload')" class="btn-primary px-6 py-2.5 rounded-xl font-medium text-sm">
+          <i class="fas fa-upload mr-2"></i>Upload Report
+        </button>
+      </div>`
+    return
+  }
+  const s = state.currentSummary
+  const t = s.totals || {}
+  const margin = (t.total_margin || 0)
+  const marginPct = t.total_carevalidate > 0 ? ((margin / t.total_carevalidate) * 100).toFixed(1) : 0
+
+  $('mainContent').innerHTML = `
+    <div class="space-y-6">
+      <!-- Stats Row -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="stat-card card flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:rgba(201,168,76,0.1)">
+            <i class="fas fa-file-medical text-yellow-500 text-xl"></i>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-gray-800">${fmtNum(t.total_cases)}</div>
+            <div class="text-xs text-gray-500 font-medium">Total Cases</div>
+          </div>
+        </div>
+        <div class="stat-card card flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50">
+            <i class="fas fa-building text-blue-500 text-xl"></i>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-gray-800">${fmt(t.total_carevalidate)}</div>
+            <div class="text-xs text-gray-500 font-medium">CareValidate Owes Us</div>
+          </div>
+        </div>
+        <div class="stat-card card flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-purple-50">
+            <i class="fas fa-user-md text-purple-500 text-xl"></i>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-gray-800">${fmt(t.total_contractor)}</div>
+            <div class="text-xs text-gray-500 font-medium">We Owe Contractors</div>
+          </div>
+        </div>
+        <div class="stat-card card flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-green-50">
+            <i class="fas fa-chart-line text-green-500 text-xl"></i>
+          </div>
+          <div>
+            <div class="text-2xl font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}">${fmt(margin)}</div>
+            <div class="text-xs text-gray-500 font-medium">Net Margin (${marginPct}%)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Visit Type Breakdown -->
+        <div class="card p-5">
+          <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <i class="fas fa-chart-pie text-yellow-500"></i> Visit Type Breakdown
+          </h3>
+          <canvas id="visitTypeChart" height="200"></canvas>
+        </div>
+
+        <!-- Top Contractors -->
+        <div class="card p-5">
+          <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <i class="fas fa-user-md text-purple-500"></i> Contractor Earnings
+          </h3>
+          <div class="space-y-3" id="contractorBars"></div>
+        </div>
+      </div>
+
+      <!-- Doctor Summary Table -->
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-gray-700 flex items-center gap-2">
+            <i class="fas fa-table text-blue-500"></i> Payroll Summary by Doctor
+            ${s.flaggedCount > 0 ? `<span class="status-badge badge-flagged"><i class="fas fa-flag mr-1"></i>${s.flaggedCount} Flagged</span>` : ''}
+          </h3>
+          <div class="flex gap-2">
+            <button onclick="navigate('payroll')" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium">
+              <i class="fas fa-file-invoice-dollar mr-2"></i>View Payroll
+            </button>
+            <button onclick="exportGusto()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
+              <i class="fas fa-file-excel mr-2"></i>Export Gusto
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-100">
+                <th class="text-left pb-3 text-gray-500 font-semibold px-3">Doctor / Contractor</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Cases</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Async</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Sync</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Orderly</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3">CV Pays Us</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3">We Pay</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3">Margin</th>
+                <th class="text-center pb-3 text-gray-500 font-semibold px-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(s.byDoctor || []).map(d => `
+                <tr class="table-row border-b border-gray-50">
+                  <td class="py-3 px-3 font-medium text-gray-800">${d.doctor_name || '<i class="text-gray-400">Unmatched</i>'}</td>
+                  <td class="py-3 px-3 text-right text-gray-600">${fmtNum(d.case_count)}</td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.async_count)}</td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.sync_count)}</td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.orderly_count)}</td>
+                  <td class="py-3 px-3 text-right font-medium text-blue-600">${fmt(d.total_carevalidate)}</td>
+                  <td class="py-3 px-3 text-right font-medium text-purple-600">${fmt(d.total_contractor)}</td>
+                  <td class="py-3 px-3 text-right font-medium ${d.margin >= 0 ? 'text-green-600' : 'text-red-600'}">${fmt(d.margin)}</td>
+                  <td class="py-3 px-3 text-center">
+                    ${d.contractor_id ? `
+                      <button onclick="openPaystubModal(${state.currentSession.id}, ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
+                        class="text-xs px-3 py-1.5 rounded-lg btn-outline font-medium">
+                        <i class="fas fa-file-pdf mr-1"></i>Paystub
+                      </button>` : '<span class="text-gray-300 text-xs">No match</span>'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`
+
+  // Charts
+  renderVisitTypeChart(s.byVisitType || [])
+  renderContractorBars(s.byDoctor || [])
+}
+
+function renderVisitTypeChart(data) {
+  const ctx = document.getElementById('visitTypeChart')
+  if (!ctx) return
+  const labels = data.map(d => visitTypeLabel(d.visit_type))
+  const values = data.map(d => d.total_cv)
+  const colors = ['#C9A84C','#3b82f6','#8b5cf6','#ef4444','#10b981','#f59e0b']
+  if (window.vtChart) window.vtChart.destroy()
+  window.vtChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+    options: { responsive: true, plugins: { legend: { position: 'right', labels: { font: { size: 11 }, padding: 12 } } } }
+  })
+}
+
+function renderContractorBars(doctors) {
+  const sorted = [...doctors].sort((a,b) => b.total_contractor - a.total_contractor).slice(0, 8)
+  const max = sorted[0]?.total_contractor || 1
+  $('contractorBars').innerHTML = sorted.map(d => `
+    <div>
+      <div class="flex justify-between text-xs mb-1">
+        <span class="font-medium text-gray-700">${d.doctor_name || 'Unmatched'}</span>
+        <span class="font-semibold text-purple-600">${fmt(d.total_contractor)}</span>
+      </div>
+      <div class="bg-gray-100 rounded-full h-2">
+        <div class="bg-purple-400 rounded-full h-2 transition-all" style="width:${(d.total_contractor/max*100).toFixed(1)}%"></div>
+      </div>
+    </div>`).join('')
+}
+
+function escHtml(s) { return (s || '').replace(/'/g, "\\'") }
+
+// ════════════════════════════════════════════════════
+// UPLOAD PAGE
+// ════════════════════════════════════════════════════
+function renderUpload() {
+  $('mainContent').innerHTML = `
+    <div class="max-w-2xl mx-auto space-y-6">
+      <div class="card p-6">
+        <h3 class="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <i class="fas fa-upload text-yellow-500"></i> Upload CareValidate Report
+        </h3>
+        <p class="text-sm text-gray-500 mb-5">Upload the Excel (.xlsx) file received from CareValidate. The system will parse all consult records and calculate payroll automatically.</p>
+        
+        <div class="upload-zone rounded-xl p-10 text-center cursor-pointer mb-4"
+          id="dropZone" onclick="$('fileInput').click()"
+          ondragover="e=>e.preventDefault() || this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handleDrop(event)">
+          <input type="file" id="fileInput" class="hidden" accept=".xlsx,.xls" onchange="handleFile(this.files[0])"/>
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style="background:rgba(201,168,76,0.1)">
+            <i class="fas fa-file-excel text-yellow-500 text-2xl"></i>
+          </div>
+          <p class="font-semibold text-gray-700">Drop Excel file here or click to browse</p>
+          <p class="text-sm text-gray-400 mt-1">Supports .xlsx files from CareValidate</p>
+        </div>
+
+        <div id="filePreview" class="hidden bg-gray-50 rounded-xl p-4 mb-4">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-file-excel text-green-500 text-2xl"></i>
+            <div>
+              <div id="fileName" class="font-medium text-gray-700"></div>
+              <div id="fileRows" class="text-xs text-gray-500"></div>
+            </div>
+            <button onclick="clearFile()" class="ml-auto text-gray-400 hover:text-red-500"><i class="fas fa-times text-lg"></i></button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Period Month</label>
+            <select id="uploadMonth" class="w-full">
+              ${['January','February','March','April','May','June','July','August','September','October','November','December'].map((m,i) => `<option value="${i+1}" ${i+1 === new Date().getMonth() ? 'selected' : ''}>${m}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Year</label>
+            <input type="number" id="uploadYear" value="${new Date().getFullYear()}" class="w-full"/>
+          </div>
+        </div>
+
+        <button id="uploadBtn" onclick="processUpload()" disabled
+          class="w-full btn-primary py-3 rounded-xl font-semibold opacity-50 cursor-not-allowed transition-all">
+          <i class="fas fa-cog mr-2"></i> Process & Upload
+        </button>
+      </div>
+
+      <!-- Previous Uploads -->
+      <div class="card p-5">
+        <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fas fa-history text-blue-500"></i> Previous Uploads
+        </h3>
+        <div class="space-y-2">
+          ${state.sessions.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No uploads yet</p>' : 
+            state.sessions.map(s => `
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div class="flex items-center gap-3">
+                  <i class="fas fa-calendar text-yellow-500"></i>
+                  <div>
+                    <div class="font-medium text-gray-700 text-sm">${s.period_label}</div>
+                    <div class="text-xs text-gray-400">${fmtNum(s.total_cases)} cases · ${fmt(s.total_carevalidate_amount)} CV · Uploaded ${new Date(s.uploaded_at).toLocaleDateString()}</div>
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="selectSession(${s.id}); navigate('dashboard')" class="text-xs px-3 py-1.5 btn-outline rounded-lg">View</button>
+                  <button onclick="deleteSession(${s.id}, '${s.period_label}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>`).join('')}
+        </div>
+      </div>
+    </div>`
+
+  // Setup drag-over
+  const dz = $('dropZone')
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over') })
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'))
+  dz.addEventListener('drop', handleDrop)
+}
+
+let pendingFileData = null
+
+function handleDrop(e) {
+  e.preventDefault()
+  $('dropZone').classList.remove('drag-over')
+  const file = e.dataTransfer.files[0]
+  if (file) handleFile(file)
+}
+
+function clearFile() {
+  pendingFileData = null
+  $('filePreview').classList.add('hidden')
+  $('fileInput').value = ''
+  $('uploadBtn').disabled = true
+  $('uploadBtn').classList.add('opacity-50', 'cursor-not-allowed')
+}
+
+async function handleFile(file) {
+  if (!file) return
+  showLoading('Reading Excel file...', true)
+  try {
+    const data = await readExcelFile(file)
+    pendingFileData = { file, rows: data }
+    $('fileName').textContent = file.name
+    $('fileRows').textContent = `${fmtNum(data.length)} consult records found`
+    $('filePreview').classList.remove('hidden')
+    $('uploadBtn').disabled = false
+    $('uploadBtn').classList.remove('opacity-50', 'cursor-not-allowed')
+    showToast(`Loaded ${fmtNum(data.length)} records`, 'success')
+  } catch(e) {
+    showToast('Error reading file: ' + e.message, 'error')
+  } finally { hideLoading() }
+}
+
+function readExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true })
+        // Use first sheet (main data)
+        const sheetName = wb.SheetNames[0]
+        const ws = wb.Sheets[sheetName]
+        const jsonData = XLSX.utils.sheet_to_json(ws, { raw: false, defval: null })
+
+        const rows = []
+        let flaggedSheet = null
+        if (wb.SheetNames.includes('Flagged')) {
+          const flagWs = wb.Sheets['Flagged']
+          const flagData = XLSX.utils.sheet_to_json(flagWs, { raw: false, defval: null })
+          const flaggedIds = new Set()
+          flagData.forEach(row => {
+            const flag = row['FLAG'] || row['Flag'] || ''
+            if (typeof flag === 'string' && flag.toUpperCase().includes('FLAG')) {
+              flaggedIds.add(row['Case ID'] || row['case_id'] || '')
+            }
+          })
+          flaggedSheet = flaggedIds
+        }
+
+        jsonData.forEach(row => {
+          const caseId = row['Case ID'] || row['case_id'] || ''
+          const visitType = row['Visit Type'] || row['visit_type'] || ''
+          let rawFee = row['Consult Fee'] || row['consult_fee']
+          if (typeof rawFee === 'string' && rawFee.startsWith('=')) rawFee = null
+          if (rawFee !== null) rawFee = parseFloat(rawFee) || null
+
+          let decisionDate = row['Decision date'] || row['decision_date'] || ''
+          if (decisionDate instanceof Date) decisionDate = decisionDate.toISOString().split('T')[0]
+
+          rows.push({
+            case_id: caseId,
+            case_id_short: row['Case ID (short)'] || row['case_id_short'] || '',
+            organization_name: row['Organization Name'] || row['organization_name'] || '',
+            patient_name: row['Patient Name'] || row['patient_name'] || '',
+            doctor_name: row['Doctor Name'] || row['doctor_name'] || '',
+            decision_date: decisionDate,
+            decision_status: row['Decision Status'] || row['decision_status'] || 'Approved',
+            visit_type: visitType,
+            raw_fee: rawFee,
+            is_flagged: flaggedSheet ? flaggedSheet.has(caseId) : false
+          })
+        })
+        resolve(rows)
+      } catch(err) { reject(err) }
+    }
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+async function processUpload() {
+  if (!pendingFileData) return
+  const month = parseInt($('uploadMonth').value)
+  const year = parseInt($('uploadYear').value)
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const label = `${monthNames[month-1]} ${year}`
+
+  showLoading(`Uploading ${fmtNum(pendingFileData.rows.length)} records...`, true)
+  setProgress(10)
+
+  try {
+    const payload = {
+      filename: pendingFileData.file.name,
+      period_label: label,
+      period_month: month,
+      period_year: year,
+      rows: pendingFileData.rows
+    }
+    setProgress(40)
+    const result = await api('/api/upload', { method: 'POST', body: JSON.stringify(payload) })
+    setProgress(90)
+    
+    // Refresh data
+    state.sessions = await api('/api/sessions')
+    populateSessionSelector()
+    await selectSession(result.session_id)
+    setProgress(100)
+    
+    showToast(`✅ Uploaded ${fmtNum(result.total_cases)} cases for ${label}`, 'success')
+    clearFile()
+    navigate('dashboard')
+  } catch(e) {
+    showToast('Upload failed: ' + e.message, 'error')
+  } finally { hideLoading() }
+}
+
+async function deleteSession(id, label) {
+  if (!confirm(`Delete all data for "${label}"? This cannot be undone.`)) return
+  await api(`/api/sessions/${id}`, { method: 'DELETE' })
+  state.sessions = await api('/api/sessions')
+  if (state.currentSession?.id == id) {
+    state.currentSession = state.sessions[0] || null
+    state.currentSummary = null
+  }
+  populateSessionSelector()
+  showToast(`Deleted ${label}`, 'info')
+  renderUpload()
+}
+
+// ════════════════════════════════════════════════════
+// CONSULTS TABLE PAGE
+// ════════════════════════════════════════════════════
+let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '' }
+
+async function renderConsults() {
+  if (!state.currentSession) { $('mainContent').innerHTML = noDataMsg(); return }
+
+  $('mainContent').innerHTML = `
+    <div class="card">
+      <!-- Filters -->
+      <div class="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-center">
+        <input type="text" id="searchInput" placeholder="Search patient, case ID, org..." class="flex-1 min-w-[200px]" value="${consultsState.search}" oninput="debounceSearch(this.value)"/>
+        <select id="doctorFilter" onchange="filterConsults()" class="min-w-[160px]">
+          <option value="">All Doctors</option>
+          ${state.contractors.map(c => `<option value="${c.name}" ${consultsState.doctor === c.name ? 'selected' : ''}>${c.name}</option>`).join('')}
+        </select>
+        <select id="vtFilter" onchange="filterConsults()" class="min-w-[140px]">
+          <option value="">All Types</option>
+          <option value="ASYNC_TEXT_EMAIL" ${consultsState.visitType==='ASYNC_TEXT_EMAIL'?'selected':''}>Async</option>
+          <option value="SYNC_PHONE" ${consultsState.visitType==='SYNC_PHONE'?'selected':''}>Sync Phone</option>
+          <option value="SYNC_VIDEO" ${consultsState.visitType==='SYNC_VIDEO'?'selected':''}>Sync Video</option>
+        </select>
+        <span id="countLabel" class="text-sm text-gray-500"></span>
+      </div>
+      <!-- Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" id="consultsTable">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Case ID</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Date</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Patient</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Organization</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Doctor</th>
+              <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Type</th>
+              <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs">CV Fee</th>
+              <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs">Contractor Fee</th>
+              <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs">Status</th>
+            </tr>
+          </thead>
+          <tbody id="consultsTbody">
+            <tr><td colspan="9" class="text-center py-10"><div class="spinner mx-auto"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Pagination -->
+      <div class="p-4 border-t border-gray-100 flex items-center justify-between" id="pagination"></div>
+    </div>`
+
+  await loadConsultsPage(1)
+}
+
+let searchTimer = null
+function debounceSearch(val) {
+  clearTimeout(searchTimer)
+  consultsState.search = val
+  searchTimer = setTimeout(() => loadConsultsPage(1), 400)
+}
+
+async function filterConsults() {
+  consultsState.doctor = $('doctorFilter')?.value || ''
+  consultsState.visitType = $('vtFilter')?.value || ''
+  await loadConsultsPage(1)
+}
+
+async function loadConsultsPage(page) {
+  consultsState.page = page
+  const params = new URLSearchParams({
+    session_id: state.currentSession.id,
+    page, limit: 50
+  })
+  if (consultsState.search) params.set('search', consultsState.search)
+  if (consultsState.doctor) params.set('doctor_name', consultsState.doctor)
+  if (consultsState.visitType) params.set('visit_type', consultsState.visitType)
+
+  try {
+    const result = await api('/api/consults?' + params)
+    consultsState.data = result.data
+    consultsState.total = result.total
+    renderConsultsTable(result.data, result.total, page)
+  } catch(e) { showToast('Error loading consults: ' + e.message, 'error') }
+}
+
+function renderConsultsTable(rows, total, page) {
+  $('countLabel').textContent = `${fmtNum(total)} records`
+  const tbody = $('consultsTbody')
+  if (!tbody) return
+  tbody.innerHTML = rows.map(r => `
+    <tr class="table-row border-b border-gray-50 ${r.is_flagged ? 'bg-yellow-50' : ''}">
+      <td class="px-4 py-2.5">
+        <span class="font-mono text-xs text-blue-600">${r.case_id_short || r.case_id?.substring(0,8)}</span>
+        ${r.is_flagged ? '<i class="fas fa-flag text-yellow-500 ml-1 text-xs"></i>' : ''}
+      </td>
+      <td class="px-4 py-2.5 text-gray-500 text-xs">${r.decision_date ? r.decision_date.substring(0,10) : ''}</td>
+      <td class="px-4 py-2.5 text-gray-700">${r.patient_name || ''}</td>
+      <td class="px-4 py-2.5 text-gray-500 text-xs max-w-[140px] truncate">${r.organization_name || ''}</td>
+      <td class="px-4 py-2.5 text-gray-700 font-medium">${r.doctor_name || '<span class="text-gray-300">—</span>'}</td>
+      <td class="px-4 py-2.5">${visitTypeBadge(r.visit_type, r.carevalidate_fee)}</td>
+      <td class="px-4 py-2.5 text-right font-medium text-blue-600">${fmt(r.carevalidate_fee)}</td>
+      <td class="px-4 py-2.5 text-right font-medium text-purple-600">${fmt(r.contractor_fee)}</td>
+      <td class="px-4 py-2.5 text-center"><span class="status-badge badge-approved">${r.decision_status || 'Approved'}</span></td>
+    </tr>`).join('') || '<tr><td colspan="9" class="text-center py-8 text-gray-400">No records found</td></tr>'
+
+  // Pagination
+  const totalPages = Math.ceil(total / 50)
+  const pagination = $('pagination')
+  if (pagination) {
+    pagination.innerHTML = `
+      <span class="text-sm text-gray-500">Page ${page} of ${totalPages} · ${fmtNum(total)} total</span>
+      <div class="flex gap-2">
+        <button onclick="loadConsultsPage(${page-1})" ${page <= 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+        <button onclick="loadConsultsPage(${page+1})" ${page >= totalPages ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-40 hover:bg-gray-50">Next →</button>
+      </div>`
+  }
+}
+
+// ════════════════════════════════════════════════════
+// PAYROLL PAGE
+// ════════════════════════════════════════════════════
+function renderPayroll() {
+  if (!state.currentSession || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
+  const s = state.currentSummary
+  $('mainContent').innerHTML = `
+    <div class="space-y-4">
+      <div class="flex justify-between items-center">
+        <p class="text-sm text-gray-500">Payroll for <strong>${state.currentSession.period_label}</strong> — click any contractor to view/export paystub</p>
+        <button onclick="exportGusto()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
+          <i class="fas fa-file-excel mr-2"></i>Export All to Gusto
+        </button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        ${(s.byDoctor || []).filter(d => d.contractor_id).map(d => `
+          <div class="card p-5 hover:shadow-md transition-all cursor-pointer" onclick="openPaystubModal(${state.currentSession.id}, ${d.contractor_id}, '${escHtml(d.doctor_name)}')">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <div class="font-semibold text-gray-800">${d.doctor_name}</div>
+                <div class="text-xs text-gray-400">${d.company || 'Lion MD'} ${d.ein_ssn ? '· EIN/SSN: ' + d.ein_ssn : ''}</div>
+              </div>
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:rgba(139,92,246,0.1)">
+                <i class="fas fa-user-md text-purple-500"></i>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <div class="bg-gray-50 rounded-lg p-2 text-center">
+                <div class="font-bold text-gray-700">${fmtNum(d.case_count)}</div>
+                <div class="text-xs text-gray-400">Cases</div>
+              </div>
+              <div class="bg-purple-50 rounded-lg p-2 text-center">
+                <div class="font-bold text-purple-600">${fmt(d.total_contractor)}</div>
+                <div class="text-xs text-gray-400">Total Pay</div>
+              </div>
+            </div>
+            <div class="flex gap-2 text-xs">
+              ${d.async_count > 0 ? `<span class="status-badge badge-async">${fmtNum(d.async_count)} Async</span>` : ''}
+              ${d.sync_count > 0 ? `<span class="status-badge badge-sync">${fmtNum(d.sync_count)} Sync</span>` : ''}
+              ${d.orderly_count > 0 ? `<span class="status-badge badge-orderly">${fmtNum(d.orderly_count)} Orderly</span>` : ''}
+            </div>
+            <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+              <button onclick="event.stopPropagation(); openPaystubModal(${state.currentSession.id}, ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
+                class="flex-1 text-xs py-2 btn-outline rounded-lg font-medium">
+                <i class="fas fa-file-pdf mr-1"></i>Paystub
+              </button>
+            </div>
+          </div>`).join('')}
+      </div>
+      ${(s.byDoctor || []).filter(d => !d.contractor_id).length > 0 ? `
+        <div class="card p-4">
+          <h4 class="text-sm font-semibold text-yellow-700 mb-3 flex items-center gap-2">
+            <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+            Unmatched Doctors (${(s.byDoctor || []).filter(d => !d.contractor_id).length})
+          </h4>
+          <p class="text-xs text-gray-500 mb-3">These doctors are not in the contractors database. Add them in <a onclick="navigate('contractors')" class="text-blue-500 cursor-pointer underline">Contractors</a>.</p>
+          <div class="flex flex-wrap gap-2">
+            ${(s.byDoctor || []).filter(d => !d.contractor_id).map(d => `
+              <div class="px-3 py-2 bg-yellow-50 rounded-lg text-sm">
+                <span class="font-medium text-yellow-800">${d.doctor_name}</span>
+                <span class="text-yellow-600 ml-2">${fmtNum(d.case_count)} cases · ${fmt(d.total_contractor)}</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+    </div>
+    ${paystubModalHtml()}`
+}
+
+// ════════════════════════════════════════════════════
+// PAYSTUB MODAL
+// ════════════════════════════════════════════════════
+function paystubModalHtml() {
+  return `
+  <div id="paystubModal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-auto">
+      <div class="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-2xl z-10">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800" id="paystubDoctorName">Paystub</h2>
+          <p class="text-sm text-gray-500" id="paystubPeriod"></p>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="downloadPaystub()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
+            <i class="fas fa-file-pdf mr-2"></i>Download PDF
+          </button>
+          <button onclick="$('paystubModal').classList.add('hidden')" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-xl">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      <div id="paystubContent" class="p-6">
+        <div class="flex justify-center py-10"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>`
+}
+
+let currentPaystubData = null
+
+async function openPaystubModal(sessionId, contractorId, doctorName) {
+  // Ensure modal exists
+  if (!$('paystubModal')) {
+    const div = document.createElement('div')
+    div.innerHTML = paystubModalHtml()
+    document.body.appendChild(div.firstChild)
+  }
+  $('paystubModal').classList.remove('hidden')
+  $('paystubDoctorName').textContent = doctorName
+  $('paystubPeriod').textContent = state.currentSession?.period_label || ''
+  $('paystubContent').innerHTML = '<div class="flex justify-center py-10"><div class="spinner"></div></div>'
+
+  try {
+    currentPaystubData = await api(`/api/paystub/${sessionId}/${contractorId}`)
+    renderPaystubContent(currentPaystubData)
+  } catch(e) {
+    $('paystubContent').innerHTML = `<p class="text-red-500 text-center py-8">${e.message}</p>`
+  }
+}
+
+function renderPaystubContent(data) {
+  const { contractor, session, summary, consults } = data
+  const c = contractor || {}
+  const sum = summary || {}
+  $('paystubContent').innerHTML = `
+    <div id="paystubPrintArea">
+      <!-- Header -->
+      <div class="flex justify-between items-start mb-6 pb-6 border-b">
+        <div>
+          <div class="text-2xl font-bold text-gray-800 mb-1">
+            <span style="color:var(--lion-gold)">LION</span> MD
+          </div>
+          <div class="text-sm text-gray-500">Independent Contractor Payment Statement</div>
+        </div>
+        <div class="text-right">
+          <div class="font-bold text-gray-700">${session?.period_label || ''}</div>
+          <div class="text-xs text-gray-400">Issued: ${new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}</div>
+        </div>
+      </div>
+
+      <!-- Contractor Info -->
+      <div class="grid grid-cols-2 gap-6 mb-6">
+        <div class="bg-gray-50 rounded-xl p-4">
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Contractor</div>
+          <div class="font-bold text-gray-800 text-lg">${c.name || ''}</div>
+          <div class="text-sm text-gray-600">${c.company || 'Lion MD'}</div>
+          ${c.ein_ssn ? `<div class="text-sm text-gray-500 mt-1">EIN/SSN: ${c.ein_ssn}</div>` : ''}
+          ${c.email ? `<div class="text-xs text-gray-400">${c.email}</div>` : ''}
+        </div>
+        <div class="bg-purple-50 rounded-xl p-4">
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Payment Summary</div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <div class="text-2xl font-bold text-purple-600">${fmt(sum.total_pay)}</div>
+              <div class="text-xs text-gray-500">Total Payment</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-gray-700">${fmtNum(sum.total_cases)}</div>
+              <div class="text-xs text-gray-500">Total Cases</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Breakdown -->
+      <div class="grid grid-cols-3 gap-3 mb-6">
+        ${sum.async_count > 0 ? `
+          <div class="bg-purple-50 border border-purple-100 rounded-xl p-3 text-center">
+            <div class="font-bold text-purple-600 text-lg">${fmtNum(sum.async_count)}</div>
+            <div class="text-xs text-gray-500 font-medium">Async Cases</div>
+            <div class="text-sm font-semibold text-purple-700 mt-1">${fmt(sum.async_pay)}</div>
+          </div>` : ''}
+        ${sum.sync_count > 0 ? `
+          <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+            <div class="font-bold text-blue-600 text-lg">${fmtNum(sum.sync_count)}</div>
+            <div class="text-xs text-gray-500 font-medium">Sync Cases</div>
+            <div class="text-sm font-semibold text-blue-700 mt-1">${fmt(sum.sync_pay)}</div>
+          </div>` : ''}
+        ${sum.orderly_count > 0 ? `
+          <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 text-center">
+            <div class="font-bold text-rose-600 text-lg">${fmtNum(sum.orderly_count)}</div>
+            <div class="text-xs text-gray-500 font-medium">OrderlyMeds</div>
+            <div class="text-sm font-semibold text-rose-700 mt-1">${fmt(sum.orderly_pay)}</div>
+          </div>` : ''}
+      </div>
+
+      <!-- Consult Detail Table -->
+      <div>
+        <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Consult Detail</div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-50 rounded-xl">
+              <tr>
+                <th class="text-left px-3 py-2 text-gray-500 font-semibold rounded-l-xl">Case ID</th>
+                <th class="text-left px-3 py-2 text-gray-500 font-semibold">Date</th>
+                <th class="text-left px-3 py-2 text-gray-500 font-semibold">Patient</th>
+                <th class="text-left px-3 py-2 text-gray-500 font-semibold">Organization</th>
+                <th class="text-left px-3 py-2 text-gray-500 font-semibold">Type</th>
+                <th class="text-right px-3 py-2 text-gray-500 font-semibold rounded-r-xl">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(consults || []).map(r => `
+                <tr class="border-b border-gray-50">
+                  <td class="px-3 py-2 font-mono text-blue-600">${r.case_id_short || r.case_id?.substring(0,8)}</td>
+                  <td class="px-3 py-2 text-gray-500">${(r.decision_date||'').substring(0,10)}</td>
+                  <td class="px-3 py-2 text-gray-700">${r.patient_name}</td>
+                  <td class="px-3 py-2 text-gray-500 max-w-[120px] truncate">${r.organization_name}</td>
+                  <td class="px-3 py-2">${visitTypeBadge(r.visit_type, r.carevalidate_fee)}</td>
+                  <td class="px-3 py-2 text-right font-semibold text-purple-600">${fmt(r.contractor_fee)}</td>
+                </tr>`).join('')}
+            </tbody>
+            <tfoot>
+              <tr class="border-t-2 border-gray-200">
+                <td colspan="5" class="px-3 py-3 font-bold text-gray-700 text-right">Total</td>
+                <td class="px-3 py-3 text-right font-bold text-purple-600 text-base">${fmt(sum.total_pay)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="mt-6 pt-4 border-t text-xs text-gray-400 text-center">
+        This is an official payment statement from Lion MD. For questions contact your payroll administrator.
+      </div>
+    </div>`
+}
+
+function downloadPaystub() {
+  if (!currentPaystubData) return
+  const { contractor, session, summary } = currentPaystubData
+  const { jsPDF } = window.jspdf
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pageW = doc.internal.pageSize.getWidth()
+
+  // Header bar
+  doc.setFillColor(26, 26, 46)
+  doc.rect(0, 0, pageW, 30, 'F')
+  doc.setTextColor(201, 168, 76)
+  doc.setFontSize(22)
+  doc.setFont('helvetica', 'bold')
+  doc.text('LION MD', 15, 18)
+  doc.setTextColor(200, 200, 200)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Independent Contractor Payment Statement', 15, 25)
+  doc.setTextColor(255, 255, 255)
+  doc.text(session?.period_label || '', pageW - 15, 18, { align: 'right' })
+  doc.setFontSize(8)
+  doc.text('Issued: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), pageW - 15, 25, { align: 'right' })
+
+  // Contractor info
+  doc.setTextColor(50, 50, 50)
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text(contractor?.name || '', 15, 42)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(100, 100, 100)
+  doc.text(contractor?.company || 'Lion MD', 15, 48)
+  if (contractor?.ein_ssn) doc.text('EIN/SSN: ' + contractor.ein_ssn, 15, 54)
+
+  // Summary box
+  doc.setFillColor(247, 244, 255)
+  doc.roundedRect(pageW - 90, 36, 75, 30, 3, 3, 'F')
+  doc.setTextColor(139, 92, 246)
+  doc.setFontSize(18)
+  doc.setFont('helvetica', 'bold')
+  doc.text(fmt(summary?.total_pay), pageW - 52, 49, { align: 'center' })
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 100, 100)
+  doc.text('Total Payment', pageW - 52, 56, { align: 'center' })
+  doc.text(`${fmtNum(summary?.total_cases)} Cases`, pageW - 52, 61, { align: 'center' })
+
+  // Breakdown line
+  let yPos = 72
+  const rows = []
+  if (summary?.async_count > 0) rows.push([`${fmtNum(summary.async_count)} Async Text/Email`, `${fmtNum(summary.async_count)} × rate`, fmt(summary.async_pay)])
+  if (summary?.sync_count > 0) rows.push([`${fmtNum(summary.sync_count)} Sync (Phone/Video)`, `${fmtNum(summary.sync_count)} × rate`, fmt(summary.sync_pay)])
+  if (summary?.orderly_count > 0) rows.push([`${fmtNum(summary.orderly_count)} OrderlyMeds`, `${fmtNum(summary.orderly_count)} × rate`, fmt(summary.orderly_pay)])
+
+  if (rows.length > 0) {
+    doc.autoTable({
+      startY: yPos,
+      head: [['Service Type', 'Quantity', 'Amount']],
+      body: rows,
+      foot: [['', 'TOTAL', fmt(summary?.total_pay)]],
+      theme: 'grid',
+      headStyles: { fillColor: [26, 26, 46], textColor: [201, 168, 76], fontStyle: 'bold', fontSize: 9 },
+      footStyles: { fillColor: [245, 245, 245], textColor: [80, 80, 80], fontStyle: 'bold', fontSize: 10 },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: { 2: { halign: 'right', fontStyle: 'bold', textColor: [139, 92, 246] } },
+      margin: { left: 15, right: 15 },
+      tableWidth: pageW - 30
+    })
+    yPos = doc.lastAutoTable.finalY + 10
+  }
+
+  // Detail table
+  const detailRows = (currentPaystubData.consults || []).map(r => [
+    r.case_id_short || r.case_id?.substring(0, 8),
+    (r.decision_date || '').substring(0, 10),
+    r.patient_name,
+    r.organization_name,
+    visitTypeLabel(r.visit_type),
+    fmt(r.contractor_fee)
+  ])
+
+  doc.autoTable({
+    startY: yPos,
+    head: [['Case ID', 'Date', 'Patient', 'Organization', 'Type', 'Amount']],
+    body: detailRows,
+    theme: 'striped',
+    headStyles: { fillColor: [240, 240, 245], textColor: [80, 80, 80], fontStyle: 'bold', fontSize: 8 },
+    styles: { fontSize: 7, cellPadding: 2 },
+    columnStyles: { 5: { halign: 'right', fontStyle: 'bold', textColor: [139, 92, 246] } },
+    margin: { left: 15, right: 15 },
+    tableWidth: pageW - 30
+  })
+
+  // Footer
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i)
+    doc.setFillColor(26, 26, 46)
+    doc.rect(0, doc.internal.pageSize.getHeight() - 12, pageW, 12, 'F')
+    doc.setTextColor(150, 150, 150)
+    doc.setFontSize(7)
+    doc.text('Lion MD Payroll Portal · Confidential', 15, doc.internal.pageSize.getHeight() - 4)
+    doc.text(`Page ${i} of ${totalPages}`, pageW - 15, doc.internal.pageSize.getHeight() - 4, { align: 'right' })
+  }
+
+  const fileName = `${contractor?.name?.replace(/\s+/g, '_')}_${session?.period_label?.replace(/\s+/g, '_')}_Paystub.pdf`
+  doc.save(fileName)
+  showToast('PDF downloaded!', 'success')
+}
+
+// ════════════════════════════════════════════════════
+// CONTRACTORS PAGE
+// ════════════════════════════════════════════════════
+function renderContractors() {
+  $('mainContent').innerHTML = `
+    <div class="space-y-4">
+      <div class="flex justify-between items-center">
+        <p class="text-sm text-gray-500">${state.contractors.length} active contractors</p>
+        <button onclick="openContractorModal()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
+          <i class="fas fa-plus mr-2"></i>Add Contractor
+        </button>
+      </div>
+      <div class="card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Name</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Company</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">EIN / SSN</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Email</th>
+              <th class="text-center px-5 py-3 text-gray-500 font-semibold text-xs">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.contractors.map(c => `
+              <tr class="table-row border-b border-gray-50">
+                <td class="px-5 py-3 font-semibold text-gray-800">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:var(--lion-gold)">${(c.name || '?')[0]}</div>
+                    ${c.name}
+                  </div>
+                </td>
+                <td class="px-5 py-3 text-gray-600">${c.company || '—'}</td>
+                <td class="px-5 py-3 font-mono text-sm text-gray-500">${c.ein_ssn || '—'}</td>
+                <td class="px-5 py-3 text-gray-500">${c.email || '—'}</td>
+                <td class="px-5 py-3 text-center">
+                  <div class="flex gap-2 justify-center">
+                    <button onclick="openContractorModal(${JSON.stringify(c).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
+                      <i class="fas fa-edit mr-1"></i>Edit
+                    </button>
+                    <button onclick="deleteContractor(${c.id}, '${escHtml(c.name)}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Contractor Modal -->
+    <div id="contractorModal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h3 class="text-lg font-bold text-gray-800 mb-5" id="contractorModalTitle">Add Contractor</h3>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Full Name *</label>
+            <input type="text" id="ctName" class="w-full" placeholder="Dr. Jane Smith"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Company / Practice</label>
+            <input type="text" id="ctCompany" class="w-full" placeholder="Lion MD"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">EIN / SSN</label>
+            <input type="text" id="ctEin" class="w-full" placeholder="XX-XXXXXXX"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Email</label>
+            <input type="email" id="ctEmail" class="w-full" placeholder="doctor@example.com"/>
+          </div>
+        </div>
+        <input type="hidden" id="ctId"/>
+        <div class="flex gap-3 mt-6">
+          <button onclick="saveContractor()" class="flex-1 btn-primary py-3 rounded-xl font-semibold">Save</button>
+          <button onclick="$('contractorModal').classList.add('hidden')" class="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50">Cancel</button>
+        </div>
+      </div>
+    </div>`
+}
+
+function openContractorModal(contractor = null) {
+  $('contractorModalTitle').textContent = contractor ? 'Edit Contractor' : 'Add Contractor'
+  $('ctId').value = contractor?.id || ''
+  $('ctName').value = contractor?.name || ''
+  $('ctCompany').value = contractor?.company || ''
+  $('ctEin').value = contractor?.ein_ssn || ''
+  $('ctEmail').value = contractor?.email || ''
+  $('contractorModal').classList.remove('hidden')
+}
+
+async function saveContractor() {
+  const id = $('ctId').value
+  const data = { name: $('ctName').value, company: $('ctCompany').value, ein_ssn: $('ctEin').value, email: $('ctEmail').value }
+  if (!data.name) { showToast('Name is required', 'warning'); return }
+  try {
+    if (id) {
+      await api(`/api/contractors/${id}`, { method: 'PUT', body: JSON.stringify({ ...data, is_active: 1 }) })
+    } else {
+      await api('/api/contractors', { method: 'POST', body: JSON.stringify(data) })
+    }
+    state.contractors = await api('/api/contractors')
+    $('contractorModal').classList.add('hidden')
+    showToast('Contractor saved!', 'success')
+    renderContractors()
+  } catch(e) { showToast('Error: ' + e.message, 'error') }
+}
+
+async function deleteContractor(id, name) {
+  if (!confirm(`Archive contractor "${name}"?`)) return
+  await api(`/api/contractors/${id}`, { method: 'DELETE' })
+  state.contractors = await api('/api/contractors')
+  showToast('Contractor archived', 'info')
+  renderContractors()
+}
+
+// ════════════════════════════════════════════════════
+// RATES PAGE
+// ════════════════════════════════════════════════════
+function renderRates() {
+  $('mainContent').innerHTML = `
+    <div class="max-w-2xl space-y-4">
+      <div class="card p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <i class="fas fa-info-circle text-blue-400"></i>
+          <p class="text-sm text-gray-600">
+            <strong>CareValidate Rate</strong> = what CareValidate pays Lion MD per case.<br>
+            <strong>Contractor Rate</strong> = what Lion MD pays each contractor per case.
+          </p>
+        </div>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100">
+          <h3 class="font-semibold text-gray-700">Payment Rates by Visit Type</h3>
+          <p class="text-xs text-gray-400 mt-0.5">Changes take effect for new uploads only</p>
+        </div>
+        <div id="ratesTable">
+          ${state.rates.map(r => `
+            <div class="flex items-center gap-4 px-5 py-4 border-b border-gray-50 hover:bg-gray-50" id="rate_${r.id}">
+              <div class="w-36">
+                <div class="font-semibold text-gray-700 text-sm">${r.label || visitTypeLabel(r.visit_type)}</div>
+                <div class="text-xs text-gray-400 font-mono">${r.visit_type}</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500 w-32">CareValidate pays us:</span>
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                  <input type="number" id="cv_${r.id}" value="${r.carevalidate_rate}" step="0.01" min="0"
+                    class="w-24 pl-6" style="padding-left:1.5rem"/>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500 w-28">We pay contractor:</span>
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                  <input type="number" id="ct_${r.id}" value="${r.contractor_rate}" step="0.01" min="0"
+                    class="w-24 pl-6" style="padding-left:1.5rem"/>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 ml-2">
+                <span class="text-xs text-green-600 font-semibold" id="margin_${r.id}">
+                  Margin: ${fmt(r.carevalidate_rate - r.contractor_rate)}
+                </span>
+              </div>
+              <button onclick="saveRate(${r.id})" class="ml-auto btn-primary px-4 py-2 rounded-lg text-xs font-semibold">
+                Save
+              </button>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="card p-4 bg-amber-50 border border-amber-200">
+        <div class="flex items-start gap-3">
+          <i class="fas fa-lightbulb text-amber-500 mt-0.5"></i>
+          <div class="text-sm text-amber-700">
+            <strong>OrderlyMeds Note:</strong> OrderlyMeds cases appear in the report with a flat fee of $17 (instead of the formula). 
+            These are automatically detected and use the OrderlyMeds rate row above.
+          </div>
+        </div>
+      </div>
+    </div>`
+
+  // Live margin calculation
+  state.rates.forEach(r => {
+    const cvInput = $(`cv_${r.id}`)
+    const ctInput = $(`ct_${r.id}`)
+    if (cvInput && ctInput) {
+      const update = () => {
+        const m = parseFloat(cvInput.value) - parseFloat(ctInput.value)
+        $(`margin_${r.id}`).textContent = `Margin: ${fmt(m)}`
+      }
+      cvInput.addEventListener('input', update)
+      ctInput.addEventListener('input', update)
+    }
+  })
+}
+
+async function saveRate(id) {
+  const cv = parseFloat($(`cv_${id}`).value)
+  const ct = parseFloat($(`ct_${id}`).value)
+  const rate = state.rates.find(r => r.id === id)
+  try {
+    await api(`/api/rates/${id}`, { method: 'PUT', body: JSON.stringify({ carevalidate_rate: cv, contractor_rate: ct, label: rate?.label }) })
+    state.rates = await api('/api/rates')
+    showToast('Rate saved!', 'success')
+    renderRates()
+  } catch(e) { showToast('Error: ' + e.message, 'error') }
+}
+
+// ════════════════════════════════════════════════════
+// CAREVALIDATE VIEW (Admin sees this, CV sees it too)
+// ════════════════════════════════════════════════════
+function renderCVView() {
+  if (!state.currentSession || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
+  renderCVDashboard()
+}
+
+async function renderCVDashboard() {
+  if (!state.currentSession) {
+    $('mainContent').innerHTML = noDataMsg(); return
+  }
+  let cvData
+  try {
+    cvData = await api(`/api/cv-summary/${state.currentSession.id}`)
+  } catch(e) { $('mainContent').innerHTML = `<p class="text-red-500">${e.message}</p>`; return }
+
+  const t = cvData.total || {}
+  const isCV = state.role === 'carevalidate'
+
+  $('mainContent').innerHTML = `
+    <div class="space-y-6">
+      ${isCV ? `
+        <div class="bg-blue-600 rounded-2xl p-6 text-white">
+          <div class="flex items-center gap-3 mb-2">
+            <i class="fas fa-hospital text-3xl opacity-80"></i>
+            <div>
+              <h2 class="text-xl font-bold">CareValidate Invoice Summary</h2>
+              <p class="opacity-80 text-sm">${state.currentSession.period_label}</p>
+            </div>
+          </div>
+        </div>` : `
+        <div class="bg-gray-100 rounded-xl p-4 border border-dashed border-yellow-400">
+          <p class="text-sm text-yellow-700"><i class="fas fa-eye mr-2"></i>This is the <strong>CareValidate view</strong> — only showing what CareValidate owes Lion MD</p>
+        </div>`}
+
+      <!-- Total Owed -->
+      <div class="card p-8 text-center">
+        <div class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Total Amount Owed to Lion MD</div>
+        <div class="text-5xl font-bold mb-1" style="color:var(--lion-gold)">${fmt(t.total_owed)}</div>
+        <div class="text-gray-400 text-sm">${fmtNum(t.total_cases)} consult cases · ${state.currentSession.period_label}</div>
+      </div>
+
+      <!-- Breakdown by Type -->
+      <div class="card p-6">
+        <h3 class="font-semibold text-gray-700 mb-4">Breakdown by Consult Type</h3>
+        <div class="space-y-3">
+          ${(cvData.byVisitType || []).map(vt => `
+            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+              <div class="flex items-center gap-3">
+                ${visitTypeBadge(vt.visit_type, null)}
+                <span class="text-gray-700 font-medium">${visitTypeLabel(vt.visit_type)}</span>
+                <span class="text-gray-400 text-sm">${fmtNum(vt.count)} cases</span>
+              </div>
+              <span class="font-bold text-gray-800 text-lg">${fmt(vt.total_amount)}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Period selector for CV -->
+      ${state.sessions.length > 1 ? `
+        <div class="card p-5">
+          <h3 class="font-semibold text-gray-700 mb-3">All Periods</h3>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            ${state.sessions.map(s => `
+              <button onclick="selectSession(${s.id})" class="p-3 rounded-xl text-left border-2 ${state.currentSession.id === s.id ? 'border-yellow-400 bg-yellow-50' : 'border-gray-100 hover:border-gray-300'} transition-all">
+                <div class="font-semibold text-gray-700 text-sm">${s.period_label}</div>
+                <div class="text-xs text-gray-400 mt-0.5">${fmt(s.total_carevalidate_amount)} · ${fmtNum(s.total_cases)} cases</div>
+              </button>`).join('')}
+          </div>
+        </div>` : ''}
+    </div>`
+}
+
+async function renderCVDetail() {
+  if (!state.currentSession) { $('mainContent').innerHTML = noDataMsg(); return }
+  consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '' }
+  await renderConsults()
+}
+
+// ════════════════════════════════════════════════════
+// GUSTO EXPORT
+// ════════════════════════════════════════════════════
+async function exportGusto() {
+  if (!state.currentSession) { showToast('Please select a period first', 'warning'); return }
+  showLoading('Generating Gusto export...')
+  try {
+    const data = await api(`/api/export/gusto/${state.currentSession.id}`)
+    
+    const ws_data = [
+      ['Contractor Name', 'Company', 'EIN/SSN', 'Email', 'Period', 'Total Cases', 'Total Pay', 'Async Cases', 'Async Pay', 'Sync Cases', 'Sync Pay', 'OrderlyMeds Cases', 'OrderlyMeds Pay']
+    ]
+    data.forEach(row => {
+      ws_data.push([
+        row.contractor_name || '',
+        row.company || '',
+        row.ein_ssn || '',
+        row.email || '',
+        row.period_label || '',
+        row.total_cases || 0,
+        row.total_pay || 0,
+        row.async_count || 0,
+        row.async_pay || 0,
+        row.sync_count || 0,
+        row.sync_pay || 0,
+        row.orderly_count || 0,
+        row.orderly_pay || 0
+      ])
+    })
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(ws_data)
+    ws['!cols'] = [18, 16, 14, 24, 14, 10, 12, 10, 12, 10, 12, 14, 14].map(w => ({ wch: w }))
+    XLSX.utils.book_append_sheet(wb, ws, 'Gusto Payroll')
+
+    // Summary sheet
+    const summaryData = [['Lion MD Payroll Export'], ['Period:', state.currentSession.period_label], ['Generated:', new Date().toLocaleDateString()], [''], ['Total Contractors:', data.length], ['Total Cases:', data.reduce((s, r) => s + (r.total_cases || 0), 0)], ['Total Payout:', data.reduce((s, r) => s + (r.total_pay || 0), 0)]]
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData)
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
+
+    XLSX.writeFile(wb, `LionMD_Gusto_${state.currentSession.period_label.replace(/\s+/g,'_')}.xlsx`)
+    showToast('Gusto Excel exported!', 'success')
+  } catch(e) { showToast('Export failed: ' + e.message, 'error') }
+  finally { hideLoading() }
+}
+
+// ════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════
+function noDataMsg() {
+  return `<div class="flex flex-col items-center justify-center h-64 text-center">
+    <i class="fas fa-database text-4xl text-gray-200 mb-4"></i>
+    <h3 class="text-lg font-semibold text-gray-500">No data for selected period</h3>
+    <p class="text-gray-400 text-sm mt-1">Please select a period or upload a report</p>
+  </div>`
+}
+</script>
+</body>
+</html>

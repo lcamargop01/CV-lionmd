@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lionmd-payroll",
+  "compatibility_date": "2026-02-28",
+  "pages_build_output_dir": "./dist",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lionmd-production",
+      "database_id": "local-db-placeholder"
+    }
+  ]
+}
