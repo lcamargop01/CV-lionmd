@@ -24,14 +24,13 @@ function computeFee(
   if (!visitType) return { cv: 0, ct: 0 }
   const vt = visitType.toUpperCase()
 
-  // OrderlyMeds flat rate applies to ALL visit types EXCEPT NO_SHOW.
-  // NO_SHOW from OrderlyMeds → $0 (NO_SHOW rate wins).
-  if (isOrderlyRow(orgName, rawFee) && vt !== 'NO_SHOW') {
+  // OrderlyMeds flat rate ($17/$10) applies to ALL visit types including NO_SHOW.
+  if (isOrderlyRow(orgName, rawFee)) {
     const orderly = ratesMap['ORDERLY']
     return orderly ? { cv: orderly.cv, ct: orderly.ct } : { cv: rawFee ?? 0, ct: rawFee ?? 0 }
   }
 
-  // NO_SHOW (including OrderlyMeds) and all other types use their normal rate
+  // All other (non-OrderlyMeds) rows use their normal rate by visit type
   const rate = ratesMap[vt]
   if (rate) return { cv: rate.cv, ct: rate.ct }
   return { cv: 0, ct: 0 }
