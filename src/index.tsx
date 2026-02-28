@@ -381,12 +381,60 @@ app.get('/api/consults', async (c) => {
   return c.json({ total: countResult?.total || 0, page: parseInt(page), limit: parseInt(limit), data: rows.results })
 })
 
+app.get('/api/consults/:id', async (c) => {
+  const id = c.req.param('id')
+  const row = await c.env.DB.prepare(
+    `SELECT c.*, ct.ein_ssn, ct.company, s.period_key, s.source_label as file_label
+     FROM consults c
+     LEFT JOIN contractors ct ON c.contractor_id = ct.id
+     LEFT JOIN upload_sessions s ON c.session_id = s.id
+     WHERE c.id=?`
+  ).bind(id).first()
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  return c.json(row)
+})
+
 app.put('/api/consults/:id', async (c) => {
   const id = c.req.param('id')
-  const { contractor_fee, carevalidate_fee, notes, is_override, override_fee } = await c.req.json()
-  await c.env.DB.prepare(
-    'UPDATE consults SET contractor_fee=?, carevalidate_fee=?, notes=?, is_override=?, override_fee=? WHERE id=?'
-  ).bind(contractor_fee, carevalidate_fee, notes || null, is_override ? 1 : 0, override_fee || null, id).run()
+  const body = await c.req.json()
+  const {
+    doctor_name, patient_name, organization_name, visit_type, decision_date, decision_status,
+    carevalidate_fee, contractor_fee, notes, is_override, override_fee, is_orderly, is_flagged, flag_reason
+  } = body
+
+  // Recompute is_orderly if org name changed
+  const orderly = (is_orderly !== undefined)
+    ? (is_orderly ? 1 : 0)
+    : (organization_name?.toLowerCase().includes('orderly') ? 1 : 0)
+
+  await c.env.DB.prepare(`
+    UPDATE consults SET
+      doctor_name=?, patient_name=?, organization_name=?, visit_type=?,
+      decision_date=?, decision_status=?,
+      carevalidate_fee=?, contractor_fee=?,
+      notes=?, is_override=?, override_fee=?,
+      is_orderly=?, is_flagged=?, flag_reason=?
+    WHERE id=?
+  `).bind(
+    doctor_name || null, patient_name || null, organization_name || null, visit_type || null,
+    decision_date || null, decision_status || 'Approved',
+    carevalidate_fee ?? 0, contractor_fee ?? 0,
+    notes || null, is_override ? 1 : 0, override_fee || null,
+    orderly, is_flagged ? 1 : 0, flag_reason || null,
+    id
+  ).run()
+
+  // Recompute session totals for the session this consult belongs to
+  const row = await c.env.DB.prepare('SELECT session_id FROM consults WHERE id=?').bind(id).first() as any
+  if (row?.session_id) {
+    const totals = await c.env.DB.prepare(
+      'SELECT COUNT(*) as tc, SUM(carevalidate_fee) as cv, SUM(contractor_fee) as ct FROM consults WHERE session_id=?'
+    ).bind(row.session_id).first() as any
+    await c.env.DB.prepare(
+      'UPDATE upload_sessions SET total_cases=?, total_carevalidate_amount=?, total_contractor_amount=? WHERE id=?'
+    ).bind(totals?.tc || 0, totals?.cv || 0, totals?.ct || 0, row.session_id).run()
+  }
+
   return c.json({ ok: true })
 })
 

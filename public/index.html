@@ -929,6 +929,7 @@ async function renderConsults() {
               <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">CV Fee</th>
               <th class="text-right px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Contractor Fee</th>
               <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Status</th>
+              <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Edit</th>
             </tr>
           </thead>
           <tbody id="consultsTbody">
@@ -992,7 +993,12 @@ function renderConsultsTable(rows, total, page) {
       <td class="px-4 py-2.5 text-right font-medium text-blue-600">${fmt(r.carevalidate_fee)}</td>
       <td class="px-4 py-2.5 text-right font-medium text-purple-600">${fmt(r.contractor_fee)}</td>
       <td class="px-4 py-2.5 text-center"><span class="status-badge badge-approved">${r.decision_status || 'Approved'}</span></td>
-    </tr>`).join('') || '<tr><td colspan="9" class="text-center py-8 text-gray-400">No records found</td></tr>'
+      <td class="px-4 py-2.5 text-center">
+        <button onclick="openEditConsult(${r.id})" class="text-gray-400 hover:text-blue-600 transition-colors" title="Edit record">
+          <i class="fas fa-pen text-xs"></i>
+        </button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="10" class="text-center py-8 text-gray-400">No records found</td></tr>'
 
   // Pagination
   const totalPages = Math.ceil(total / 50)
@@ -1073,6 +1079,219 @@ function renderPayroll() {
         </div>` : ''}
     </div>
     ${paystubModalHtml()}`
+}
+
+// ════════════════════════════════════════════════════
+// EDIT CONSULT MODAL
+// ════════════════════════════════════════════════════
+let editConsultData = null
+
+async function openEditConsult(id) {
+  // Fetch the single consult row from current page data first, fallback to API
+  editConsultData = consultsState.data.find(r => r.id === id) || null
+  if (!editConsultData) {
+    try { editConsultData = await api(`/api/consults/${id}`) } catch(e) {}
+  }
+  if (!editConsultData) return showToast('Could not load record', 'error')
+
+  const r = editConsultData
+  const doctorOptions = state.contractors.map(c =>
+    `<option value="${c.name}" ${c.name === r.doctor_name ? 'selected' : ''}>${c.name}</option>`
+  ).join('')
+
+  const html = `
+  <div id="editConsultModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+      <div class="flex items-center justify-between p-5 border-b sticky top-0 bg-white rounded-t-2xl z-10">
+        <div>
+          <h3 class="text-lg font-bold text-gray-800">Edit Consult Record</h3>
+          <p class="text-xs text-gray-400 mt-0.5 font-mono">${r.case_id_short || r.case_id?.substring(0,12) || 'ID: ' + id}</p>
+        </div>
+        <button onclick="closeEditConsult()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      </div>
+      <div class="p-5 space-y-4">
+
+        <!-- Row 1: Doctor + Visit Type -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Doctor</label>
+            <select id="ec_doctor" class="w-full">
+              <option value="">— Unassigned —</option>
+              ${doctorOptions}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Visit Type</label>
+            <select id="ec_visit_type" class="w-full" onchange="onEditVisitTypeChange()">
+              <option value="ASYNC_TEXT_EMAIL" ${r.visit_type==='ASYNC_TEXT_EMAIL'?'selected':''}>Async (Text/Email)</option>
+              <option value="SYNC_PHONE" ${r.visit_type==='SYNC_PHONE'?'selected':''}>Sync Phone</option>
+              <option value="SYNC_VIDEO" ${r.visit_type==='SYNC_VIDEO'?'selected':''}>Sync Video</option>
+              <option value="SYNC_IN_PERSON" ${r.visit_type==='SYNC_IN_PERSON'?'selected':''}>Sync In-Person</option>
+              <option value="NO_SHOW" ${r.visit_type==='NO_SHOW'?'selected':''}>No Show</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 2: Patient + Organization -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Patient Name</label>
+            <input id="ec_patient" type="text" class="w-full" value="${(r.patient_name||'').replace(/"/g,'&quot;')}"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Organization</label>
+            <input id="ec_org" type="text" class="w-full" value="${(r.organization_name||'').replace(/"/g,'&quot;')}" oninput="onEditOrgChange()"/>
+          </div>
+        </div>
+
+        <!-- Row 3: Date + Status -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Decision Date</label>
+            <input id="ec_date" type="date" class="w-full" value="${r.decision_date ? r.decision_date.substring(0,10) : ''}"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Decision Status</label>
+            <select id="ec_status" class="w-full">
+              <option value="Approved" ${(r.decision_status||'Approved')==='Approved'?'selected':''}>Approved</option>
+              <option value="Denied" ${r.decision_status==='Denied'?'selected':''}>Denied</option>
+              <option value="Pending" ${r.decision_status==='Pending'?'selected':''}>Pending</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 4: CV Fee + CT Fee -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">CareValidate Fee ($)</label>
+            <input id="ec_cv_fee" type="number" step="0.01" min="0" class="w-full font-mono" value="${r.carevalidate_fee ?? 0}"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">Contractor Fee ($)</label>
+            <input id="ec_ct_fee" type="number" step="0.01" min="0" class="w-full font-mono" value="${r.contractor_fee ?? 0}"/>
+          </div>
+        </div>
+
+        <!-- Row 5: Flags -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="flex items-center gap-3 bg-purple-50 rounded-lg px-3 py-2.5">
+            <input id="ec_orderly" type="checkbox" class="w-4 h-4 accent-purple-600" ${r.is_orderly ? 'checked' : ''} onchange="onEditOrderlyChange()"/>
+            <label for="ec_orderly" class="text-sm font-medium text-purple-700 cursor-pointer">OrderlyMeds Rate ($17/$10)</label>
+          </div>
+          <div class="flex items-center gap-3 bg-yellow-50 rounded-lg px-3 py-2.5">
+            <input id="ec_flagged" type="checkbox" class="w-4 h-4 accent-yellow-500" ${r.is_flagged ? 'checked' : ''}/>
+            <label for="ec_flagged" class="text-sm font-medium text-yellow-700 cursor-pointer">Flagged for Review</label>
+          </div>
+        </div>
+
+        <!-- Row 6: Notes -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Notes</label>
+          <textarea id="ec_notes" rows="2" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Optional notes...">${r.notes||''}</textarea>
+        </div>
+
+        <!-- Preset buttons for quick fee assignment -->
+        <div class="bg-gray-50 rounded-xl p-3">
+          <p class="text-xs font-semibold text-gray-400 mb-2">Quick Fee Presets</p>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="applyFeePreset(20,10,'ASYNC_TEXT_EMAIL',false)" class="px-3 py-1 rounded-lg bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200">Async $20/$10</button>
+            <button onclick="applyFeePreset(17,10,'ASYNC_TEXT_EMAIL',true)" class="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold hover:bg-purple-200">Orderly $17/$10</button>
+            <button onclick="applyFeePreset(50,30,null,false)" class="px-3 py-1 rounded-lg bg-green-100 text-green-700 text-xs font-semibold hover:bg-green-200">Sync $50/$30</button>
+            <button onclick="applyFeePreset(0,0,null,false)" class="px-3 py-1 rounded-lg bg-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-300">No Show $0/$0</button>
+          </div>
+        </div>
+
+      </div>
+      <div class="flex justify-end gap-3 px-5 py-4 border-t bg-gray-50 rounded-b-2xl sticky bottom-0">
+        <button onclick="closeEditConsult()" class="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+        <button onclick="saveEditConsult(${id})" class="btn-primary px-5 py-2 text-sm font-semibold">
+          <i class="fas fa-save mr-1.5"></i>Save Changes
+        </button>
+      </div>
+    </div>
+  </div>`
+
+  document.body.insertAdjacentHTML('beforeend', html)
+}
+
+function closeEditConsult() {
+  document.getElementById('editConsultModal')?.remove()
+  editConsultData = null
+}
+
+function applyFeePreset(cv, ct, vt, orderly) {
+  const cvEl = document.getElementById('ec_cv_fee')
+  const ctEl = document.getElementById('ec_ct_fee')
+  const vtEl = document.getElementById('ec_visit_type')
+  const orEl = document.getElementById('ec_orderly')
+  if (cvEl) cvEl.value = cv
+  if (ctEl) ctEl.value = ct
+  if (vt && vtEl) vtEl.value = vt
+  if (orEl) orEl.checked = orderly
+}
+
+function onEditVisitTypeChange() {
+  // Auto-suggest fees based on visit type, respecting orderly checkbox
+  const vt = document.getElementById('ec_visit_type')?.value
+  const orderly = document.getElementById('ec_orderly')?.checked
+  if (orderly) return // don't override if orderly is set
+  const rates = state.rates || []
+  const rate = rates.find(r => r.visit_type === vt)
+  if (rate) {
+    const cvEl = document.getElementById('ec_cv_fee')
+    const ctEl = document.getElementById('ec_ct_fee')
+    if (cvEl) cvEl.value = rate.carevalidate_rate
+    if (ctEl) ctEl.value = rate.contractor_rate
+  }
+}
+
+function onEditOrgChange() {
+  const org = document.getElementById('ec_org')?.value || ''
+  const orEl = document.getElementById('ec_orderly')
+  if (orEl && org.toLowerCase().includes('orderly')) {
+    orEl.checked = true
+    applyFeePreset(17, 10, 'ASYNC_TEXT_EMAIL', true)
+  }
+}
+
+function onEditOrderlyChange() {
+  const orderly = document.getElementById('ec_orderly')?.checked
+  if (orderly) {
+    applyFeePreset(17, 10, 'ASYNC_TEXT_EMAIL', true)
+  } else {
+    onEditVisitTypeChange()
+  }
+}
+
+async function saveEditConsult(id) {
+  const payload = {
+    doctor_name:       document.getElementById('ec_doctor')?.value || null,
+    patient_name:      document.getElementById('ec_patient')?.value || null,
+    organization_name: document.getElementById('ec_org')?.value || null,
+    visit_type:        document.getElementById('ec_visit_type')?.value || null,
+    decision_date:     document.getElementById('ec_date')?.value || null,
+    decision_status:   document.getElementById('ec_status')?.value || 'Approved',
+    carevalidate_fee:  parseFloat(document.getElementById('ec_cv_fee')?.value) || 0,
+    contractor_fee:    parseFloat(document.getElementById('ec_ct_fee')?.value) || 0,
+    is_orderly:        document.getElementById('ec_orderly')?.checked ? 1 : 0,
+    is_flagged:        document.getElementById('ec_flagged')?.checked ? 1 : 0,
+    notes:             document.getElementById('ec_notes')?.value || null,
+    is_override:       1
+  }
+
+  try {
+    await api(`/api/consults/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    closeEditConsult()
+    showToast('Record updated successfully', 'success')
+    // Reload consults table and refresh dashboard summary
+    await loadConsultsPage(consultsState.page)
+    if (state.currentPeriod) {
+      const summary = await api(`/api/summary/period/${state.currentPeriod.period_key}`)
+      state.currentSummary = summary
+    }
+  } catch(e) {
+    showToast('Error saving: ' + e.message, 'error')
+  }
 }
 
 // ════════════════════════════════════════════════════
