@@ -292,6 +292,15 @@ function navigate(page) {
   if (pages[page]) pages[page]()
 }
 
+// Contractor type helpers
+function contractorTypeLabel(t) {
+  return t === 'owner' ? 'Owner' : t === 'chris_garcia' ? 'Chris Garcia' : 'Regular'
+}
+function contractorTypeBadge(t) {
+  const cls = t === 'owner' ? 'bg-amber-100 text-amber-700' : t === 'chris_garcia' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+  return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${cls}">${contractorTypeLabel(t)}</span>`
+}
+
 // ════════════════════════════════════════════════════
 // INITIAL DATA
 // ════════════════════════════════════════════════════
@@ -301,6 +310,7 @@ async function loadInitialData() {
     state.periods = await api('/api/sessions')
     state.contractors = await api('/api/contractors')
     state.rates = await api('/api/rates')
+    state.typeRates = await api('/api/contractor-type-rates').catch(() => [])
     populateSessionSelector()
 
     if (state.periods.length > 0) {
@@ -1023,9 +1033,14 @@ function renderPayroll() {
     <div class="space-y-4">
       <div class="flex justify-between items-center">
         <p class="text-sm text-gray-500">Payroll for <strong>${state.currentPeriod.period_label}</strong> — click any contractor to view/export paystub</p>
-        <button onclick="exportGusto()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
-          <i class="fas fa-file-excel mr-2"></i>Export All to Gusto
-        </button>
+        <div class="flex gap-3">
+          <button onclick="recalculatePeriods('${escHtml(state.currentPeriod.period_key)}')" class="px-4 py-2.5 rounded-xl font-medium text-sm border border-gray-200 hover:bg-gray-50 text-gray-600">
+            <i class="fas fa-sync-alt mr-2"></i>Recalculate Period
+          </button>
+          <button onclick="exportGusto()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
+            <i class="fas fa-file-excel mr-2"></i>Export All to Gusto
+          </button>
+        </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         ${(s.byDoctor || []).filter(d => d.contractor_id).map(d => `
@@ -1033,7 +1048,11 @@ function renderPayroll() {
             <div class="flex items-start justify-between mb-3">
               <div>
                 <div class="font-semibold text-gray-800">${d.doctor_name}</div>
-                <div class="text-xs text-gray-400">${d.company || 'Lion MD'} ${d.ein_ssn ? '· EIN/SSN: ' + d.ein_ssn : ''}</div>
+                <div class="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
+                  ${d.company || 'Lion MD'}
+                  ${contractorTypeBadge(state.contractors.find(c=>c.id===d.contractor_id)?.contractor_type || 'regular')}
+                  ${d.ein_ssn ? '· EIN/SSN: ' + d.ein_ssn : ''}
+                </div>
               </div>
               <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:rgba(139,92,246,0.1)">
                 <i class="fas fa-user-md text-purple-500"></i>
@@ -1307,6 +1326,9 @@ function paystubModalHtml() {
           <p class="text-sm text-gray-500" id="paystubPeriod"></p>
         </div>
         <div class="flex gap-3">
+          <button onclick="regeneratePaystub()" class="px-4 py-2.5 rounded-xl font-medium text-sm border border-gray-200 hover:bg-gray-50 text-gray-600">
+            <i class="fas fa-sync-alt mr-2"></i>Regenerate
+          </button>
           <button onclick="downloadPaystub()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
             <i class="fas fa-file-pdf mr-2"></i>Download PDF
           </button>
@@ -1322,7 +1344,8 @@ function paystubModalHtml() {
   </div>`
 }
 
-let currentPaystubData = null
+  let currentPaystubData = null
+  let currentPaystubMeta = { periodKey: null, contractorId: null, doctorName: null }
 
 async function openPaystubModal(sessionId, contractorId, doctorName) {
   // Ensure modal exists
@@ -1331,16 +1354,35 @@ async function openPaystubModal(sessionId, contractorId, doctorName) {
     div.innerHTML = paystubModalHtml()
     document.body.appendChild(div.firstChild)
   }
+  currentPaystubMeta = { periodKey: sessionId, contractorId, doctorName }
   $('paystubModal').classList.remove('hidden')
   $('paystubDoctorName').textContent = doctorName
   $('paystubPeriod').textContent = state.currentPeriod?.period_label || ''
   $('paystubContent').innerHTML = '<div class="flex justify-center py-10"><div class="spinner"></div></div>'
-
   try {
     currentPaystubData = await api(`/api/paystub/period/${sessionId}/${contractorId}`)
     renderPaystubContent(currentPaystubData)
   } catch(e) {
     $('paystubContent').innerHTML = `<p class="text-red-500 text-center py-8">${e.message}</p>`
+  }
+}
+
+async function regeneratePaystub() {
+  const { periodKey, contractorId, doctorName } = currentPaystubMeta
+  if (!periodKey || !contractorId) return
+  // Run recalculate for this period only, then reload paystub
+  showToast('Recalculating fees...', 'info')
+  try {
+    await api('/api/recalculate', { method: 'POST', body: JSON.stringify({ period_key: periodKey }) })
+    currentPaystubData = await api(`/api/paystub/period/${periodKey}/${contractorId}`)
+    renderPaystubContent(currentPaystubData)
+    // Refresh summary
+    state.currentSummary = await api(`/api/summary/period/${periodKey}`)
+    state.periods = await api('/api/sessions')
+    populateSessionSelector()
+    showToast('Paystub regenerated with current rates!', 'success')
+  } catch(e) {
+    showToast('Error regenerating: ' + e.message, 'error')
   }
 }
 
@@ -1581,6 +1623,7 @@ function renderContractors() {
           <thead class="bg-gray-50">
             <tr>
               <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Name</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Type</th>
               <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Company</th>
               <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">EIN / SSN</th>
               <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Email</th>
@@ -1596,6 +1639,7 @@ function renderContractors() {
                     ${c.name}
                   </div>
                 </td>
+                <td class="px-5 py-3">${contractorTypeBadge(c.contractor_type || 'regular')}</td>
                 <td class="px-5 py-3 text-gray-600">${c.company || '—'}</td>
                 <td class="px-5 py-3 font-mono text-sm text-gray-500">${c.ein_ssn || '—'}</td>
                 <td class="px-5 py-3 text-gray-500">${c.email || '—'}</td>
@@ -1620,6 +1664,14 @@ function renderContractors() {
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
         <h3 class="text-lg font-bold text-gray-800 mb-5" id="contractorModalTitle">Add Contractor</h3>
         <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Contractor Type *</label>
+            <select id="ctType" class="w-full">
+              <option value="regular">Regular</option>
+              <option value="owner">Owner</option>
+              <option value="chris_garcia">Chris Garcia</option>
+            </select>
+          </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1.5">Full Name *</label>
             <input type="text" id="ctName" class="w-full" placeholder="Dr. Jane Smith"/>
@@ -1649,6 +1701,7 @@ function renderContractors() {
 function openContractorModal(contractor = null) {
   $('contractorModalTitle').textContent = contractor ? 'Edit Contractor' : 'Add Contractor'
   $('ctId').value = contractor?.id || ''
+  $('ctType').value = contractor?.contractor_type || 'regular'
   $('ctName').value = contractor?.name || ''
   $('ctCompany').value = contractor?.company || ''
   $('ctEin').value = contractor?.ein_ssn || ''
@@ -1658,7 +1711,7 @@ function openContractorModal(contractor = null) {
 
 async function saveContractor() {
   const id = $('ctId').value
-  const data = { name: $('ctName').value, company: $('ctCompany').value, ein_ssn: $('ctEin').value, email: $('ctEmail').value }
+  const data = { name: $('ctName').value, company: $('ctCompany').value, ein_ssn: $('ctEin').value, email: $('ctEmail').value, contractor_type: $('ctType').value }
   if (!data.name) { showToast('Name is required', 'warning'); return }
   try {
     if (id) {
@@ -1685,60 +1738,115 @@ async function deleteContractor(id, name) {
 // RATES PAGE
 // ════════════════════════════════════════════════════
 function renderRates() {
+  const types = [
+    { key: 'regular',      label: 'Regular',      color: 'gray' },
+    { key: 'owner',        label: 'Owner',         color: 'amber' },
+    { key: 'chris_garcia', label: 'Chris Garcia',  color: 'blue' }
+  ]
+  const visitTypes = [
+    { key: 'ASYNC_TEXT_EMAIL', label: 'Async (Text/Email)' },
+    { key: 'SYNC_PHONE',       label: 'Sync Phone' },
+    { key: 'SYNC_VIDEO',       label: 'Sync Video' },
+    { key: 'SYNC_IN_PERSON',   label: 'Sync In-Person' },
+    { key: 'ORDERLY',          label: 'OrderlyMeds' },
+    { key: 'NO_SHOW',          label: 'No Show' }
+  ]
+
+  // Build lookup for type rates
+  const trMap = {}
+  ;(state.typeRates || []).forEach(r => {
+    if (!trMap[r.contractor_type]) trMap[r.contractor_type] = {}
+    trMap[r.contractor_type][r.visit_type] = r.contractor_rate
+  })
+
   $('mainContent').innerHTML = `
-    <div class="max-w-3xl space-y-4">
-      <!-- Info banner -->
-      <div class="card p-4 flex items-start gap-3">
-        <i class="fas fa-info-circle text-blue-400 mt-0.5 flex-shrink-0"></i>
-        <p class="text-sm text-gray-600">
-          <strong>CareValidate Rate</strong> = what CareValidate pays Lion MD per case. &nbsp;·&nbsp;
-          <strong>Contractor Rate</strong> = what Lion MD pays each contractor per case.
-        </p>
+    <div class="max-w-4xl space-y-5">
+
+      <!-- Info + Recalculate banner -->
+      <div class="card p-4 flex items-start justify-between gap-4">
+        <div class="flex items-start gap-3">
+          <i class="fas fa-info-circle text-blue-400 mt-0.5 flex-shrink-0"></i>
+          <p class="text-sm text-gray-600">
+            <strong>CareValidate Rate</strong> = what CareValidate pays Lion MD per case. &nbsp;·&nbsp;
+            <strong>Contractor Rate</strong> = what Lion MD pays each contractor type per case.
+            Rates apply to <em>new</em> uploads automatically.
+          </p>
+        </div>
+        <div class="flex-shrink-0">
+          <button onclick="recalculatePeriods()" id="recalcBtn"
+            class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap">
+            <i class="fas fa-sync-alt mr-2"></i>Recalculate All Periods
+          </button>
+        </div>
       </div>
 
-      <!-- Rates table card -->
+      <!-- CareValidate rates (what CV pays us) -->
       <div class="card overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-100">
-          <h3 class="font-semibold text-gray-700">Payment Rates by Visit Type</h3>
-          <p class="text-xs text-gray-400 mt-0.5">Changes take effect for new uploads only</p>
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 class="font-semibold text-gray-700">CareValidate Rates (CV → Lion MD)</h3>
+            <p class="text-xs text-gray-400 mt-0.5">What CareValidate pays Lion MD per case type</p>
+          </div>
         </div>
-        <!-- Column headers -->
-        <div class="grid px-5 py-2 bg-gray-50 border-b border-gray-100" style="grid-template-columns:1fr 140px 140px 110px 80px;gap:12px;">
-          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Visit Type</span>
-          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">CV Pays Us</span>
-          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">We Pay Contractor</span>
-          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Margin</span>
+        <div class="grid px-5 py-2 bg-gray-50 border-b border-gray-100" style="grid-template-columns:1fr 140px 80px;gap:12px;">
+          <span class="text-xs font-semibold text-gray-400 uppercase">Visit Type</span>
+          <span class="text-xs font-semibold text-gray-400 uppercase">CV Pays Us</span>
           <span></span>
         </div>
-        <div id="ratesTable">
-          ${state.rates.map(r => `
-            <div class="grid items-center px-5 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors" id="rate_${r.id}" style="grid-template-columns:1fr 140px 140px 110px 80px;gap:12px;">
-              <div>
-                <div class="font-semibold text-gray-800 text-sm">${r.label || visitTypeLabel(r.visit_type)}</div>
-                <div class="text-xs text-gray-400 font-mono mt-0.5">${r.visit_type}</div>
-              </div>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
-                <input type="number" id="cv_${r.id}" value="${r.carevalidate_rate}" step="0.01" min="0"
-                  class="w-full" style="padding-left:1.6rem"/>
-              </div>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
-                <input type="number" id="ct_${r.id}" value="${r.contractor_rate}" step="0.01" min="0"
-                  class="w-full" style="padding-left:1.6rem"/>
-              </div>
-              <div>
-                <span class="text-sm font-semibold" id="margin_${r.id}"
-                  style="color:${r.carevalidate_rate - r.contractor_rate >= 0 ? '#16a34a' : '#dc2626'}">
-                  ${fmt(r.carevalidate_rate - r.contractor_rate)}
-                </span>
-              </div>
-              <div>
-                <button onclick="saveRate(${r.id})" class="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold w-full">
-                  Save
-                </button>
-              </div>
-            </div>`).join('')}
+        ${state.rates.map(r => `
+          <div class="grid items-center px-5 py-3 border-b border-gray-50 hover:bg-gray-50" id="rate_${r.id}" style="grid-template-columns:1fr 140px 80px;gap:12px;">
+            <div>
+              <div class="font-semibold text-gray-800 text-sm">${r.label || visitTypeLabel(r.visit_type)}</div>
+              <div class="text-xs text-gray-400 font-mono">${r.visit_type}</div>
+            </div>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+              <input type="number" id="cv_${r.id}" value="${r.carevalidate_rate}" step="0.01" min="0" class="w-full" style="padding-left:1.6rem"/>
+            </div>
+            <button onclick="saveRate(${r.id})" class="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">Save</button>
+          </div>`).join('')}
+      </div>
+
+      <!-- Contractor Type Rates -->
+      <div class="card overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100">
+          <h3 class="font-semibold text-gray-700">Contractor Payout Rates (Lion MD → Contractor)</h3>
+          <p class="text-xs text-gray-400 mt-0.5">Each contractor type can have different payout rates per visit type</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Visit Type</th>
+                ${types.map(t => `<th class="text-center px-4 py-3 text-xs font-semibold">
+                  <span class="px-2 py-1 rounded-full bg-${t.color}-100 text-${t.color}-700">${t.label}</span>
+                </th>`).join('')}
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${visitTypes.map(vt => `
+                <tr class="border-b border-gray-50 hover:bg-gray-50">
+                  <td class="px-5 py-3">
+                    <div class="font-medium text-gray-800">${vt.label}</div>
+                    <div class="text-xs text-gray-400 font-mono">${vt.key}</div>
+                  </td>
+                  ${types.map(t => `
+                    <td class="px-4 py-3 text-center">
+                      <div class="relative inline-block w-24">
+                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+                        <input type="number" id="tr_${t.key}_${vt.key}"
+                          value="${trMap[t.key]?.[vt.key] ?? 0}"
+                          step="0.01" min="0"
+                          class="w-full text-center font-mono" style="padding-left:1.4rem"/>
+                      </div>
+                    </td>`).join('')}
+                  <td class="px-4 py-3">
+                    <button onclick="saveTypeRate('${vt.key}')" class="btn-outline px-3 py-1 rounded-lg text-xs font-semibold">Save Row</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -1747,39 +1855,60 @@ function renderRates() {
         <div class="flex items-start gap-3">
           <i class="fas fa-lightbulb text-amber-500 mt-0.5 flex-shrink-0"></i>
           <div class="text-sm text-amber-700">
-            <strong>OrderlyMeds Note:</strong> If the organization name contains "OrderlyMeds", the consult is automatically classified as OrderlyMeds regardless of visit type or fee amount.
+            <strong>OrderlyMeds Note:</strong> If the organization name contains "OrderlyMeds", the consult uses the <strong>OrderlyMeds</strong> CV rate (currently $17) regardless of visit type. Contractor payout uses the <strong>ORDERLY</strong> row for that contractor's type.
           </div>
         </div>
       </div>
-    </div>`
 
-  // Live margin calculation
-  state.rates.forEach(r => {
-    const cvInput = $(`cv_${r.id}`)
-    const ctInput = $(`ct_${r.id}`)
-    if (cvInput && ctInput) {
-      const update = () => {
-        const m = parseFloat(cvInput.value || 0) - parseFloat(ctInput.value || 0)
-        const el = $(`margin_${r.id}`)
-        if (el) { el.textContent = fmt(m); el.style.color = m >= 0 ? '#16a34a' : '#dc2626' }
-      }
-      cvInput.addEventListener('input', update)
-      ctInput.addEventListener('input', update)
-    }
-  })
+    </div>`
 }
 
 async function saveRate(id) {
   const cv = parseFloat($(`cv_${id}`).value)
-  const ct = parseFloat($(`ct_${id}`).value)
   const rate = state.rates.find(r => r.id === id)
   try {
-    await api(`/api/rates/${id}`, { method: 'PUT', body: JSON.stringify({ carevalidate_rate: cv, contractor_rate: ct, label: rate?.label }) })
+    await api(`/api/rates/${id}`, { method: 'PUT', body: JSON.stringify({ carevalidate_rate: cv, contractor_rate: cv, label: rate?.label }) })
     state.rates = await api('/api/rates')
-    showToast('Rate saved!', 'success')
+    showToast('CV rate saved!', 'success')
     renderRates()
   } catch(e) { showToast('Error: ' + e.message, 'error') }
 }
+
+async function saveTypeRate(visitType) {
+  const types = ['regular', 'owner', 'chris_garcia']
+  try {
+    for (const t of types) {
+      const val = parseFloat(document.getElementById(`tr_${t}_${visitType}`)?.value || '0')
+      await api('/api/contractor-type-rates', { method: 'PUT', body: JSON.stringify({ contractor_type: t, visit_type: visitType, contractor_rate: val }) })
+    }
+    state.typeRates = await api('/api/contractor-type-rates').catch(() => [])
+    showToast(`${visitType} rates saved for all types!`, 'success')
+  } catch(e) { showToast('Error: ' + e.message, 'error') }
+}
+
+async function recalculatePeriods(periodKey) {
+  const btn = $('recalcBtn')
+  const targetPeriod = periodKey || state.currentPeriod?.period_key || null
+  const scopeLabel = targetPeriod ? `period ${targetPeriod}` : 'all periods'
+  if (!confirm(`Recalculate fees for ${scopeLabel} using current rates?\n\nThis will update all consult fees that have not been manually overridden.`)) return
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Recalculating...' }
+  try {
+    const body = targetPeriod ? { period_key: targetPeriod } : {}
+    const res = await api('/api/recalculate', { method: 'POST', body: JSON.stringify(body) })
+    showToast(`✅ Recalculated ${res.updated?.toLocaleString()} consults across ${res.sessions} sessions`, 'success')
+    // Reload summary
+    if (state.currentPeriod) {
+      state.currentSummary = await api(`/api/summary/period/${state.currentPeriod.period_key}`)
+    }
+    state.periods = await api('/api/sessions')
+    populateSessionSelector()
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error')
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Recalculate All Periods' }
+  }
+}
+
 
 // ════════════════════════════════════════════════════
 // CAREVALIDATE VIEW (Admin sees this, CV sees it too)

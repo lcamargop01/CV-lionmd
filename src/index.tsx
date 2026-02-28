@@ -94,27 +94,161 @@ app.put('/api/rates/:id', async (c) => {
 })
 
 // ──────────────────────────────────────────────
+// CONTRACTOR TYPE RATES
+// ──────────────────────────────────────────────
+app.get('/api/contractor-type-rates', async (c) => {
+  // Ensure table exists
+  await c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS contractor_type_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contractor_type TEXT NOT NULL,
+    visit_type TEXT NOT NULL,
+    contractor_rate REAL NOT NULL DEFAULT 0,
+    label TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(contractor_type, visit_type)
+  )`).run()
+  const rows = await c.env.DB.prepare('SELECT * FROM contractor_type_rates ORDER BY contractor_type, visit_type').all()
+  return c.json(rows.results)
+})
+
+app.put('/api/contractor-type-rates', async (c) => {
+  const { contractor_type, visit_type, contractor_rate } = await c.req.json()
+  await c.env.DB.prepare(
+    `INSERT INTO contractor_type_rates (contractor_type, visit_type, contractor_rate, updated_at)
+     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(contractor_type, visit_type) DO UPDATE SET contractor_rate=excluded.contractor_rate, updated_at=CURRENT_TIMESTAMP`
+  ).bind(contractor_type, visit_type, contractor_rate).run()
+  return c.json({ ok: true })
+})
+
+// ──────────────────────────────────────────────
+// RECALCULATE PERIODS — recompute all consult fees using current rates
+// ──────────────────────────────────────────────
+app.post('/api/recalculate', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const period_key = (body as any).period_key || null  // optional: limit to one period
+
+  // Load current rates
+  const ratesResult = await c.env.DB.prepare('SELECT * FROM payment_rates').all()
+  const ratesMap: Record<string, { cv: number; ct: number }> = {}
+  for (const r of ratesResult.results as any[]) {
+    ratesMap[(r as any).visit_type] = { cv: (r as any).carevalidate_rate, ct: (r as any).contractor_rate }
+  }
+
+  // Load contractor type rates
+  const ctRatesResult = await c.env.DB.prepare('SELECT * FROM contractor_type_rates').all()
+  const ctRatesMap: Record<string, Record<string, number>> = {}
+  for (const r of ctRatesResult.results as any[]) {
+    if (!ctRatesMap[(r as any).contractor_type]) ctRatesMap[(r as any).contractor_type] = {}
+    ctRatesMap[(r as any).contractor_type][(r as any).visit_type] = (r as any).contractor_rate
+  }
+
+  // Load contractors with their types
+  const contractorsResult = await c.env.DB.prepare('SELECT id, name, contractor_type FROM contractors WHERE is_active=1').all()
+  const contractorTypeMap: Record<number, string> = {}
+  for (const ct of contractorsResult.results as any[]) {
+    contractorTypeMap[(ct as any).id] = (ct as any).contractor_type || 'regular'
+  }
+
+  // Fetch all consults (not overridden), optionally filtered by period
+  const whereClause = period_key
+    ? 'LEFT JOIN upload_sessions s ON c.session_id=s.id WHERE c.is_override=0 AND s.period_key=?'
+    : 'LEFT JOIN upload_sessions s ON c.session_id=s.id WHERE c.is_override=0'
+  const params: any[] = period_key ? [period_key] : []
+
+  const PAGE_SIZE = 500
+  let offset = 0
+  let updatedCount = 0
+
+  while (true) {
+    const rows = await c.env.DB.prepare(
+      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.session_id
+       FROM consults c ${whereClause} LIMIT ${PAGE_SIZE} OFFSET ${offset}`
+    ).bind(...params).all()
+
+    if (!rows.results.length) break
+
+    // Batch updates
+    const stmts = []
+    for (const row of rows.results as any[]) {
+      const vt: string = row.visit_type || ''
+      const isOrderly: boolean = row.is_orderly === 1
+      const ctype: string = contractorTypeMap[row.contractor_id] || 'regular'
+
+      // CV fee: orderly always $17, else lookup by visit_type
+      let cvFee = 0
+      if (isOrderly) {
+        cvFee = ratesMap['ORDERLY']?.cv ?? 17
+      } else {
+        cvFee = ratesMap[vt.toUpperCase()]?.cv ?? 0
+      }
+
+      // CT fee: use contractor-type-specific rate if available, else fall back to payment_rates
+      let ctFee = 0
+      if (isOrderly) {
+        ctFee = ctRatesMap[ctype]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 10
+      } else {
+        ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
+      }
+
+      stmts.push(
+        c.env.DB.prepare('UPDATE consults SET carevalidate_fee=?, contractor_fee=? WHERE id=?')
+          .bind(cvFee, ctFee, row.id)
+      )
+      updatedCount++
+    }
+
+    if (stmts.length > 0) await c.env.DB.batch(stmts)
+    offset += PAGE_SIZE
+    if (rows.results.length < PAGE_SIZE) break
+  }
+
+  // Recompute all session totals
+  const sessions = await c.env.DB.prepare(
+    period_key
+      ? 'SELECT id FROM upload_sessions WHERE period_key=?'
+      : 'SELECT id FROM upload_sessions'
+  ).bind(...(period_key ? [period_key] : [])).all()
+
+  const sessionStmts = []
+  for (const s of sessions.results as any[]) {
+    const totals = await c.env.DB.prepare(
+      'SELECT COUNT(*) as tc, SUM(carevalidate_fee) as cv, SUM(contractor_fee) as ct FROM consults WHERE session_id=?'
+    ).bind(s.id).first() as any
+    sessionStmts.push(
+      c.env.DB.prepare('UPDATE upload_sessions SET total_cases=?, total_carevalidate_amount=?, total_contractor_amount=? WHERE id=?')
+        .bind(totals?.tc || 0, totals?.cv || 0, totals?.ct || 0, s.id)
+    )
+  }
+  if (sessionStmts.length) await c.env.DB.batch(sessionStmts)
+
+  return c.json({ ok: true, updated: updatedCount, sessions: sessions.results.length })
+})
+
+// ──────────────────────────────────────────────
 // CONTRACTORS
 // ──────────────────────────────────────────────
 app.get('/api/contractors', async (c) => {
+  // ensure contractor_type column exists
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN contractor_type TEXT DEFAULT 'regular'`).run().catch(() => {})
   const rows = await c.env.DB.prepare('SELECT * FROM contractors WHERE is_active=1 ORDER BY name').all()
   return c.json(rows.results)
 })
 
 app.post('/api/contractors', async (c) => {
-  const { name, company, ein_ssn, email } = await c.req.json()
+  const { name, company, ein_ssn, email, contractor_type } = await c.req.json()
   const result = await c.env.DB.prepare(
-    'INSERT INTO contractors (name, company, ein_ssn, email) VALUES (?, ?, ?, ?)'
-  ).bind(name, company || '', ein_ssn || '', email || '').run()
-  return c.json({ id: result.meta.last_row_id, name, company, ein_ssn, email })
+    `INSERT INTO contractors (name, company, ein_ssn, email, contractor_type) VALUES (?, ?, ?, ?, ?)`
+  ).bind(name, company || '', ein_ssn || '', email || '', contractor_type || 'regular').run()
+  return c.json({ id: result.meta.last_row_id, name, company, ein_ssn, email, contractor_type })
 })
 
 app.put('/api/contractors/:id', async (c) => {
   const id = c.req.param('id')
-  const { name, company, ein_ssn, email, is_active } = await c.req.json()
+  const { name, company, ein_ssn, email, is_active, contractor_type } = await c.req.json()
   await c.env.DB.prepare(
-    'UPDATE contractors SET name=?, company=?, ein_ssn=?, email=?, is_active=? WHERE id=?'
-  ).bind(name, company || '', ein_ssn || '', email || '', is_active ?? 1, id).run()
+    `UPDATE contractors SET name=?, company=?, ein_ssn=?, email=?, is_active=?, contractor_type=? WHERE id=?`
+  ).bind(name, company || '', ein_ssn || '', email || '', is_active ?? 1, contractor_type || 'regular', id).run()
   return c.json({ ok: true })
 })
 
@@ -207,12 +341,21 @@ async function loadMaps(db: D1Database) {
   for (const r of ratesResult.results as any[]) {
     ratesMap[r.visit_type] = { cv: r.carevalidate_rate, ct: r.contractor_rate }
   }
-  const contractorsResult = await db.prepare('SELECT id, name FROM contractors WHERE is_active=1').all()
+  const contractorsResult = await db.prepare('SELECT id, name, contractor_type FROM contractors WHERE is_active=1').all()
   const contractorMap: Record<string, number> = {}
+  const contractorTypeMap: Record<number, string> = {}
   for (const ct of contractorsResult.results as any[]) {
     contractorMap[(ct.name as string).toLowerCase().trim()] = ct.id as number
+    contractorTypeMap[ct.id as number] = (ct.contractor_type as string) || 'regular'
   }
-  return { ratesMap, contractorMap }
+  // Load contractor-type-specific rates
+  const ctRatesResult = await db.prepare('SELECT * FROM contractor_type_rates').all().catch(() => ({ results: [] }))
+  const ctRatesMap: Record<string, Record<string, number>> = {}
+  for (const r of ctRatesResult.results as any[]) {
+    if (!ctRatesMap[r.contractor_type]) ctRatesMap[r.contractor_type] = {}
+    ctRatesMap[r.contractor_type][r.visit_type] = r.contractor_rate
+  }
+  return { ratesMap, contractorMap, contractorTypeMap, ctRatesMap }
 }
 
 // ──────────────────────────────────────────────
@@ -225,7 +368,9 @@ async function insertRows(
   sessionId: number,
   rows: any[],
   ratesMap: Record<string, { cv: number; ct: number }>,
-  contractorMap: Record<string, number>
+  contractorMap: Record<string, number>,
+  contractorTypeMap: Record<number, string> = {},
+  ctRatesMap: Record<string, Record<string, number>> = {}
 ) {
   let totalCV = 0
   let totalCT = 0
@@ -243,15 +388,19 @@ async function insertRows(
     const statements = batch.map((row: any) => {
       const fees = computeFee(row.visit_type, ratesMap, row.raw_fee, row.organization_name)
       const orderly = isOrderlyRow(row.organization_name, row.raw_fee) ? 1 : 0
-      totalCV += fees.cv
-      totalCT += fees.ct
       const contractorId = contractorMap[(row.doctor_name || '').toLowerCase().trim()] || null
+      // Override CT fee with contractor-type-specific rate if available
+      const ctype = contractorId ? (contractorTypeMap[contractorId] || 'regular') : 'regular'
+      const vtKey = orderly ? 'ORDERLY' : (row.visit_type || '').toUpperCase()
+      const ctFee = (ctRatesMap[ctype]?.[vtKey] !== undefined) ? ctRatesMap[ctype][vtKey] : fees.ct
+      totalCV += fees.cv
+      totalCT += ctFee
       return stmt.bind(
         sessionId, row.case_id || '', row.case_id_short || '',
         row.organization_name || '', row.patient_name || '',
         row.doctor_name || '', row.decision_date || '',
         row.decision_status || '', row.visit_type || '',
-        fees.cv, fees.ct, contractorId, row.is_flagged ? 1 : 0, orderly
+        fees.cv, ctFee, contractorId, row.is_flagged ? 1 : 0, orderly
       )
     })
     await db.batch(statements)
@@ -274,7 +423,7 @@ app.post('/api/upload', async (c) => {
   if (!rows || !Array.isArray(rows)) return c.json({ error: 'Invalid payload' }, 400)
 
   const pk = periodKey(period_month, period_year)
-  const { ratesMap, contractorMap } = await loadMaps(c.env.DB)
+  const { ratesMap, contractorMap, contractorTypeMap, ctRatesMap } = await loadMaps(c.env.DB)
 
   // Create new session for this file
   const sessionResult = await c.env.DB.prepare(
@@ -283,7 +432,7 @@ app.post('/api/upload', async (c) => {
   ).bind(filename, period_label, period_month, period_year, pk, source_label || filename).run()
   const sessionId = sessionResult.meta.last_row_id as number
 
-  const result = await insertRows(c.env.DB, sessionId, rows, ratesMap, contractorMap)
+  const result = await insertRows(c.env.DB, sessionId, rows, ratesMap, contractorMap, contractorTypeMap, ctRatesMap)
 
   // If this is the only / last chunk, finalise totals now
   if (is_last_chunk !== false) {
@@ -314,9 +463,9 @@ app.post('/api/upload/chunk', async (c) => {
 
   if (!session_id || !rows || !Array.isArray(rows)) return c.json({ error: 'Invalid payload' }, 400)
 
-  const { ratesMap, contractorMap } = await loadMaps(c.env.DB)
+  const { ratesMap, contractorMap, contractorTypeMap, ctRatesMap } = await loadMaps(c.env.DB)
 
-  const result = await insertRows(c.env.DB, session_id, rows, ratesMap, contractorMap)
+  const result = await insertRows(c.env.DB, session_id, rows, ratesMap, contractorMap, contractorTypeMap, ctRatesMap)
 
   if (is_last_chunk) {
     // Recompute totals from DB (accurate after all chunks)
