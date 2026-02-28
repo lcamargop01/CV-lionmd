@@ -696,7 +696,7 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
   const pk = c.req.param('period_key')
   const cid = c.req.param('contractor_id')
 
-  const contractor = await c.env.DB.prepare('SELECT * FROM contractors WHERE id=?').bind(cid).first()
+  const contractor = await c.env.DB.prepare('SELECT * FROM contractors WHERE id=?').bind(cid).first() as any
 
   // Get all sessions for this period to build a label
   const sessions = await c.env.DB.prepare(
@@ -725,11 +725,18 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
     WHERE s.period_key=? AND c.contractor_id=?
   `).bind(pk, cid).first()
 
+  // If this contractor is Chris Garcia (chris_garcia type), attach commission data
+  let commission = null
+  if (contractor?.contractor_type === 'chris_garcia') {
+    commission = await calcCommission(c.env.DB, pk)
+  }
+
   return c.json({
     contractor,
     session: { period_label: periodLabel, period_key: pk, files: sessions.results },
     consults: consults.results,
-    summary
+    summary,
+    commission
   })
 })
 
@@ -753,6 +760,122 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
     FROM consults WHERE session_id=? AND contractor_id=?
   `).bind(sid, cid).first()
   return c.json({ contractor, session, consults: consults.results, summary })
+})
+
+// ──────────────────────────────────────────────
+// CHRIS GARCIA COMMISSION
+//
+// Commission rates (applied to CareValidate fees):
+//   regular contractors — Async + Orderly: 25%  |  Sync: 16.6667%
+//   owner contractors   — All visit types:  25%
+//   chris_garcia himself — excluded (no commission on his own consults)
+// ──────────────────────────────────────────────
+const COMMISSION_ASYNC_ORDERLY = 0.25        // 25%
+const COMMISSION_SYNC_REGULAR  = 1 / 6      // 16.6667%
+const COMMISSION_OWNER         = 0.25        // 25% of all CV
+
+async function calcCommission(db: D1Database, pk: string) {
+  // Pull every consult in the period for regular + owner contractors
+  const rows = await db.prepare(`
+    SELECT
+      ct.id       as contractor_id,
+      ct.name     as contractor_name,
+      ct.contractor_type,
+      c.visit_type,
+      c.is_orderly,
+      SUM(c.carevalidate_fee) as cv_total,
+      COUNT(*)                as case_count
+    FROM consults c
+    LEFT JOIN upload_sessions s  ON c.session_id = s.id
+    LEFT JOIN contractors     ct ON c.contractor_id = ct.id
+    WHERE s.period_key = ?
+      AND ct.contractor_type IN ('regular', 'owner')
+    GROUP BY ct.id, ct.name, ct.contractor_type, c.visit_type, c.is_orderly
+    ORDER BY ct.name, c.visit_type
+  `).bind(pk).all()
+
+  // Aggregate per contractor
+  const byContractor: Record<number, {
+    contractor_id: number
+    contractor_name: string
+    contractor_type: string
+    async_cv: number; async_cases: number
+    orderly_cv: number; orderly_cases: number
+    sync_cv: number; sync_cases: number
+    other_cv: number; other_cases: number
+    commission: number
+  }> = {}
+
+  for (const row of rows.results as any[]) {
+    const cid: number = row.contractor_id
+    if (!byContractor[cid]) {
+      byContractor[cid] = {
+        contractor_id: cid, contractor_name: row.contractor_name,
+        contractor_type: row.contractor_type,
+        async_cv: 0, async_cases: 0,
+        orderly_cv: 0, orderly_cases: 0,
+        sync_cv: 0, sync_cases: 0,
+        other_cv: 0, other_cases: 0,
+        commission: 0
+      }
+    }
+    const entry = byContractor[cid]
+    const vt: string = (row.visit_type || '').toUpperCase()
+    const isOrderly: boolean = row.is_orderly === 1
+    const cv: number  = row.cv_total   || 0
+    const cnt: number = row.case_count || 0
+
+    if (isOrderly) {
+      entry.orderly_cv += cv;  entry.orderly_cases += cnt
+    } else if (vt === 'ASYNC_TEXT_EMAIL') {
+      entry.async_cv   += cv;  entry.async_cases   += cnt
+    } else if (['SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON'].includes(vt)) {
+      entry.sync_cv    += cv;  entry.sync_cases    += cnt
+    } else {
+      entry.other_cv   += cv;  entry.other_cases   += cnt
+    }
+  }
+
+  // Compute commission per contractor
+  let commission_total       = 0
+  let grand_async_orderly_cv = 0
+  let grand_sync_cv          = 0
+  let grand_owner_cv         = 0
+
+  const details = Object.values(byContractor).map(e => {
+    let commission = 0
+    if (e.contractor_type === 'owner') {
+      const total_cv = e.async_cv + e.orderly_cv + e.sync_cv + e.other_cv
+      commission = total_cv * COMMISSION_OWNER
+      grand_owner_cv += total_cv
+    } else {
+      // regular: 25% async+orderly, 16.6667% sync; NO_SHOW/other = 0
+      commission = (e.async_cv + e.orderly_cv) * COMMISSION_ASYNC_ORDERLY
+                 +  e.sync_cv                  * COMMISSION_SYNC_REGULAR
+      grand_async_orderly_cv += e.async_cv + e.orderly_cv
+      grand_sync_cv          += e.sync_cv
+    }
+    e.commission = commission
+    commission_total += commission
+    return e
+  })
+
+  return {
+    period_key:  pk,
+    commission_total,
+    grand_async_orderly_cv,
+    grand_sync_cv,
+    grand_owner_cv,
+    commission_async_orderly: grand_async_orderly_cv * COMMISSION_ASYNC_ORDERLY,
+    commission_sync:          grand_sync_cv          * COMMISSION_SYNC_REGULAR,
+    commission_owner:         grand_owner_cv         * COMMISSION_OWNER,
+    by_contractor: details.sort((a, b) => b.commission - a.commission)
+  }
+}
+
+app.get('/api/commission/:period_key', async (c) => {
+  const pk = c.req.param('period_key')
+  return c.json(await calcCommission(c.env.DB, pk))
 })
 
 // ──────────────────────────────────────────────
