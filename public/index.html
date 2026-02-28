@@ -171,8 +171,8 @@
 // ════════════════════════════════════════════════════
 let state = {
   role: null, // 'admin' | 'carevalidate'
-  sessions: [],
-  currentSession: null,
+  periods: [],        // grouped periods [{period_key, period_label, files:[], total_cases, ...}]
+  currentPeriod: null, // the selected period object
   currentSummary: null,
   contractors: [],
   rates: [],
@@ -246,7 +246,7 @@ function setRole(role) {
 }
 
 function logout() {
-  state = { role: null, sessions: [], currentSession: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
+  state = { role: null, periods: [], currentPeriod: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
   $('roleModal').classList.remove('hidden')
   $('app').classList.add('hidden')
   $('sessionSelector').innerHTML = '<option value="">Select Period...</option>'
@@ -299,13 +299,13 @@ function navigate(page) {
 async function loadInitialData() {
   showLoading('Loading data...')
   try {
-    state.sessions = await api('/api/sessions')
+    state.periods = await api('/api/sessions')
     state.contractors = await api('/api/contractors')
     state.rates = await api('/api/rates')
     populateSessionSelector()
 
-    if (state.sessions.length > 0) {
-      await selectSession(state.sessions[0].id)
+    if (state.periods.length > 0) {
+      await selectPeriod(state.periods[0].period_key)
     }
 
     navigate(state.role === 'admin' ? 'dashboard' : 'cv_dashboard')
@@ -318,38 +318,38 @@ async function loadInitialData() {
 
 function populateSessionSelector() {
   const sel = $('sessionSelector')
-  sel.innerHTML = '<option value="">Select Period...</option>' + state.sessions.map(s =>
-    `<option value="${s.id}">${s.period_label}</option>`
+  sel.innerHTML = '<option value="">Select Period...</option>' + state.periods.map(p =>
+    `<option value="${p.period_key}">${p.period_label} (${p.files.length} file${p.files.length>1?'s':''})</option>`
   ).join('')
-  if (state.currentSession) sel.value = state.currentSession.id
+  if (state.currentPeriod) sel.value = state.currentPeriod.period_key
 }
 
-async function selectSession(id) {
-  if (!id) return
-  state.currentSession = state.sessions.find(s => s.id == id)
-  if (state.currentSession) {
-    $('sessionSelector').value = id
+async function selectPeriod(pk) {
+  if (!pk) return
+  state.currentPeriod = state.periods.find(p => p.period_key === pk)
+  if (state.currentPeriod) {
+    $('sessionSelector').value = pk
     const badge = $('periodBadge')
-    badge.textContent = state.currentSession.period_label
+    badge.textContent = state.currentPeriod.period_label
     badge.classList.remove('hidden')
     showLoading('Loading summary...')
     try {
-      state.currentSummary = await api(`/api/summary/${id}`)
+      state.currentSummary = await api(`/api/summary/period/${pk}`)
     } catch(e) { console.error(e) }
     finally { hideLoading() }
     navigate(state.currentPage)
   }
 }
 
-async function onSessionChange(id) {
-  await selectSession(id)
+async function onSessionChange(pk) {
+  await selectPeriod(pk)
 }
 
 // ════════════════════════════════════════════════════
 // DASHBOARD PAGE
 // ════════════════════════════════════════════════════
 function renderDashboard() {
-  if (!state.currentSession || !state.currentSummary) {
+  if (!state.currentPeriod || !state.currentSummary) {
     $('mainContent').innerHTML = `
       <div class="flex flex-col items-center justify-center h-64 text-center">
         <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style="background:#f0f2f5">
@@ -473,7 +473,7 @@ function renderDashboard() {
                   <td class="py-3 px-3 text-right font-medium ${d.margin >= 0 ? 'text-green-600' : 'text-red-600'}">${fmt(d.margin)}</td>
                   <td class="py-3 px-3 text-center">
                     ${d.contractor_id ? `
-                      <button onclick="openPaystubModal(${state.currentSession.id}, ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
+                      <button onclick="openPaystubModal('${escHtml(state.currentPeriod.period_key)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
                         class="text-xs px-3 py-1.5 rounded-lg btn-outline font-medium">
                         <i class="fas fa-file-pdf mr-1"></i>Paystub
                       </button>` : '<span class="text-gray-300 text-xs">No match</span>'}
@@ -525,44 +525,40 @@ function escHtml(s) { return (s || '').replace(/'/g, "\\'") }
 // ════════════════════════════════════════════════════
 // UPLOAD PAGE
 // ════════════════════════════════════════════════════
+// ── Upload file queue (multiple files before submitting) ──────────────────────
+let fileQueue = []   // [{file, rows, id}]
+let uploadQueueIdCounter = 0
+
 function renderUpload() {
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
   $('mainContent').innerHTML = `
-    <div class="max-w-2xl mx-auto space-y-6">
+    <div class="max-w-2xl mx-auto space-y-5">
+      <!-- Upload card -->
       <div class="card p-6">
-        <h3 class="font-semibold text-gray-700 mb-2 flex items-center gap-2">
-          <i class="fas fa-upload text-yellow-500"></i> Upload CareValidate Report
+        <h3 class="font-semibold text-gray-700 mb-1 flex items-center gap-2">
+          <i class="fas fa-upload text-yellow-500"></i> Upload CareValidate Reports
         </h3>
-        <p class="text-sm text-gray-500 mb-5">Upload the Excel (.xlsx) file received from CareValidate. The system will parse all consult records and calculate payroll automatically.</p>
-        
-        <div class="upload-zone rounded-xl p-10 text-center cursor-pointer mb-4"
-          id="dropZone" onclick="$('fileInput').click()"
-          ondragover="e=>e.preventDefault() || this.classList.add('drag-over')"
-          ondragleave="this.classList.remove('drag-over')"
-          ondrop="handleDrop(event)">
-          <input type="file" id="fileInput" class="hidden" accept=".xlsx,.xls" onchange="handleFile(this.files[0])"/>
-          <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style="background:rgba(201,168,76,0.1)">
+        <p class="text-sm text-gray-500 mb-5">You can upload <strong>multiple Excel files for the same month</strong> — duplicates (same Case ID) are automatically skipped.</p>
+
+        <!-- Drop zone -->
+        <div class="upload-zone rounded-xl p-8 text-center cursor-pointer mb-4" id="dropZone">
+          <input type="file" id="fileInput" class="hidden" accept=".xlsx,.xls" multiple onchange="handleFiles(this.files)"/>
+          <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style="background:rgba(201,168,76,0.1)">
             <i class="fas fa-file-excel text-yellow-500 text-2xl"></i>
           </div>
-          <p class="font-semibold text-gray-700">Drop Excel file here or click to browse</p>
-          <p class="text-sm text-gray-400 mt-1">Supports .xlsx files from CareValidate</p>
+          <p class="font-semibold text-gray-700">Drop one or more Excel files here</p>
+          <p class="text-sm text-gray-400 mt-1">or <span class="text-yellow-600 underline cursor-pointer" onclick="$('fileInput').click()">click to browse</span> · .xlsx files only</p>
         </div>
 
-        <div id="filePreview" class="hidden bg-gray-50 rounded-xl p-4 mb-4">
-          <div class="flex items-center gap-3">
-            <i class="fas fa-file-excel text-green-500 text-2xl"></i>
-            <div>
-              <div id="fileName" class="font-medium text-gray-700"></div>
-              <div id="fileRows" class="text-xs text-gray-500"></div>
-            </div>
-            <button onclick="clearFile()" class="ml-auto text-gray-400 hover:text-red-500"><i class="fas fa-times text-lg"></i></button>
-          </div>
-        </div>
+        <!-- File queue -->
+        <div id="fileQueue" class="${fileQueue.length === 0 ? 'hidden' : ''} space-y-2 mb-4"></div>
 
+        <!-- Period selector -->
         <div class="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1.5">Period Month</label>
             <select id="uploadMonth" class="w-full">
-              ${['January','February','March','April','May','June','July','August','September','October','November','December'].map((m,i) => `<option value="${i+1}" ${i+1 === new Date().getMonth() ? 'selected' : ''}>${m}</option>`).join('')}
+              ${monthNames.map((m,i) => `<option value="${i+1}" ${i+1 === new Date().getMonth()+1 ? 'selected' : ''}>${m}</option>`).join('')}
             </select>
           </div>
           <div>
@@ -571,78 +567,133 @@ function renderUpload() {
           </div>
         </div>
 
-        <button id="uploadBtn" onclick="processUpload()" disabled
-          class="w-full btn-primary py-3 rounded-xl font-semibold opacity-50 cursor-not-allowed transition-all">
-          <i class="fas fa-cog mr-2"></i> Process & Upload
-        </button>
+        <div class="flex gap-3">
+          <button id="uploadBtn" onclick="processUploadQueue()" disabled
+            class="flex-1 btn-primary py-3 rounded-xl font-semibold opacity-50 cursor-not-allowed transition-all">
+            <i class="fas fa-cog mr-2"></i><span id="uploadBtnLabel">Upload Files</span>
+          </button>
+          <button onclick="clearQueue()" id="clearQueueBtn" class="px-4 py-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 hidden">
+            <i class="fas fa-times mr-1"></i>Clear
+          </button>
+        </div>
       </div>
 
-      <!-- Previous Uploads -->
+      <!-- Existing periods -->
       <div class="card p-5">
         <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-          <i class="fas fa-history text-blue-500"></i> Previous Uploads
+          <i class="fas fa-history text-blue-500"></i> Uploaded Periods
         </h3>
-        <div class="space-y-2">
-          ${state.sessions.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No uploads yet</p>' : 
-            state.sessions.map(s => `
-              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <div class="flex items-center gap-3">
-                  <i class="fas fa-calendar text-yellow-500"></i>
-                  <div>
-                    <div class="font-medium text-gray-700 text-sm">${s.period_label}</div>
-                    <div class="text-xs text-gray-400">${fmtNum(s.total_cases)} cases · ${fmt(s.total_carevalidate_amount)} CV · Uploaded ${new Date(s.uploaded_at).toLocaleDateString()}</div>
+        <div class="space-y-3" id="periodsList">
+          ${state.periods.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No uploads yet</p>' :
+            state.periods.map(p => `
+              <div class="border border-gray-100 rounded-xl overflow-hidden">
+                <!-- Period header -->
+                <div class="flex items-center justify-between px-4 py-3 bg-gray-50">
+                  <div class="flex items-center gap-3">
+                    <i class="fas fa-calendar-alt text-yellow-500"></i>
+                    <div>
+                      <span class="font-semibold text-gray-700">${p.period_label}</span>
+                      <span class="ml-2 text-xs text-gray-400">${fmtNum(p.total_cases)} total cases · ${fmt(p.total_carevalidate_amount)}</span>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-semibold">${p.files.length} file${p.files.length>1?'s':''}</span>
+                  </div>
+                  <div class="flex gap-2">
+                    <button onclick="selectPeriod('${p.period_key}'); navigate('dashboard')" class="text-xs px-3 py-1.5 btn-outline rounded-lg">View</button>
+                    <button onclick="deletePeriod('${p.period_key}','${p.period_label}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
+                      <i class="fas fa-trash"></i>
+                    </button>
                   </div>
                 </div>
-                <div class="flex gap-2">
-                  <button onclick="selectSession(${s.id}); navigate('dashboard')" class="text-xs px-3 py-1.5 btn-outline rounded-lg">View</button>
-                  <button onclick="deleteSession(${s.id}, '${s.period_label}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
-                    <i class="fas fa-trash"></i>
-                  </button>
+                <!-- Individual files -->
+                <div class="divide-y divide-gray-50">
+                  ${p.files.map(f => `
+                    <div class="flex items-center justify-between px-4 py-2.5">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <i class="fas fa-file-excel text-green-400 text-sm flex-shrink-0"></i>
+                        <span class="text-sm text-gray-600 truncate">${f.source_label || f.filename}</span>
+                        <span class="text-xs text-gray-400 flex-shrink-0">${fmtNum(f.total_cases)} cases · ${new Date(f.uploaded_at).toLocaleDateString()}</span>
+                      </div>
+                      <button onclick="deleteFile(${f.id},'${escHtml(f.source_label||f.filename)}')" class="text-xs text-red-400 hover:text-red-600 ml-3 flex-shrink-0">
+                        <i class="fas fa-times"></i>
+                      </button>
+                    </div>`).join('')}
                 </div>
               </div>`).join('')}
         </div>
       </div>
     </div>`
 
-  // Setup drag-over
+  // Setup drag-and-drop
   const dz = $('dropZone')
+  dz.addEventListener('click', () => $('fileInput').click())
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over') })
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'))
-  dz.addEventListener('drop', handleDrop)
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); handleFiles(e.dataTransfer.files) })
+
+  renderFileQueue()
 }
 
-let pendingFileData = null
+function renderFileQueue() {
+  const container = $('fileQueue')
+  const btn = $('uploadBtn')
+  const clearBtn = $('clearQueueBtn')
+  const label = $('uploadBtnLabel')
+  if (!container) return
 
-function handleDrop(e) {
-  e.preventDefault()
-  $('dropZone').classList.remove('drag-over')
-  const file = e.dataTransfer.files[0]
-  if (file) handleFile(file)
+  if (fileQueue.length === 0) {
+    container.classList.add('hidden')
+    if (btn) { btn.disabled = true; btn.classList.add('opacity-50','cursor-not-allowed') }
+    if (clearBtn) clearBtn.classList.add('hidden')
+    return
+  }
+
+  container.classList.remove('hidden')
+  if (clearBtn) clearBtn.classList.remove('hidden')
+  if (btn) { btn.disabled = false; btn.classList.remove('opacity-50','cursor-not-allowed') }
+  if (label) label.textContent = `Upload ${fileQueue.length} File${fileQueue.length>1?'s':''}`
+
+  container.innerHTML = fileQueue.map(item => `
+    <div class="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3" id="qitem_${item.id}">
+      <i class="fas fa-file-excel text-green-500"></i>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-gray-700 text-sm truncate">${item.file.name}</div>
+        <div class="text-xs text-gray-500">${fmtNum(item.rows.length)} records found</div>
+      </div>
+      <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold" id="qstatus_${item.id}">Ready</span>
+      <button onclick="removeFromQueue(${item.id})" class="text-gray-400 hover:text-red-500 flex-shrink-0">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>`).join('')
 }
 
-function clearFile() {
-  pendingFileData = null
-  $('filePreview').classList.add('hidden')
-  $('fileInput').value = ''
-  $('uploadBtn').disabled = true
-  $('uploadBtn').classList.add('opacity-50', 'cursor-not-allowed')
+async function handleFiles(fileList) {
+  const files = Array.from(fileList)
+  for (const file of files) {
+    if (!file.name.match(/\.xlsx?$/i)) { showToast(`${file.name} is not an Excel file`, 'warning'); continue }
+    // Check not already queued
+    if (fileQueue.some(q => q.file.name === file.name)) { showToast(`${file.name} already in queue`, 'info'); continue }
+    showLoading(`Reading ${file.name}…`, false)
+    try {
+      const rows = await readExcelFile(file)
+      const id = ++uploadQueueIdCounter
+      fileQueue.push({ file, rows, id })
+      showToast(`Added: ${file.name} (${fmtNum(rows.length)} records)`, 'success')
+    } catch(e) {
+      showToast(`Error reading ${file.name}: ${e.message}`, 'error')
+    } finally { hideLoading() }
+  }
+  renderFileQueue()
 }
 
-async function handleFile(file) {
-  if (!file) return
-  showLoading('Reading Excel file...', true)
-  try {
-    const data = await readExcelFile(file)
-    pendingFileData = { file, rows: data }
-    $('fileName').textContent = file.name
-    $('fileRows').textContent = `${fmtNum(data.length)} consult records found`
-    $('filePreview').classList.remove('hidden')
-    $('uploadBtn').disabled = false
-    $('uploadBtn').classList.remove('opacity-50', 'cursor-not-allowed')
-    showToast(`Loaded ${fmtNum(data.length)} records`, 'success')
-  } catch(e) {
-    showToast('Error reading file: ' + e.message, 'error')
-  } finally { hideLoading() }
+function removeFromQueue(id) {
+  fileQueue = fileQueue.filter(q => q.id !== id)
+  renderFileQueue()
+}
+
+function clearQueue() {
+  fileQueue = []
+  if ($('fileInput')) $('fileInput').value = ''
+  renderFileQueue()
 }
 
 function readExcelFile(file) {
@@ -651,36 +702,29 @@ function readExcelFile(file) {
     reader.onload = e => {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true })
-        // Use first sheet (main data)
         const sheetName = wb.SheetNames[0]
         const ws = wb.Sheets[sheetName]
         const jsonData = XLSX.utils.sheet_to_json(ws, { raw: false, defval: null })
-
         const rows = []
-        let flaggedSheet = null
+        let flaggedIds = null
         if (wb.SheetNames.includes('Flagged')) {
-          const flagWs = wb.Sheets['Flagged']
-          const flagData = XLSX.utils.sheet_to_json(flagWs, { raw: false, defval: null })
-          const flaggedIds = new Set()
+          const flagData = XLSX.utils.sheet_to_json(wb.Sheets['Flagged'], { raw: false, defval: null })
+          flaggedIds = new Set()
           flagData.forEach(row => {
             const flag = row['FLAG'] || row['Flag'] || ''
             if (typeof flag === 'string' && flag.toUpperCase().includes('FLAG')) {
-              flaggedIds.add(row['Case ID'] || row['case_id'] || '')
+              flaggedIds.add(row['Case ID'] || '')
             }
           })
-          flaggedSheet = flaggedIds
         }
-
         jsonData.forEach(row => {
           const caseId = row['Case ID'] || row['case_id'] || ''
           const visitType = row['Visit Type'] || row['visit_type'] || ''
           let rawFee = row['Consult Fee'] || row['consult_fee']
           if (typeof rawFee === 'string' && rawFee.startsWith('=')) rawFee = null
           if (rawFee !== null) rawFee = parseFloat(rawFee) || null
-
           let decisionDate = row['Decision date'] || row['decision_date'] || ''
           if (decisionDate instanceof Date) decisionDate = decisionDate.toISOString().split('T')[0]
-
           rows.push({
             case_id: caseId,
             case_id_short: row['Case ID (short)'] || row['case_id_short'] || '',
@@ -691,7 +735,7 @@ function readExcelFile(file) {
             decision_status: row['Decision Status'] || row['decision_status'] || 'Approved',
             visit_type: visitType,
             raw_fee: rawFee,
-            is_flagged: flaggedSheet ? flaggedSheet.has(caseId) : false
+            is_flagged: flaggedIds ? flaggedIds.has(caseId) : false
           })
         })
         resolve(rows)
@@ -702,48 +746,88 @@ function readExcelFile(file) {
   })
 }
 
-async function processUpload() {
-  if (!pendingFileData) return
+async function processUploadQueue() {
+  if (fileQueue.length === 0) return
   const month = parseInt($('uploadMonth').value)
   const year = parseInt($('uploadYear').value)
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
   const label = `${monthNames[month-1]} ${year}`
 
-  showLoading(`Uploading ${fmtNum(pendingFileData.rows.length)} records...`, true)
-  setProgress(10)
+  showLoading(`Uploading ${fileQueue.length} file${fileQueue.length>1?'s':''}…`, true)
+  setProgress(5)
 
-  try {
-    const payload = {
-      filename: pendingFileData.file.name,
-      period_label: label,
-      period_month: month,
-      period_year: year,
-      rows: pendingFileData.rows
+  let lastPeriodKey = null
+  let totalAdded = 0
+  let totalSkipped = 0
+
+  for (let i = 0; i < fileQueue.length; i++) {
+    const item = fileQueue[i]
+    const statusEl = $(`qstatus_${item.id}`)
+    if (statusEl) { statusEl.textContent = 'Uploading…'; statusEl.className = 'text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-semibold' }
+    try {
+      const payload = {
+        filename: item.file.name,
+        source_label: item.file.name,
+        period_label: label,
+        period_month: month,
+        period_year: year,
+        rows: item.rows
+      }
+      const result = await api('/api/upload', { method: 'POST', body: JSON.stringify(payload) })
+      lastPeriodKey = result.period_key
+      totalAdded += result.new_cases_added || 0
+      totalSkipped += result.skipped_duplicates || 0
+      if (statusEl) {
+        const skipped = result.skipped_duplicates > 0 ? ` (${result.skipped_duplicates} dupes skipped)` : ''
+        statusEl.textContent = `✓ ${fmtNum(result.new_cases_added)} added${skipped}`
+        statusEl.className = 'text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold'
+      }
+    } catch(e) {
+      if (statusEl) { statusEl.textContent = '✗ Error'; statusEl.className = 'text-xs px-2 py-1 bg-red-100 text-red-600 rounded-full font-semibold' }
+      showToast(`Error uploading ${item.file.name}: ${e.message}`, 'error')
     }
-    setProgress(40)
-    const result = await api('/api/upload', { method: 'POST', body: JSON.stringify(payload) })
-    setProgress(90)
-    
-    // Refresh data
-    state.sessions = await api('/api/sessions')
-    populateSessionSelector()
-    await selectSession(result.session_id)
-    setProgress(100)
-    
-    showToast(`✅ Uploaded ${fmtNum(result.total_cases)} cases for ${label}`, 'success')
-    clearFile()
-    navigate('dashboard')
-  } catch(e) {
-    showToast('Upload failed: ' + e.message, 'error')
-  } finally { hideLoading() }
+    setProgress(Math.round(((i+1) / fileQueue.length) * 90))
+  }
+
+  // Refresh
+  state.periods = await api('/api/sessions')
+  populateSessionSelector()
+  if (lastPeriodKey) await selectPeriod(lastPeriodKey)
+  setProgress(100)
+
+  const skippedMsg = totalSkipped > 0 ? ` · ${fmtNum(totalSkipped)} duplicates skipped` : ''
+  showToast(`✅ ${fmtNum(totalAdded)} new cases added for ${label}${skippedMsg}`, 'success')
+  fileQueue = []
+  hideLoading()
+  navigate('dashboard')
 }
 
-async function deleteSession(id, label) {
-  if (!confirm(`Delete all data for "${label}"? This cannot be undone.`)) return
-  await api(`/api/sessions/${id}`, { method: 'DELETE' })
-  state.sessions = await api('/api/sessions')
-  if (state.currentSession?.id == id) {
-    state.currentSession = state.sessions[0] || null
+// Delete a single file from a period
+async function deleteFile(sessionId, label) {
+  if (!confirm(`Remove file "${label}"? Its cases will be deleted from this period.`)) return
+  await api(`/api/sessions/${sessionId}`, { method: 'DELETE' })
+  state.periods = await api('/api/sessions')
+  if (state.currentPeriod) {
+    const stillExists = state.periods.find(p => p.period_key === state.currentPeriod.period_key)
+    if (stillExists) {
+      await selectPeriod(state.currentPeriod.period_key)
+    } else {
+      state.currentPeriod = state.periods[0] || null
+      state.currentSummary = null
+    }
+  }
+  populateSessionSelector()
+  showToast('File removed', 'info')
+  renderUpload()
+}
+
+// Delete entire period (all files)
+async function deletePeriod(periodKey, label) {
+  if (!confirm(`Delete ALL data for "${label}"? This removes all files for this month.`)) return
+  await api(`/api/periods/${periodKey}`, { method: 'DELETE' })
+  state.periods = await api('/api/sessions')
+  if (state.currentPeriod?.period_key === periodKey) {
+    state.currentPeriod = state.periods[0] || null
     state.currentSummary = null
   }
   populateSessionSelector()
@@ -757,7 +841,7 @@ async function deleteSession(id, label) {
 let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '' }
 
 async function renderConsults() {
-  if (!state.currentSession) { $('mainContent').innerHTML = noDataMsg(); return }
+  if (!state.currentPeriod) { $('mainContent').innerHTML = noDataMsg(); return }
 
   $('mainContent').innerHTML = `
     <div class="card">
@@ -820,7 +904,7 @@ async function filterConsults() {
 async function loadConsultsPage(page) {
   consultsState.page = page
   const params = new URLSearchParams({
-    session_id: state.currentSession.id,
+    period_key: state.currentPeriod.period_key,
     page, limit: 50
   })
   if (consultsState.search) params.set('search', consultsState.search)
@@ -872,19 +956,19 @@ function renderConsultsTable(rows, total, page) {
 // PAYROLL PAGE
 // ════════════════════════════════════════════════════
 function renderPayroll() {
-  if (!state.currentSession || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
+  if (!state.currentPeriod || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
   const s = state.currentSummary
   $('mainContent').innerHTML = `
     <div class="space-y-4">
       <div class="flex justify-between items-center">
-        <p class="text-sm text-gray-500">Payroll for <strong>${state.currentSession.period_label}</strong> — click any contractor to view/export paystub</p>
+        <p class="text-sm text-gray-500">Payroll for <strong>${state.currentPeriod.period_label}</strong> — click any contractor to view/export paystub</p>
         <button onclick="exportGusto()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
           <i class="fas fa-file-excel mr-2"></i>Export All to Gusto
         </button>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         ${(s.byDoctor || []).filter(d => d.contractor_id).map(d => `
-          <div class="card p-5 hover:shadow-md transition-all cursor-pointer" onclick="openPaystubModal(${state.currentSession.id}, ${d.contractor_id}, '${escHtml(d.doctor_name)}')">
+          <div class="card p-5 hover:shadow-md transition-all cursor-pointer" onclick="openPaystubModal('${escHtml(state.currentPeriod.period_key)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')">
             <div class="flex items-start justify-between mb-3">
               <div>
                 <div class="font-semibold text-gray-800">${d.doctor_name}</div>
@@ -910,7 +994,7 @@ function renderPayroll() {
               ${d.orderly_count > 0 ? `<span class="status-badge badge-orderly">${fmtNum(d.orderly_count)} Orderly</span>` : ''}
             </div>
             <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-              <button onclick="event.stopPropagation(); openPaystubModal(${state.currentSession.id}, ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
+              <button onclick="event.stopPropagation(); openPaystubModal('${escHtml(state.currentPeriod.period_key)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
                 class="flex-1 text-xs py-2 btn-outline rounded-lg font-medium">
                 <i class="fas fa-file-pdf mr-1"></i>Paystub
               </button>
@@ -975,11 +1059,11 @@ async function openPaystubModal(sessionId, contractorId, doctorName) {
   }
   $('paystubModal').classList.remove('hidden')
   $('paystubDoctorName').textContent = doctorName
-  $('paystubPeriod').textContent = state.currentSession?.period_label || ''
+  $('paystubPeriod').textContent = state.currentPeriod?.period_label || ''
   $('paystubContent').innerHTML = '<div class="flex justify-center py-10"><div class="spinner"></div></div>'
 
   try {
-    currentPaystubData = await api(`/api/paystub/${sessionId}/${contractorId}`)
+    currentPaystubData = await api(`/api/paystub/period/${sessionId}/${contractorId}`)
     renderPaystubContent(currentPaystubData)
   } catch(e) {
     $('paystubContent').innerHTML = `<p class="text-red-500 text-center py-8">${e.message}</p>`
@@ -1428,17 +1512,17 @@ async function saveRate(id) {
 // CAREVALIDATE VIEW (Admin sees this, CV sees it too)
 // ════════════════════════════════════════════════════
 function renderCVView() {
-  if (!state.currentSession || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
+  if (!state.currentPeriod || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
   renderCVDashboard()
 }
 
 async function renderCVDashboard() {
-  if (!state.currentSession) {
+  if (!state.currentPeriod) {
     $('mainContent').innerHTML = noDataMsg(); return
   }
   let cvData
   try {
-    cvData = await api(`/api/cv-summary/${state.currentSession.id}`)
+    cvData = await api(`/api/cv-summary/period/${state.currentPeriod.period_key}`)
   } catch(e) { $('mainContent').innerHTML = `<p class="text-red-500">${e.message}</p>`; return }
 
   const t = cvData.total || {}
@@ -1452,7 +1536,7 @@ async function renderCVDashboard() {
             <i class="fas fa-hospital text-3xl opacity-80"></i>
             <div>
               <h2 class="text-xl font-bold">CareValidate Invoice Summary</h2>
-              <p class="opacity-80 text-sm">${state.currentSession.period_label}</p>
+              <p class="opacity-80 text-sm">${state.currentPeriod.period_label}</p>
             </div>
           </div>
         </div>` : `
@@ -1464,7 +1548,7 @@ async function renderCVDashboard() {
       <div class="card p-8 text-center">
         <div class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Total Amount Owed to Lion MD</div>
         <div class="text-5xl font-bold mb-1" style="color:var(--lion-gold)">${fmt(t.total_owed)}</div>
-        <div class="text-gray-400 text-sm">${fmtNum(t.total_cases)} consult cases · ${state.currentSession.period_label}</div>
+        <div class="text-gray-400 text-sm">${fmtNum(t.total_cases)} consult cases · ${state.currentPeriod.period_label}</div>
       </div>
 
       <!-- Breakdown by Type -->
@@ -1484,14 +1568,14 @@ async function renderCVDashboard() {
       </div>
 
       <!-- Period selector for CV -->
-      ${state.sessions.length > 1 ? `
+      ${state.periods.length > 1 ? `
         <div class="card p-5">
           <h3 class="font-semibold text-gray-700 mb-3">All Periods</h3>
           <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-            ${state.sessions.map(s => `
-              <button onclick="selectSession(${s.id})" class="p-3 rounded-xl text-left border-2 ${state.currentSession.id === s.id ? 'border-yellow-400 bg-yellow-50' : 'border-gray-100 hover:border-gray-300'} transition-all">
-                <div class="font-semibold text-gray-700 text-sm">${s.period_label}</div>
-                <div class="text-xs text-gray-400 mt-0.5">${fmt(s.total_carevalidate_amount)} · ${fmtNum(s.total_cases)} cases</div>
+            ${state.periods.map(p => `
+              <button onclick="selectPeriod('${p.period_key}')" class="p-3 rounded-xl text-left border-2 ${state.currentPeriod.period_key === p.period_key ? 'border-yellow-400 bg-yellow-50' : 'border-gray-100 hover:border-gray-300'} transition-all">
+                <div class="font-semibold text-gray-700 text-sm">${p.period_label}</div>
+                <div class="text-xs text-gray-400 mt-0.5">${fmt(p.total_carevalidate_amount)} · ${fmtNum(p.total_cases)} cases</div>
               </button>`).join('')}
           </div>
         </div>` : ''}
@@ -1499,7 +1583,7 @@ async function renderCVDashboard() {
 }
 
 async function renderCVDetail() {
-  if (!state.currentSession) { $('mainContent').innerHTML = noDataMsg(); return }
+  if (!state.currentPeriod) { $('mainContent').innerHTML = noDataMsg(); return }
   consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '' }
   await renderConsults()
 }
@@ -1508,10 +1592,10 @@ async function renderCVDetail() {
 // GUSTO EXPORT
 // ════════════════════════════════════════════════════
 async function exportGusto() {
-  if (!state.currentSession) { showToast('Please select a period first', 'warning'); return }
+  if (!state.currentPeriod) { showToast('Please select a period first', 'warning'); return }
   showLoading('Generating Gusto export...')
   try {
-    const data = await api(`/api/export/gusto/${state.currentSession.id}`)
+    const data = await api(`/api/export/gusto/period/${state.currentPeriod.period_key}`)
     
     const ws_data = [
       ['Contractor Name', 'Company', 'EIN/SSN', 'Email', 'Period', 'Total Cases', 'Total Pay', 'Async Cases', 'Async Pay', 'Sync Cases', 'Sync Pay', 'OrderlyMeds Cases', 'OrderlyMeds Pay']
@@ -1540,11 +1624,11 @@ async function exportGusto() {
     XLSX.utils.book_append_sheet(wb, ws, 'Gusto Payroll')
 
     // Summary sheet
-    const summaryData = [['Lion MD Payroll Export'], ['Period:', state.currentSession.period_label], ['Generated:', new Date().toLocaleDateString()], [''], ['Total Contractors:', data.length], ['Total Cases:', data.reduce((s, r) => s + (r.total_cases || 0), 0)], ['Total Payout:', data.reduce((s, r) => s + (r.total_pay || 0), 0)]]
+    const summaryData = [['Lion MD Payroll Export'], ['Period:', state.currentPeriod.period_label], ['Generated:', new Date().toLocaleDateString()], [''], ['Total Contractors:', data.length], ['Total Cases:', data.reduce((s, r) => s + (r.total_cases || 0), 0)], ['Total Payout:', data.reduce((s, r) => s + (r.total_pay || 0), 0)]]
     const summaryWs = XLSX.utils.aoa_to_sheet(summaryData)
     XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
 
-    XLSX.writeFile(wb, `LionMD_Gusto_${state.currentSession.period_label.replace(/\s+/g,'_')}.xlsx`)
+    XLSX.writeFile(wb, `LionMD_Gusto_${state.currentPeriod.period_label.replace(/\s+/g,'_')}.xlsx`)
     showToast('Gusto Excel exported!', 'success')
   } catch(e) { showToast('Export failed: ' + e.message, 'error') }
   finally { hideLoading() }
