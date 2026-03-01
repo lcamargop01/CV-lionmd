@@ -64,15 +64,37 @@
     }
     .progress-bar { background: linear-gradient(90deg, var(--lion-gold), #f59e0b); height: 6px; border-radius: 3px; transition: width 0.5s; }
 
-    /* ── Sidebar drawer (mobile) ───────────────────────── */
-    .sidebar {
-      transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+    /* ── Sidebar ───────────────────────────────────────── */
+    #sidebar {
+      transition: transform 0.3s cubic-bezier(.4,0,.2,1);
     }
-    /* Mobile overlay */
+    /* Desktop: always visible, no transform */
+    @media (min-width: 768px) {
+      #sidebar { transform: none !important; box-shadow: none !important; }
+      #mobileOverlay { display: none !important; }
+    }
+    /* Mobile: hidden off-screen by default */
+    @media (max-width: 767px) {
+      #sidebar {
+        position: fixed !important;
+        top: 0; left: 0;
+        height: 100vh !important;
+        width: 260px !important;
+        transform: translateX(-100%);
+        z-index: 9000 !important;
+        box-shadow: none;
+      }
+      #sidebar.sidebar-open {
+        transform: translateX(0) !important;
+        box-shadow: 4px 0 32px rgba(0,0,0,0.45) !important;
+      }
+    }
+    /* Overlay */
     #mobileOverlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
-      z-index: 39;
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 8999;
     }
     #mobileOverlay.active { display: block; }
   </style>
@@ -132,13 +154,13 @@
 </div>
 
 <!-- Mobile sidebar overlay -->
-<div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileSidebar()"></div>
+<div id="mobileOverlay" onclick="closeMobileSidebar()"></div>
 
 <!-- App Layout -->
 <div id="app" class="flex hidden">
 
-  <!-- Sidebar -->
-  <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col fixed md:relative left-0 top-0 z-40 h-screen w-[260px] flex-shrink-0">
+  <!-- Sidebar: on desktop it's a normal flex item (relative); on mobile CSS overrides to fixed -->
+  <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col left-0 top-0 h-screen w-[260px] flex-shrink-0 relative">
     <div class="p-4 border-b border-white/10 flex items-center gap-3">
       <div class="w-10 h-10 rounded-xl flex-shrink-0 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
         <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
@@ -165,8 +187,8 @@
     </div>
   </div>
 
-  <!-- Main Content -->
-  <div class="flex-1 flex flex-col min-w-0 overflow-x-hidden md:ml-[260px]">
+  <!-- Main Content: on desktop sidebar is a flex sibling so no margin needed; on mobile sidebar is fixed so we need no left margin -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-x-hidden">
     <!-- Top Bar -->
     <div class="bg-white border-b border-gray-200 px-3 md:px-4 py-3 flex items-center justify-between sticky top-0 z-30 gap-2">
       <div class="flex items-center gap-2 min-w-0">
@@ -286,37 +308,19 @@ function logout() {
 function isMobile() { return window.innerWidth < 768 }
 
 function openMobileSidebar() {
-  const sb = $('sidebar')
-  sb.style.transform = 'translateX(0)'
-  sb.style.boxShadow = '4px 0 24px rgba(0,0,0,0.4)'
+  $('sidebar').classList.add('sidebar-open')
   $('mobileOverlay').classList.add('active')
   document.body.style.overflow = 'hidden'
 }
 
 function closeMobileSidebar() {
-  const sb = $('sidebar')
-  sb.style.transform = ''
-  sb.style.boxShadow = ''
+  $('sidebar').classList.remove('sidebar-open')
   $('mobileOverlay').classList.remove('active')
   document.body.style.overflow = ''
 }
 
-// On resize — reset sidebar state
 window.addEventListener('resize', () => {
-  if (!isMobile()) {
-    closeMobileSidebar()
-    $('sidebar').style.transform = ''
-  } else {
-    // Ensure sidebar is hidden off-screen on mobile unless opened
-    if (!$('mobileOverlay').classList.contains('active')) {
-      $('sidebar').style.transform = 'translateX(-100%)'
-    }
-  }
-})
-
-// Init sidebar position on load
-document.addEventListener('DOMContentLoaded', () => {
-  if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+  if (!isMobile()) closeMobileSidebar()
 })
 
 // ════════════════════════════════════════════════════
