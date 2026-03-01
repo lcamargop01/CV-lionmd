@@ -1584,11 +1584,11 @@ function paystubModalHtml() {
   let currentPaystubMeta = { periodKey: null, contractorId: null, doctorName: null }
 
 async function openPaystubModal(sessionId, contractorId, doctorName) {
-  // Ensure modal exists
+  // Ensure modal exists in DOM (dashboard doesn't render payroll page first)
   if (!$('paystubModal')) {
     const div = document.createElement('div')
     div.innerHTML = paystubModalHtml()
-    document.body.appendChild(div.firstChild)
+    document.body.appendChild(div.firstElementChild)
   }
   currentPaystubMeta = { periodKey: sessionId, contractorId, doctorName }
   $('paystubModal').classList.remove('hidden')
