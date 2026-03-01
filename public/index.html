@@ -457,49 +457,49 @@ function renderDashboard() {
     <div class="space-y-6">
       <!-- Stats Row -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <div class="card p-3 md:p-5 flex items-center gap-3">
-          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(201,168,76,0.1)">
-            <i class="fas fa-file-medical text-yellow-500 text-base md:text-xl"></i>
+        <div class="card p-3 md:p-4 flex flex-col gap-2">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(201,168,76,0.1)">
+            <i class="fas fa-file-medical text-yellow-500 text-base"></i>
           </div>
-          <div class="min-w-0">
-            <div class="text-lg md:text-2xl font-bold text-gray-800 truncate">${fmtNum(t.total_cases)}</div>
-            <div class="text-xs text-gray-500 font-medium leading-tight">Total Cases</div>
-          </div>
-        </div>
-        <div class="card p-3 md:p-5 flex items-center gap-3">
-          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
-            <i class="fas fa-building text-blue-500 text-base md:text-xl"></i>
-          </div>
-          <div class="min-w-0">
-            <div class="text-lg md:text-2xl font-bold text-gray-800 truncate">${fmt(t.total_carevalidate)}</div>
-            <div class="text-xs text-gray-500 font-medium leading-tight">CV Owes Us</div>
+          <div>
+            <div class="text-xl md:text-2xl font-bold text-gray-800 leading-tight break-all">${fmtNum(t.total_cases)}</div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">Total Cases</div>
           </div>
         </div>
-        <div class="card p-3 md:p-5 flex items-center gap-3">
-          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50">
-            <i class="fas fa-user-md text-purple-500 text-base md:text-xl"></i>
+        <div class="card p-3 md:p-4 flex flex-col gap-2">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
+            <i class="fas fa-building text-blue-500 text-base"></i>
           </div>
-          <div class="min-w-0">
-            <div class="text-lg md:text-2xl font-bold text-gray-800 truncate">${fmt(t.total_contractor)}</div>
-            <div class="text-xs text-gray-500 font-medium leading-tight">We Owe Contractors</div>
-          </div>
-        </div>
-        <div class="card p-3 md:p-5 flex items-center gap-3">
-          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
-            <i class="fas fa-percent text-blue-500 text-base md:text-xl"></i>
-          </div>
-          <div class="min-w-0">
-            <div class="text-lg md:text-2xl font-bold text-blue-600 truncate" id="dashChrisComm"><span class="text-sm text-gray-400">...</span></div>
-            <div class="text-xs text-gray-500 font-medium leading-tight">Chris Commission</div>
+          <div>
+            <div class="text-base md:text-xl font-bold text-gray-800 leading-tight break-all">${fmt(t.total_carevalidate)}</div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">CV Owes Us</div>
           </div>
         </div>
-        <div class="card p-3 md:p-5 flex items-center gap-3 col-span-2 sm:col-span-1">
-          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-green-50">
-            <i class="fas fa-chart-line text-green-500 text-base md:text-xl"></i>
+        <div class="card p-3 md:p-4 flex flex-col gap-2">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50">
+            <i class="fas fa-user-md text-purple-500 text-base"></i>
           </div>
-          <div class="min-w-0">
-            <div class="text-lg md:text-2xl font-bold truncate ${margin >= 0 ? 'text-green-600' : 'text-red-600'}" id="dashNetMargin">${fmt(margin)}</div>
-            <div class="text-xs text-gray-500 font-medium leading-tight" id="dashMarginLabel">Net Margin (${marginPct}%)</div>
+          <div>
+            <div class="text-base md:text-xl font-bold text-gray-800 leading-tight break-all">${fmt(t.total_contractor)}</div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">We Owe Contractors</div>
+          </div>
+        </div>
+        <div class="card p-3 md:p-4 flex flex-col gap-2">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
+            <i class="fas fa-percent text-blue-500 text-base"></i>
+          </div>
+          <div>
+            <div class="text-base md:text-xl font-bold text-blue-600 leading-tight break-all" id="dashChrisComm"><span class="text-sm text-gray-400">...</span></div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">Chris Commission</div>
+          </div>
+        </div>
+        <div class="card p-3 md:p-4 flex flex-col gap-2 col-span-2 sm:col-span-1">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-green-50">
+            <i class="fas fa-chart-line text-green-500 text-base"></i>
+          </div>
+          <div>
+            <div class="text-base md:text-xl font-bold leading-tight break-all ${margin >= 0 ? 'text-green-600' : 'text-red-600'}" id="dashNetMargin">${fmt(margin)}</div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5" id="dashMarginLabel">Net Margin (${marginPct}%)</div>
           </div>
         </div>
       </div>
