@@ -228,26 +228,29 @@ app.post('/api/recalculate', async (c) => {
 // CONTRACTORS
 // ──────────────────────────────────────────────
 app.get('/api/contractors', async (c) => {
-  // ensure contractor_type column exists
+  // ensure columns exist
   await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN contractor_type TEXT DEFAULT 'regular'`).run().catch(() => {})
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN gusto_type TEXT DEFAULT 'Individual'`).run().catch(() => {})
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN first_name TEXT DEFAULT ''`).run().catch(() => {})
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN last_name TEXT DEFAULT ''`).run().catch(() => {})
   const rows = await c.env.DB.prepare('SELECT * FROM contractors WHERE is_active=1 ORDER BY name').all()
   return c.json(rows.results)
 })
 
 app.post('/api/contractors', async (c) => {
-  const { name, company, ein_ssn, email, contractor_type } = await c.req.json()
+  const { name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type } = await c.req.json()
   const result = await c.env.DB.prepare(
-    `INSERT INTO contractors (name, company, ein_ssn, email, contractor_type) VALUES (?, ?, ?, ?, ?)`
-  ).bind(name, company || '', ein_ssn || '', email || '', contractor_type || 'regular').run()
-  return c.json({ id: result.meta.last_row_id, name, company, ein_ssn, email, contractor_type })
+    `INSERT INTO contractors (name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', contractor_type || 'regular', gusto_type || 'Individual').run()
+  return c.json({ id: result.meta.last_row_id, name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type })
 })
 
 app.put('/api/contractors/:id', async (c) => {
   const id = c.req.param('id')
-  const { name, company, ein_ssn, email, is_active, contractor_type } = await c.req.json()
+  const { name, first_name, last_name, company, ein_ssn, email, is_active, contractor_type, gusto_type } = await c.req.json()
   await c.env.DB.prepare(
-    `UPDATE contractors SET name=?, company=?, ein_ssn=?, email=?, is_active=?, contractor_type=? WHERE id=?`
-  ).bind(name, company || '', ein_ssn || '', email || '', is_active ?? 1, contractor_type || 'regular', id).run()
+    `UPDATE contractors SET name=?, first_name=?, last_name=?, company=?, ein_ssn=?, email=?, is_active=?, contractor_type=?, gusto_type=? WHERE id=?`
+  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', is_active ?? 1, contractor_type || 'regular', gusto_type || 'Individual', id).run()
   return c.json({ ok: true })
 })
 
@@ -886,15 +889,13 @@ app.get('/api/commission/:period_key', async (c) => {
 app.get('/api/export/gusto/period/:period_key', async (c) => {
   const pk = c.req.param('period_key')
   const rows = await c.env.DB.prepare(`
-    SELECT ct.name as contractor_name, ct.company, ct.ein_ssn, ct.email,
+    SELECT ct.name as contractor_name, ct.first_name, ct.last_name, ct.company, ct.ein_ssn, ct.email,
+      ct.gusto_type,
       s.period_label,
       COUNT(*) as total_cases, SUM(c.contractor_fee) as total_pay,
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
-      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN c.contractor_fee ELSE 0 END) as async_pay,
       SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.contractor_fee ELSE 0 END) as sync_pay,
-      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
-      SUM(CASE WHEN c.is_orderly=1 THEN c.contractor_fee ELSE 0 END) as orderly_pay
+      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count
     FROM consults c
     LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id

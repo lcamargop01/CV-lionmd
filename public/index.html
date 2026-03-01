@@ -2033,16 +2033,40 @@ function renderContractors() {
             </select>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Full Name *</label>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Gusto Type *</label>
+            <select id="ctGustoType" class="w-full" onchange="toggleGustoFields()">
+              <option value="Individual">Individual</option>
+              <option value="Business">Business</option>
+            </select>
+          </div>
+          <div id="ctIndividualFields" class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1.5">First Name *</label>
+                <input type="text" id="ctFirstName" class="w-full" placeholder="Jane"/>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1.5">Last Name *</label>
+                <input type="text" id="ctLastName" class="w-full" placeholder="Smith"/>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Full Name (Display)</label>
             <input type="text" id="ctName" class="w-full" placeholder="Dr. Jane Smith"/>
+          </div>
+          <div id="ctBusinessFields" class="hidden">
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Business Name *</label>
+            <input type="text" id="ctBusinessName" class="w-full" placeholder="Avidity Health LLC"/>
+            <p class="text-xs text-gray-400 mt-1">For Business type, use Company field for business name</p>
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1.5">Company / Practice</label>
             <input type="text" id="ctCompany" class="w-full" placeholder="Lion MD"/>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1.5">EIN / SSN</label>
-            <input type="text" id="ctEin" class="w-full" placeholder="XX-XXXXXXX"/>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5" id="ctEinLabel">SSN (last 4, e.g. *1234)</label>
+            <input type="text" id="ctEin" class="w-full" placeholder="*1234"/>
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1.5">Email</label>
@@ -2058,20 +2082,51 @@ function renderContractors() {
     </div>`
 }
 
+function toggleGustoFields() {
+  const isBusiness = $('ctGustoType').value === 'Business'
+  $('ctIndividualFields').classList.toggle('hidden', isBusiness)
+  $('ctBusinessFields').classList.toggle('hidden', !isBusiness)
+  $('ctEinLabel').textContent = isBusiness ? 'EIN (last 4, e.g. *1234)' : 'SSN (last 4, e.g. *1234)'
+}
+
 function openContractorModal(contractor = null) {
   $('contractorModalTitle').textContent = contractor ? 'Edit Contractor' : 'Add Contractor'
   $('ctId').value = contractor?.id || ''
   $('ctType').value = contractor?.contractor_type || 'regular'
+  $('ctGustoType').value = contractor?.gusto_type || 'Individual'
+  $('ctFirstName').value = contractor?.first_name || ''
+  $('ctLastName').value = contractor?.last_name || ''
   $('ctName').value = contractor?.name || ''
+  $('ctBusinessName').value = (contractor?.gusto_type === 'Business' ? (contractor?.company || '') : '')
   $('ctCompany').value = contractor?.company || ''
   $('ctEin').value = contractor?.ein_ssn || ''
   $('ctEmail').value = contractor?.email || ''
+  toggleGustoFields()
   $('contractorModal').classList.remove('hidden')
 }
 
 async function saveContractor() {
   const id = $('ctId').value
-  const data = { name: $('ctName').value, company: $('ctCompany').value, ein_ssn: $('ctEin').value, email: $('ctEmail').value, contractor_type: $('ctType').value }
+  const gustoType = $('ctGustoType').value
+  const firstName = $('ctFirstName').value.trim()
+  const lastName = $('ctLastName').value.trim()
+  let displayName = $('ctName').value.trim()
+  // Auto-fill display name if empty
+  if (!displayName && gustoType === 'Individual' && (firstName || lastName)) {
+    displayName = [firstName, lastName].filter(Boolean).join(' ')
+  } else if (!displayName && gustoType === 'Business') {
+    displayName = $('ctCompany').value.trim() || $('ctBusinessName').value.trim()
+  }
+  const data = {
+    name: displayName,
+    first_name: firstName,
+    last_name: lastName,
+    company: gustoType === 'Business' ? ($('ctBusinessName').value.trim() || $('ctCompany').value.trim()) : $('ctCompany').value.trim(),
+    ein_ssn: $('ctEin').value.trim(),
+    email: $('ctEmail').value.trim(),
+    contractor_type: $('ctType').value,
+    gusto_type: gustoType
+  }
   if (!data.name) { showToast('Name is required', 'warning'); return }
   try {
     if (id) {
@@ -2429,36 +2484,73 @@ async function exportGusto() {
   try {
     const data = await api(`/api/export/gusto/period/${state.currentPeriod.period_key}`)
     
+    // Exact 13-column format matching Gusto upload template
     const ws_data = [
-      ['Contractor Name', 'Company', 'EIN/SSN', 'Email', 'Period', 'Total Cases', 'Total Pay', 'Async Cases', 'Async Pay', 'Sync Cases', 'Sync Pay', 'OrderlyMeds Cases', 'OrderlyMeds Pay']
+      ['contractor_type', 'first_name', 'last_name', 'Name', 'ssn', 'business_name', 'ein', 'memo', 'hours_worked', 'wage', 'reimbursement', 'bonus', 'invoice_number']
     ]
+
+    // Get the month/year label for memo (e.g. "January 2026")
+    const periodLabel = state.currentPeriod.period_label || ''
+
     data.forEach(row => {
-      ws_data.push([
-        row.contractor_name || '',
-        row.company || '',
-        row.ein_ssn || '',
-        row.email || '',
-        row.period_label || '',
-        row.total_cases || 0,
-        row.total_pay || 0,
-        row.async_count || 0,
-        row.async_pay || 0,
-        row.sync_count || 0,
-        row.sync_pay || 0,
-        row.orderly_count || 0,
-        row.orderly_pay || 0
-      ])
+      const gustoType = row.gusto_type || 'Individual'
+      const wage = row.total_pay || 0
+      const asyncCount = row.async_count || 0
+      const syncCount = row.sync_count || 0
+
+      // Memo: "{Month Year} - {async} ASYNC & {sync} SYNC" — blank if wage is 0
+      const memo = wage > 0 ? `${periodLabel} - ${asyncCount} ASYNC & ${syncCount} SYNC` : ''
+
+      if (gustoType === 'Business') {
+        // Business row: business_name + ein filled; first_name/last_name/ssn blank
+        ws_data.push([
+          'Business',           // contractor_type
+          '',                   // first_name
+          '',                   // last_name
+          '',                   // Name (blank for business)
+          '',                   // ssn
+          row.company || row.contractor_name || '',  // business_name
+          row.ein_ssn || '',    // ein
+          memo,                 // memo
+          '',                   // hours_worked
+          wage,                 // wage
+          '',                   // reimbursement
+          '',                   // bonus
+          memo                  // invoice_number = memo
+        ])
+      } else {
+        // Individual row: first_name + last_name + ssn filled; business_name/ein blank
+        // Derive first/last name: prefer stored fields, fallback to splitting full name
+        let firstName = row.first_name || ''
+        let lastName = row.last_name || ''
+        if (!firstName && !lastName && row.contractor_name) {
+          const parts = row.contractor_name.trim().split(' ')
+          firstName = parts[0] || ''
+          lastName = parts.slice(1).join(' ') || ''
+        }
+        const displayName = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : (row.contractor_name || '')
+        ws_data.push([
+          'Individual',         // contractor_type
+          firstName,            // first_name
+          lastName,             // last_name
+          displayName,          // Name = first + last
+          row.ein_ssn || '',    // ssn
+          '',                   // business_name
+          '',                   // ein
+          memo,                 // memo
+          '',                   // hours_worked
+          wage,                 // wage
+          '',                   // reimbursement
+          '',                   // bonus
+          memo                  // invoice_number = memo
+        ])
+      }
     })
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.aoa_to_sheet(ws_data)
-    ws['!cols'] = [18, 16, 14, 24, 14, 10, 12, 10, 12, 10, 12, 14, 14].map(w => ({ wch: w }))
-    XLSX.utils.book_append_sheet(wb, ws, 'Gusto Payroll')
-
-    // Summary sheet
-    const summaryData = [['Lion MD Payroll Export'], ['Period:', state.currentPeriod.period_label], ['Generated:', new Date().toLocaleDateString()], [''], ['Total Contractors:', data.length], ['Total Cases:', data.reduce((s, r) => s + (r.total_cases || 0), 0)], ['Total Payout:', data.reduce((s, r) => s + (r.total_pay || 0), 0)]]
-    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData)
-    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
+    ws['!cols'] = [12, 14, 16, 22, 10, 30, 10, 40, 12, 12, 14, 10, 40].map(w => ({ wch: w }))
+    XLSX.utils.book_append_sheet(wb, ws, 'Gusto Upload')
 
     XLSX.writeFile(wb, `LionMD_Gusto_${state.currentPeriod.period_label.replace(/\s+/g,'_')}.xlsx`)
     showToast('Gusto Excel exported!', 'success')
