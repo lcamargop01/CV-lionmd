@@ -88,8 +88,8 @@
 <div id="roleModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center">
   <div class="card p-8 w-full max-w-md mx-4">
     <div class="text-center mb-6">
-      <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
-        <i class="fas fa-paw text-white text-3xl"></i>
+      <div class="w-24 h-24 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
+        <img src="/static/lion-logo.png" alt="Lion MD" class="w-20 h-20 object-contain drop-shadow-lg"/>
       </div>
       <h1 class="text-2xl font-bold text-gray-800">Lion MD Payroll Portal</h1>
       <p class="text-gray-500 text-sm mt-1">Select your access level to continue</p>
@@ -124,9 +124,9 @@
 
   <!-- Sidebar -->
   <div id="sidebar" class="sidebar flex flex-col fixed left-0 top-0 z-40 h-screen">
-    <div class="p-5 border-b border-white/10 flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #C9A84C, #f59e0b);">
-        <i class="fas fa-paw text-white text-lg"></i>
+    <div class="p-4 border-b border-white/10 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
+        <img src="/static/lion-logo.png" alt="Lion MD" class="w-9 h-9 object-contain"/>
       </div>
       <div id="sidebarTitle" class="overflow-hidden">
         <div class="font-bold text-white text-sm">Lion MD</div>
@@ -1767,10 +1767,24 @@ function renderPaystubContent(data) {
     </div>`
 }
 
-function downloadPaystub() {
+async function downloadPaystub() {
   if (!currentPaystubData) return
   const { contractor, session, summary } = currentPaystubData
   const { jsPDF } = window.jspdf
+
+  // Pre-load logo as data URL for PDF
+  const logoDataUrl = await new Promise(resolve => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth; c.height = img.naturalHeight
+      c.getContext('2d').drawImage(img, 0, 0)
+      resolve(c.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(null)
+    img.src = '/static/lion-logo.png'
+  })
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
@@ -1778,14 +1792,20 @@ function downloadPaystub() {
   // Header bar
   doc.setFillColor(26, 26, 46)
   doc.rect(0, 0, pageW, 30, 'F')
+
+  // Logo in header
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, 'PNG', 10, 3, 24, 24)
+  }
+
   doc.setTextColor(201, 168, 76)
   doc.setFontSize(22)
   doc.setFont('helvetica', 'bold')
-  doc.text('LION MD', 15, 18)
+  doc.text('LION MD', 38, 18)
   doc.setTextColor(200, 200, 200)
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
-  doc.text('Independent Contractor Payment Statement', 15, 25)
+  doc.text('Independent Contractor Payment Statement', 38, 25)
   doc.setTextColor(255, 255, 255)
   doc.text(session?.period_label || '', pageW - 15, 18, { align: 'right' })
   doc.setFontSize(8)
@@ -2218,8 +2238,10 @@ async function renderCVDashboard() {
     <div class="space-y-6">
       ${isCV ? `
         <div class="bg-blue-600 rounded-2xl p-6 text-white">
-          <div class="flex items-center gap-3 mb-2">
-            <i class="fas fa-hospital text-3xl opacity-80"></i>
+          <div class="flex items-center gap-4 mb-2">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.15)">
+              <img src="/static/lion-logo.png" alt="Lion MD" class="w-12 h-12 object-contain"/>
+            </div>
             <div>
               <h2 class="text-xl font-bold">CareValidate Invoice Summary</h2>
               <p class="opacity-80 text-sm">${state.currentPeriod.period_label}</p>
