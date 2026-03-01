@@ -577,6 +577,20 @@ function renderDashboard() {
                 </tr>
               `).join('')}
             </tbody>
+            <tfoot>
+              <tr class="border-t-2 border-gray-200 bg-gray-50 font-bold text-sm">
+                <td class="py-3 px-3 text-gray-700">TOTAL</td>
+                <td class="py-3 px-3 text-right text-gray-700">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.case_count||0),0))}</td>
+                <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.async_count||0),0))}</td>
+                <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.sync_count||0),0))}</td>
+                <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.orderly_count||0),0))}</td>
+                <td class="py-3 px-3 text-right text-blue-700">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_carevalidate||0),0))}</td>
+                <td class="py-3 px-3 text-right text-purple-700">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_contractor||0),0))}</td>
+                <td class="py-3 px-3 text-right text-blue-700" id="dashTotalComm"><span class="text-gray-300">...</span></td>
+                <td class="py-3 px-3 text-right" id="dashTotalMargin"><span class="text-gray-300">...</span></td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -618,14 +632,24 @@ function renderDashboard() {
       if (!mCell) return
       const row = cell.closest('tr')
       if (!row) return
-      const cells = row.querySelectorAll('td')
-      // cells[5]=CV, cells[6]=We Pay, so we get from data
       const dRow = (s.byDoctor || []).find(d => d.contractor_id === cid)
       if (!dRow) return
       const adjRowMargin = (dRow.total_carevalidate || 0) - (dRow.total_contractor || 0) - c
       mCell.textContent = fmt(adjRowMargin)
       mCell.className = `py-3 px-3 text-right font-medium ${adjRowMargin >= 0 ? 'text-green-600' : 'text-red-600'}`
     })
+
+    // Fill totals row
+    const totalCommEl = $('dashTotalComm')
+    if (totalCommEl) {
+      totalCommEl.textContent = fmt(total)
+      totalCommEl.className = 'py-3 px-3 text-right text-blue-700 font-bold'
+    }
+    const totalMarginEl = $('dashTotalMargin')
+    if (totalMarginEl) {
+      totalMarginEl.textContent = fmt(adjMargin)
+      totalMarginEl.className = `py-3 px-3 text-right font-bold ${adjMargin >= 0 ? 'text-green-700' : 'text-red-700'}`
+    }
   }).catch(() => {
     const el = $('dashChrisComm')
     if (el) el.textContent = '—'
