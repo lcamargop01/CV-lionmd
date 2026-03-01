@@ -64,35 +64,17 @@
     }
     .progress-bar { background: linear-gradient(90deg, var(--lion-gold), #f59e0b); height: 6px; border-radius: 3px; transition: width 0.5s; }
 
-    /* ── Mobile sidebar drawer ─────────────────────────── */
-    @media (max-width: 767px) {
-      .sidebar {
-        position: fixed; left: 0; top: 0; z-index: 50;
-        transform: translateX(-100%);
-        transition: transform 0.28s cubic-bezier(.4,0,.2,1), width 0.3s;
-        width: 260px !important;
-        box-shadow: 4px 0 24px rgba(0,0,0,0.35);
-      }
-      .sidebar.mobile-open { transform: translateX(0); }
-      .main-content-wrap { margin-left: 0 !important; }
-      .mobile-overlay {
-        display: none; position: fixed; inset: 0;
-        background: rgba(0,0,0,0.45); backdrop-filter: blur(2px);
-        z-index: 49; transition: opacity 0.25s;
-      }
-      .mobile-overlay.active { display: block; }
-      .hamburger-btn { display: flex !important; }
-      .main-padding { padding: 12px !important; }
-      .topbar-title { font-size: 15px !important; }
-      .period-badge-wrap { max-width: 130px; }
-      /* Tappable nav items — bigger hit area */
-      .nav-item { padding-top: 14px !important; padding-bottom: 14px !important; }
+    /* ── Sidebar drawer (mobile) ───────────────────────── */
+    .sidebar {
+      transition: transform 0.28s cubic-bezier(.4,0,.2,1);
     }
-    @media (min-width: 768px) {
-      .hamburger-btn { display: none !important; }
-      .mobile-overlay { display: none !important; }
-      .main-content-wrap { margin-left: 260px; }
+    /* Mobile overlay */
+    #mobileOverlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+      z-index: 39;
     }
+    #mobileOverlay.active { display: block; }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -156,7 +138,7 @@
 <div id="app" class="flex hidden">
 
   <!-- Sidebar -->
-  <div id="sidebar" class="sidebar flex flex-col fixed left-0 top-0 z-40 h-screen">
+  <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col fixed md:relative left-0 top-0 z-40 h-screen w-[260px] flex-shrink-0">
     <div class="p-4 border-b border-white/10 flex items-center gap-3">
       <div class="w-10 h-10 rounded-xl flex-shrink-0 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
         <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
@@ -165,8 +147,8 @@
         <div class="font-bold text-white text-sm">Lion MD</div>
         <div class="text-xs text-gray-400">Payroll Portal</div>
       </div>
-      <!-- Mobile close button -->
-      <button onclick="closeMobileSidebar()" class="hamburger-btn hidden text-gray-400 hover:text-white p-1 rounded-lg ml-auto" aria-label="Close menu">
+      <!-- Mobile close ✕ -->
+      <button onclick="closeMobileSidebar()" id="sidebarCloseBtn" class="text-gray-400 hover:text-white p-1 rounded-lg flex-shrink-0 md:hidden" aria-label="Close menu">
         <i class="fas fa-times text-lg"></i>
       </button>
     </div>
@@ -184,27 +166,27 @@
   </div>
 
   <!-- Main Content -->
-  <div class="main-content-wrap flex-1 flex flex-col min-w-0 overflow-x-hidden">
+  <div class="flex-1 flex flex-col min-w-0 overflow-x-hidden md:ml-[260px]">
     <!-- Top Bar -->
-    <div class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30 gap-3">
-      <div class="flex items-center gap-3">
+    <div class="bg-white border-b border-gray-200 px-3 md:px-4 py-3 flex items-center justify-between sticky top-0 z-30 gap-2">
+      <div class="flex items-center gap-2 min-w-0">
         <!-- Hamburger (mobile only) -->
-        <button onclick="openMobileSidebar()" class="hamburger-btn hidden items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors" aria-label="Open menu">
+        <button onclick="openMobileSidebar()" id="hamburgerBtn" class="md:hidden flex items-center justify-center w-9 h-9 flex-shrink-0 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors" aria-label="Open menu">
           <i class="fas fa-bars text-lg"></i>
         </button>
-        <h2 id="pageTitle" class="topbar-title text-lg font-semibold text-gray-800 truncate">Dashboard</h2>
-        <span id="periodBadge" class="hidden px-3 py-1 rounded-full text-xs font-semibold text-white period-badge-wrap truncate" style="background: var(--lion-gold);"></span>
+        <h2 id="pageTitle" class="text-base md:text-lg font-semibold text-gray-800 truncate">Dashboard</h2>
+        <span id="periodBadge" class="hidden px-2 py-0.5 md:px-3 md:py-1 rounded-full text-xs font-semibold text-white truncate max-w-[100px] md:max-w-none" style="background: var(--lion-gold);"></span>
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
-        <select id="sessionSelector" onchange="onSessionChange(this.value)" class="text-sm px-2 py-1.5 max-w-[150px] md:max-w-[180px]">
+        <select id="sessionSelector" onchange="onSessionChange(this.value)" class="text-xs md:text-sm px-2 py-1.5 max-w-[120px] md:max-w-[180px]">
           <option value="">Select Period...</option>
         </select>
-        <div id="roleTag" class="text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap hidden md:block"></div>
+        <div id="roleTag" class="hidden md:block text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap"></div>
       </div>
     </div>
 
     <!-- Page Content -->
-    <main class="main-padding flex-1 p-6 overflow-auto min-w-0" id="mainContent">
+    <main class="flex-1 p-3 md:p-6 overflow-auto min-w-0" id="mainContent">
       <!-- Injected by JS -->
     </main>
   </div>
@@ -276,6 +258,8 @@ function setRole(role) {
   state.role = role
   $('roleModal').classList.add('hidden')
   $('app').classList.remove('hidden')
+  // Ensure sidebar starts hidden on mobile
+  if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
   buildNav()
   loadInitialData()
 
@@ -299,17 +283,41 @@ function logout() {
 // ════════════════════════════════════════════════════
 // MOBILE SIDEBAR
 // ════════════════════════════════════════════════════
+function isMobile() { return window.innerWidth < 768 }
+
 function openMobileSidebar() {
-  $('sidebar').classList.add('mobile-open')
+  const sb = $('sidebar')
+  sb.style.transform = 'translateX(0)'
+  sb.style.boxShadow = '4px 0 24px rgba(0,0,0,0.4)'
   $('mobileOverlay').classList.add('active')
   document.body.style.overflow = 'hidden'
 }
 
 function closeMobileSidebar() {
-  $('sidebar').classList.remove('mobile-open')
+  const sb = $('sidebar')
+  sb.style.transform = ''
+  sb.style.boxShadow = ''
   $('mobileOverlay').classList.remove('active')
   document.body.style.overflow = ''
 }
+
+// On resize — reset sidebar state
+window.addEventListener('resize', () => {
+  if (!isMobile()) {
+    closeMobileSidebar()
+    $('sidebar').style.transform = ''
+  } else {
+    // Ensure sidebar is hidden off-screen on mobile unless opened
+    if (!$('mobileOverlay').classList.contains('active')) {
+      $('sidebar').style.transform = 'translateX(-100%)'
+    }
+  }
+})
+
+// Init sidebar position on load
+document.addEventListener('DOMContentLoaded', () => {
+  if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+})
 
 // ════════════════════════════════════════════════════
 // NAV
@@ -352,7 +360,7 @@ function navigate(page) {
   if (pages[page]) pages[page]()
 
   // Auto-close sidebar on mobile after navigation
-  if (window.innerWidth < 768) closeMobileSidebar()
+  if (isMobile()) closeMobileSidebar()
 }
 
 // Contractor type helpers
@@ -444,50 +452,50 @@ function renderDashboard() {
   $('mainContent').innerHTML = `
     <div class="space-y-6">
       <!-- Stats Row -->
-      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div class="stat-card card flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:rgba(201,168,76,0.1)">
-            <i class="fas fa-file-medical text-yellow-500 text-xl"></i>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div class="card p-3 md:p-5 flex items-center gap-3">
+          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(201,168,76,0.1)">
+            <i class="fas fa-file-medical text-yellow-500 text-base md:text-xl"></i>
           </div>
-          <div>
-            <div class="text-2xl font-bold text-gray-800">${fmtNum(t.total_cases)}</div>
-            <div class="text-xs text-gray-500 font-medium">Total Cases</div>
-          </div>
-        </div>
-        <div class="stat-card card flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50">
-            <i class="fas fa-building text-blue-500 text-xl"></i>
-          </div>
-          <div>
-            <div class="text-2xl font-bold text-gray-800">${fmt(t.total_carevalidate)}</div>
-            <div class="text-xs text-gray-500 font-medium">CareValidate Owes Us</div>
+          <div class="min-w-0">
+            <div class="text-lg md:text-2xl font-bold text-gray-800 truncate">${fmtNum(t.total_cases)}</div>
+            <div class="text-xs text-gray-500 font-medium leading-tight">Total Cases</div>
           </div>
         </div>
-        <div class="stat-card card flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-purple-50">
-            <i class="fas fa-user-md text-purple-500 text-xl"></i>
+        <div class="card p-3 md:p-5 flex items-center gap-3">
+          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
+            <i class="fas fa-building text-blue-500 text-base md:text-xl"></i>
           </div>
-          <div>
-            <div class="text-2xl font-bold text-gray-800">${fmt(t.total_contractor)}</div>
-            <div class="text-xs text-gray-500 font-medium">We Owe Contractors</div>
-          </div>
-        </div>
-        <div class="stat-card card flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50">
-            <i class="fas fa-percent text-blue-500 text-xl"></i>
-          </div>
-          <div>
-            <div class="text-2xl font-bold text-blue-600" id="dashChrisComm"><span class="text-sm text-gray-400">...</span></div>
-            <div class="text-xs text-gray-500 font-medium">Chris Garcia Commission</div>
+          <div class="min-w-0">
+            <div class="text-lg md:text-2xl font-bold text-gray-800 truncate">${fmt(t.total_carevalidate)}</div>
+            <div class="text-xs text-gray-500 font-medium leading-tight">CV Owes Us</div>
           </div>
         </div>
-        <div class="stat-card card flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-green-50">
-            <i class="fas fa-chart-line text-green-500 text-xl"></i>
+        <div class="card p-3 md:p-5 flex items-center gap-3">
+          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50">
+            <i class="fas fa-user-md text-purple-500 text-base md:text-xl"></i>
           </div>
-          <div>
-            <div class="text-2xl font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}" id="dashNetMargin">${fmt(margin)}</div>
-            <div class="text-xs text-gray-500 font-medium" id="dashMarginLabel">Net Margin (${marginPct}%)</div>
+          <div class="min-w-0">
+            <div class="text-lg md:text-2xl font-bold text-gray-800 truncate">${fmt(t.total_contractor)}</div>
+            <div class="text-xs text-gray-500 font-medium leading-tight">We Owe Contractors</div>
+          </div>
+        </div>
+        <div class="card p-3 md:p-5 flex items-center gap-3">
+          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
+            <i class="fas fa-percent text-blue-500 text-base md:text-xl"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="text-lg md:text-2xl font-bold text-blue-600 truncate" id="dashChrisComm"><span class="text-sm text-gray-400">...</span></div>
+            <div class="text-xs text-gray-500 font-medium leading-tight">Chris Commission</div>
+          </div>
+        </div>
+        <div class="card p-3 md:p-5 flex items-center gap-3 col-span-2 sm:col-span-1">
+          <div class="w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-green-50">
+            <i class="fas fa-chart-line text-green-500 text-base md:text-xl"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="text-lg md:text-2xl font-bold truncate ${margin >= 0 ? 'text-green-600' : 'text-red-600'}" id="dashNetMargin">${fmt(margin)}</div>
+            <div class="text-xs text-gray-500 font-medium leading-tight" id="dashMarginLabel">Net Margin (${marginPct}%)</div>
           </div>
         </div>
       </div>
@@ -1221,7 +1229,7 @@ function renderPayroll() {
           </button>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div class="bg-white rounded-xl p-3 text-center border border-blue-100 md:col-span-1 col-span-2">
+          <div class="bg-white rounded-xl p-3 text-center border border-blue-100 col-span-2 md:col-span-1">
             <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Total Commission</div>
             <div class="text-2xl font-bold text-blue-600" id="chrisTotal"><span class="spinner inline-block w-5 h-5"></span></div>
           </div>
@@ -1636,7 +1644,7 @@ function renderPaystubContent(data) {
       </div>
 
       <!-- Contractor + Commission Total -->
-      <div class="grid grid-cols-2 gap-6 mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Contractor</div>
           <div class="font-bold text-gray-800 text-lg">${contractor.name || ''}</div>
@@ -1654,9 +1662,7 @@ function renderPaystubContent(data) {
       <!-- Commission Breakdown by Tier -->
       <div class="mb-6">
         <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Commission Breakdown by Tier</div>
-        <div class="grid grid-cols-3 gap-3">
-          <div class="bg-purple-50 border border-purple-100 rounded-xl p-4 text-center">
-            <div class="text-xs text-purple-500 font-semibold uppercase mb-1">Regular — Async &amp; Orderly</div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="text-2xl font-bold text-purple-700">${fmt2(comm.commission_async_orderly)}</div>
             <div class="text-xs text-gray-500 mt-1">${fmt2(comm.grand_async_orderly_cv)} CV × 25%</div>
           </div>
@@ -1738,7 +1744,7 @@ function renderPaystubContent(data) {
       </div>
 
       <!-- Contractor Info -->
-      <div class="grid grid-cols-2 gap-6 mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Contractor</div>
           <div class="font-bold text-gray-800 text-lg">${c.name || ''}</div>
@@ -1762,7 +1768,7 @@ function renderPaystubContent(data) {
       </div>
 
       <!-- Breakdown -->
-      <div class="grid grid-cols-3 gap-3 mb-6">
+      <div class="grid grid-cols-3 sm:grid-cols-3 gap-2 md:gap-3 mb-6">
         ${sum.async_count > 0 ? `
           <div class="bg-purple-50 border border-purple-100 rounded-xl p-3 text-center">
             <div class="font-bold text-purple-600 text-lg">${fmtNum(sum.async_count)}</div>
@@ -2312,7 +2318,7 @@ async function renderCVDashboard() {
         </div>`}
 
       <!-- Summary Stats Row -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div class="card p-5 text-center">
           <div class="text-3xl font-bold mb-1" style="color:var(--lion-gold)">${fmt(t.total_owed)}</div>
           <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Total CV Owes Lion MD</div>
