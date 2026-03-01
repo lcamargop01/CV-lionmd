@@ -725,9 +725,10 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
     WHERE s.period_key=? AND c.contractor_id=?
   `).bind(pk, cid).first()
 
-  // If this contractor is Chris Garcia (chris_garcia type), attach commission data
+  // If this contractor is Christopher Garcia, attach commission data
   let commission = null
-  if (contractor?.contractor_type === 'chris_garcia') {
+  const cname = (contractor?.name || '').toLowerCase()
+  if (cname.includes('garcia') && cname.includes('chris')) {
     commission = await calcCommission(c.env.DB, pk)
   }
 
@@ -768,7 +769,7 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
 // Commission rates (applied to CareValidate fees):
 //   regular contractors — Async + Orderly: 25%  |  Sync: 16.6667%
 //   owner contractors   — All visit types:  25%
-//   chris_garcia himself — excluded (no commission on his own consults)
+//   Christopher Garcia himself — excluded (no commission on his own consults)
 // ──────────────────────────────────────────────
 const COMMISSION_ASYNC_ORDERLY = 0.25        // 25%
 const COMMISSION_SYNC_REGULAR  = 1 / 6      // 16.6667%
@@ -790,6 +791,7 @@ async function calcCommission(db: D1Database, pk: string) {
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
     WHERE s.period_key = ?
       AND ct.contractor_type IN ('regular', 'owner')
+      AND LOWER(ct.name) NOT LIKE '%garcia%'
     GROUP BY ct.id, ct.name, ct.contractor_type, c.visit_type, c.is_orderly
     ORDER BY ct.name, c.visit_type
   `).bind(pk).all()

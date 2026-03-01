@@ -298,10 +298,10 @@ function navigate(page) {
 
 // Contractor type helpers
 function contractorTypeLabel(t) {
-  return t === 'owner' ? 'Owner' : t === 'chris_garcia' ? 'Chris Garcia' : 'Regular'
+  return t === 'owner' ? 'Owner' : 'Regular'
 }
 function contractorTypeBadge(t) {
-  const cls = t === 'owner' ? 'bg-amber-100 text-amber-700' : t === 'chris_garcia' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+  const cls = t === 'owner' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
   return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${cls}">${contractorTypeLabel(t)}</span>`
 }
 
@@ -1124,7 +1124,10 @@ function renderPayroll() {
   if (!state.currentPeriod || !state.currentSummary) { $('mainContent').innerHTML = noDataMsg(); return }
   const s = state.currentSummary
   const pk = state.currentPeriod.period_key
-  const chrisInfo = state.contractors.find(c => c.contractor_type === 'chris_garcia')
+  const chrisInfo = state.contractors.find(c => {
+    const n = (c.name || '').toLowerCase()
+    return n.includes('garcia') && n.includes('chris')
+  })
 
   $('mainContent').innerHTML = `
     <div class="space-y-4">
@@ -1186,7 +1189,7 @@ function renderPayroll() {
         ${(s.byDoctor || []).filter(d => {
           if (!d.contractor_id) return false
           const ct = state.contractors.find(c=>c.id===d.contractor_id)
-          return ct?.contractor_type !== 'chris_garcia'
+          return ct?.contractor_type !== 'chris_garcia' && !((ct?.name||'').toLowerCase().includes('garcia') && (ct?.name||'').toLowerCase().includes('chris'))
         }).map(d => {
           const cInfo = state.contractors.find(c=>c.id===d.contractor_id)
           const cType = cInfo?.contractor_type || 'regular'
@@ -1551,8 +1554,9 @@ async function regeneratePaystub() {
 function renderPaystubContent(data) {
   const { contractor, session, summary, consults, commission } = data
 
-  // ── Chris Garcia: show commission statement instead of normal paystub ──
-  if (commission && contractor?.contractor_type === 'chris_garcia') {
+  // ── Christopher Garcia: show commission statement instead of normal paystub ──
+  const cname2 = (contractor?.name || '').toLowerCase()
+  if (commission && cname2.includes('garcia') && cname2.includes('chris')) {
     const comm = commission
     const fmt2 = n => '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
     const pct  = n => (n*100).toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4}) + '%'
@@ -1937,7 +1941,6 @@ function renderContractors() {
             <select id="ctType" class="w-full">
               <option value="regular">Regular</option>
               <option value="owner">Owner</option>
-              <option value="chris_garcia">Chris Garcia</option>
             </select>
           </div>
           <div>
@@ -2007,9 +2010,8 @@ async function deleteContractor(id, name) {
 // ════════════════════════════════════════════════════
 function renderRates() {
   const types = [
-    { key: 'regular',      label: 'Regular',      color: 'gray' },
-    { key: 'owner',        label: 'Owner',         color: 'amber' },
-    { key: 'chris_garcia', label: 'Chris Garcia',  color: 'blue' }
+    { key: 'regular', label: 'Regular', color: 'gray' },
+    { key: 'owner',   label: 'Owner',   color: 'amber' }
   ]
   const visitTypes = [
     { key: 'ASYNC_TEXT_EMAIL', label: 'Async (Text/Email)' },
@@ -2143,7 +2145,7 @@ async function saveRate(id) {
 }
 
 async function saveTypeRate(visitType) {
-  const types = ['regular', 'owner', 'chris_garcia']
+  const types = ['regular', 'owner']
   try {
     for (const t of types) {
       const val = parseFloat(document.getElementById(`tr_${t}_${visitType}`)?.value || '0')
