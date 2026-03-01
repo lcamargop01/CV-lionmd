@@ -1831,7 +1831,7 @@ function renderPaystubContent(data) {
 
       <!-- Footer -->
       <div class="mt-6 pt-4 border-t text-xs text-gray-400 text-center">
-        This is an official payment statement from Lion MD. For questions contact your payroll administrator.
+        This is an official payment statement from Lion MD's, PLLC. For questions contact your payroll administrator.
       </div>
     </div>`
 }
@@ -1870,7 +1870,7 @@ async function downloadPaystub() {
   doc.setTextColor(201, 168, 76)
   doc.setFontSize(22)
   doc.setFont('helvetica', 'bold')
-  doc.text('LION MD', 38, 18)
+  doc.text("LION MD's, PLLC", 38, 18)
   doc.setTextColor(200, 200, 200)
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
@@ -1888,7 +1888,7 @@ async function downloadPaystub() {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(100, 100, 100)
-  doc.text(contractor?.company || 'Lion MD', 15, 48)
+  doc.text(contractor?.company || "Lion MD's, PLLC", 15, 48)
   if (contractor?.ein_ssn) doc.text('EIN/SSN: ' + contractor.ein_ssn, 15, 54)
 
   // Summary box
@@ -1958,7 +1958,7 @@ async function downloadPaystub() {
     doc.rect(0, doc.internal.pageSize.getHeight() - 12, pageW, 12, 'F')
     doc.setTextColor(150, 150, 150)
     doc.setFontSize(7)
-    doc.text('Lion MD Payroll Portal · Confidential', 15, doc.internal.pageSize.getHeight() - 4)
+    doc.text("Lion MD's, PLLC · Payroll Portal · Confidential", 15, doc.internal.pageSize.getHeight() - 4)
     doc.text(`Page ${i} of ${totalPages}`, pageW - 15, doc.internal.pageSize.getHeight() - 4, { align: 'right' })
   }
 
