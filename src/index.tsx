@@ -769,111 +769,116 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
 // ──────────────────────────────────────────────
 // CHRIS GARCIA COMMISSION
 //
-// Commission rates (applied to CareValidate fees):
-//   regular contractors — Async + Orderly: 25%  |  Sync: 16.6667%
-//   owner contractors   — All visit types:  25%
-//   Christopher Garcia himself — excluded (no commission on his own consults)
+// New formula:
+//   Commission = 25% × (total CV pays us − total we pay contractors)
+//
+// Special adjustment for Ana Lisa Carr:
+//   Before computing her net contribution, subtract
+//   (count of Ringside Health consults × $20) from her CV total.
+//
+// Christopher Garcia himself is excluded from the base calculation.
 // ──────────────────────────────────────────────
-const COMMISSION_ASYNC_ORDERLY = 0.25        // 25%
-const COMMISSION_SYNC_REGULAR  = 1 / 6      // 16.6667%
-const COMMISSION_OWNER         = 0.25        // 25% of all CV
+const COMMISSION_RATE          = 0.25   // 25% of net (CV − contractor pay)
+const RINGSIDE_DEDUCTION_RATE  = 20     // $20 per Ringside Health consult
 
 async function calcCommission(db: D1Database, pk: string) {
-  // Pull every consult in the period for regular + owner contractors
+  // 1. Pull period totals: total CV and total contractor pay (excluding Garcia)
+  const totalsRow = await db.prepare(`
+    SELECT
+      SUM(c.carevalidate_fee)  as total_cv,
+      SUM(c.contractor_fee)    as total_contractor
+    FROM consults c
+    LEFT JOIN upload_sessions s  ON c.session_id = s.id
+    LEFT JOIN contractors     ct ON c.contractor_id = ct.id
+    WHERE s.period_key = ?
+      AND LOWER(ct.name) NOT LIKE '%garcia%'
+  `).bind(pk).first() as any
+
+  const total_cv         = totalsRow?.total_cv         || 0
+  const total_contractor = totalsRow?.total_contractor || 0
+
+  // 2. Count Ringside Health consults assigned to Ana Lisa Carr
+  const ringsideRow = await db.prepare(`
+    SELECT COUNT(*) as ringside_count
+    FROM consults c
+    LEFT JOIN upload_sessions s  ON c.session_id = s.id
+    LEFT JOIN contractors     ct ON c.contractor_id = ct.id
+    WHERE s.period_key = ?
+      AND LOWER(ct.name) LIKE '%ana lisa carr%'
+      AND LOWER(c.organization_name) LIKE '%ringside%'
+  `).bind(pk).first() as any
+
+  const ringside_count     = ringsideRow?.ringside_count || 0
+  const ringside_deduction = ringside_count * RINGSIDE_DEDUCTION_RATE
+
+  // 3. Net base = (total CV − total contractor pay) − Ringside deduction
+  const net_base      = (total_cv - total_contractor) - ringside_deduction
+  const commission_total = net_base * COMMISSION_RATE
+
+  // 4. Per-contractor breakdown (for display purposes)
   const rows = await db.prepare(`
     SELECT
       ct.id       as contractor_id,
       ct.name     as contractor_name,
       ct.contractor_type,
-      c.visit_type,
-      c.is_orderly,
-      SUM(c.carevalidate_fee) as cv_total,
-      COUNT(*)                as case_count
+      SUM(c.carevalidate_fee)  as cv_total,
+      SUM(c.contractor_fee)    as contractor_total,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN c.carevalidate_fee ELSE 0 END) as async_cv,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END)                  as async_cases,
+      SUM(CASE WHEN c.is_orderly=1 THEN c.carevalidate_fee ELSE 0 END)                                     as orderly_cv,
+      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END)                                                      as orderly_cases,
+      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.carevalidate_fee ELSE 0 END) as sync_cv,
+      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)                  as sync_cases
     FROM consults c
     LEFT JOIN upload_sessions s  ON c.session_id = s.id
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
     WHERE s.period_key = ?
-      AND ct.contractor_type IN ('regular', 'owner')
       AND LOWER(ct.name) NOT LIKE '%garcia%'
-    GROUP BY ct.id, ct.name, ct.contractor_type, c.visit_type, c.is_orderly
-    ORDER BY ct.name, c.visit_type
+    GROUP BY ct.id, ct.name, ct.contractor_type
+    ORDER BY ct.name
   `).bind(pk).all()
 
-  // Aggregate per contractor
-  const byContractor: Record<number, {
-    contractor_id: number
-    contractor_name: string
-    contractor_type: string
-    async_cv: number; async_cases: number
-    orderly_cv: number; orderly_cases: number
-    sync_cv: number; sync_cases: number
-    other_cv: number; other_cases: number
-    commission: number
-  }> = {}
-
-  for (const row of rows.results as any[]) {
-    const cid: number = row.contractor_id
-    if (!byContractor[cid]) {
-      byContractor[cid] = {
-        contractor_id: cid, contractor_name: row.contractor_name,
-        contractor_type: row.contractor_type,
-        async_cv: 0, async_cases: 0,
-        orderly_cv: 0, orderly_cases: 0,
-        sync_cv: 0, sync_cases: 0,
-        other_cv: 0, other_cases: 0,
-        commission: 0
-      }
+  const details = (rows.results as any[]).map(r => {
+    const isAnaLisa = (r.contractor_name || '').toLowerCase().includes('ana lisa carr')
+    const cv  = r.cv_total         || 0
+    const pay = r.contractor_total || 0
+    // For Ana Lisa Carr: deduct the Ringside deduction from her CV contribution
+    const adjustedNet = (cv - pay) - (isAnaLisa ? ringside_deduction : 0)
+    const commission  = adjustedNet * COMMISSION_RATE
+    return {
+      contractor_id:   r.contractor_id,
+      contractor_name: r.contractor_name,
+      contractor_type: r.contractor_type,
+      async_cv:        r.async_cv    || 0,
+      async_cases:     r.async_cases || 0,
+      orderly_cv:      r.orderly_cv  || 0,
+      orderly_cases:   r.orderly_cases || 0,
+      sync_cv:         r.sync_cv     || 0,
+      sync_cases:      r.sync_cases  || 0,
+      other_cv:        0,
+      other_cases:     0,
+      cv_total:        cv,
+      contractor_total: pay,
+      ringside_deduction: isAnaLisa ? ringside_deduction : 0,
+      commission
     }
-    const entry = byContractor[cid]
-    const vt: string = (row.visit_type || '').toUpperCase()
-    const isOrderly: boolean = row.is_orderly === 1
-    const cv: number  = row.cv_total   || 0
-    const cnt: number = row.case_count || 0
-
-    if (isOrderly) {
-      entry.orderly_cv += cv;  entry.orderly_cases += cnt
-    } else if (vt === 'ASYNC_TEXT_EMAIL') {
-      entry.async_cv   += cv;  entry.async_cases   += cnt
-    } else if (['SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON'].includes(vt)) {
-      entry.sync_cv    += cv;  entry.sync_cases    += cnt
-    } else {
-      entry.other_cv   += cv;  entry.other_cases   += cnt
-    }
-  }
-
-  // Compute commission per contractor
-  let commission_total       = 0
-  let grand_async_orderly_cv = 0
-  let grand_sync_cv          = 0
-  let grand_owner_cv         = 0
-
-  const details = Object.values(byContractor).map(e => {
-    let commission = 0
-    if (e.contractor_type === 'owner') {
-      const total_cv = e.async_cv + e.orderly_cv + e.sync_cv + e.other_cv
-      commission = total_cv * COMMISSION_OWNER
-      grand_owner_cv += total_cv
-    } else {
-      // regular: 25% async+orderly, 16.6667% sync; NO_SHOW/other = 0
-      commission = (e.async_cv + e.orderly_cv) * COMMISSION_ASYNC_ORDERLY
-                 +  e.sync_cv                  * COMMISSION_SYNC_REGULAR
-      grand_async_orderly_cv += e.async_cv + e.orderly_cv
-      grand_sync_cv          += e.sync_cv
-    }
-    e.commission = commission
-    commission_total += commission
-    return e
   })
 
   return {
-    period_key:  pk,
+    period_key:          pk,
     commission_total,
-    grand_async_orderly_cv,
-    grand_sync_cv,
-    grand_owner_cv,
-    commission_async_orderly: grand_async_orderly_cv * COMMISSION_ASYNC_ORDERLY,
-    commission_sync:          grand_sync_cv          * COMMISSION_SYNC_REGULAR,
-    commission_owner:         grand_owner_cv         * COMMISSION_OWNER,
+    total_cv,
+    total_contractor,
+    net_base,
+    ringside_count,
+    ringside_deduction,
+    // Legacy fields kept for frontend compatibility
+    grand_async_orderly_cv: 0,
+    grand_sync_cv:          0,
+    grand_owner_cv:         0,
+    commission_async_orderly: 0,
+    commission_sync:          0,
+    commission_owner:         0,
     by_contractor: details.sort((a, b) => b.commission - a.commission)
   }
 }
