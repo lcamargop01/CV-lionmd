@@ -514,12 +514,12 @@ function renderDashboard() {
           <canvas id="visitTypeChart" height="200"></canvas>
         </div>
 
-        <!-- Top Contractors -->
-        <div class="card p-5">
+        <!-- Contractor Earnings -->
+        <div class="card p-5 flex flex-col">
           <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
             <i class="fas fa-user-md text-purple-500"></i> Contractor Earnings
           </h3>
-          <div class="space-y-3" id="contractorBars"></div>
+          <div class="space-y-3 overflow-y-auto" style="max-height:360px" id="contractorBars"></div>
         </div>
       </div>
 
@@ -647,7 +647,7 @@ function renderVisitTypeChart(data) {
 }
 
 function renderContractorBars(doctors) {
-  const sorted = [...doctors].sort((a,b) => b.total_contractor - a.total_contractor).slice(0, 8)
+  const sorted = [...doctors].sort((a,b) => b.total_contractor - a.total_contractor)
   const max = sorted[0]?.total_contractor || 1
   $('contractorBars').innerHTML = sorted.map(d => `
     <div>
