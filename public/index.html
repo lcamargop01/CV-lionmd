@@ -2199,6 +2199,20 @@ async function renderCVDashboard() {
 
   const t = cvData.total || {}
   const isCV = state.role === 'carevalidate'
+  const contractors = cvData.byContractor || []
+
+  // Column totals
+  const colTotals = contractors.reduce((acc, r) => {
+    acc.cases       += r.total_cases   || 0
+    acc.async_cases += r.async_cases   || 0
+    acc.async_cv    += r.async_cv      || 0
+    acc.sync_cases  += r.sync_cases    || 0
+    acc.sync_cv     += r.sync_cv       || 0
+    acc.orderly_cases += r.orderly_cases || 0
+    acc.orderly_cv  += r.orderly_cv    || 0
+    acc.total_cv    += r.total_cv      || 0
+    return acc
+  }, { cases:0, async_cases:0, async_cv:0, sync_cases:0, sync_cv:0, orderly_cases:0, orderly_cv:0, total_cv:0 })
 
   $('mainContent').innerHTML = `
     <div class="space-y-6">
@@ -2216,30 +2230,85 @@ async function renderCVDashboard() {
           <p class="text-sm text-yellow-700"><i class="fas fa-eye mr-2"></i>This is the <strong>CareValidate view</strong> — only showing what CareValidate owes Lion MD</p>
         </div>`}
 
-      <!-- Total Owed -->
-      <div class="card p-8 text-center">
-        <div class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Total Amount Owed to Lion MD</div>
-        <div class="text-5xl font-bold mb-1" style="color:var(--lion-gold)">${fmt(t.total_owed)}</div>
-        <div class="text-gray-400 text-sm">${fmtNum(t.total_cases)} consult cases · ${state.currentPeriod.period_label}</div>
-      </div>
-
-      <!-- Breakdown by Type -->
-      <div class="card p-6">
-        <h3 class="font-semibold text-gray-700 mb-4">Breakdown by Consult Type</h3>
-        <div class="space-y-3">
-          ${(cvData.byVisitType || []).map(vt => `
-            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-              <div class="flex items-center gap-3">
-                ${visitTypeBadge(vt.visit_type, null, vt.visit_type === 'ORDERLY')}
-                <span class="text-gray-700 font-medium">${visitTypeLabel(vt.visit_type)}</span>
-                <span class="text-gray-400 text-sm">${fmtNum(vt.count)} cases</span>
-              </div>
-              <span class="font-bold text-gray-800 text-lg">${fmt(vt.total_amount)}</span>
-            </div>`).join('')}
+      <!-- Summary Stats Row -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="card p-5 text-center">
+          <div class="text-3xl font-bold mb-1" style="color:var(--lion-gold)">${fmt(t.total_owed)}</div>
+          <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Total CV Owes Lion MD</div>
+          <div class="text-xs text-gray-400 mt-1">${fmtNum(t.total_cases)} total cases</div>
+        </div>
+        <div class="card p-5 text-center">
+          <div class="text-2xl font-bold text-blue-600 mb-1">${fmt(colTotals.async_cv)}</div>
+          <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Async (Text/Email)</div>
+          <div class="text-xs text-gray-400 mt-1">${fmtNum(colTotals.async_cases)} cases</div>
+        </div>
+        <div class="card p-5 text-center">
+          <div class="text-2xl font-bold text-purple-600 mb-1">${fmt(colTotals.sync_cv)}</div>
+          <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Sync (Phone/Video/In-Person)</div>
+          <div class="text-xs text-gray-400 mt-1">${fmtNum(colTotals.sync_cases)} cases</div>
+        </div>
+        <div class="card p-5 text-center">
+          <div class="text-2xl font-bold text-amber-600 mb-1">${fmt(colTotals.orderly_cv)}</div>
+          <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">OrderlyMeds</div>
+          <div class="text-xs text-gray-400 mt-1">${fmtNum(colTotals.orderly_cases)} cases</div>
         </div>
       </div>
 
-      <!-- Period selector for CV -->
+      <!-- Contractor Breakdown Table -->
+      <div class="card p-5">
+        <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fas fa-table text-blue-500"></i> CV Breakdown by Contractor
+          <span class="text-xs text-gray-400 font-normal ml-1">${contractors.length} contractors</span>
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" style="min-width:820px">
+            <thead class="bg-gray-50">
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-3 px-4 text-gray-500 font-semibold">Contractor</th>
+                <th class="text-center py-3 px-3 text-gray-400 font-semibold text-xs">Type</th>
+                <th class="text-right py-3 px-3 text-gray-500 font-semibold whitespace-nowrap">Cases</th>
+                <th class="text-right py-3 px-3 text-blue-500 font-semibold whitespace-nowrap">Async Cases</th>
+                <th class="text-right py-3 px-3 text-blue-600 font-semibold whitespace-nowrap">Async CV</th>
+                <th class="text-right py-3 px-3 text-purple-500 font-semibold whitespace-nowrap">Sync Cases</th>
+                <th class="text-right py-3 px-3 text-purple-600 font-semibold whitespace-nowrap">Sync CV</th>
+                <th class="text-right py-3 px-3 text-amber-500 font-semibold whitespace-nowrap">Orderly Cases</th>
+                <th class="text-right py-3 px-3 text-amber-600 font-semibold whitespace-nowrap">Orderly CV</th>
+                <th class="text-right py-3 px-3 text-gray-700 font-semibold whitespace-nowrap">Total CV</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${contractors.map(r => `
+                <tr class="table-row border-b border-gray-50">
+                  <td class="py-3 px-4 font-medium text-gray-800">${r.contractor_name || '<i class="text-gray-400">Unknown</i>'}</td>
+                  <td class="py-3 px-3 text-center">${contractorTypeBadge(r.contractor_type || 'regular')}</td>
+                  <td class="py-3 px-3 text-right text-gray-600">${fmtNum(r.total_cases)}</td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(r.async_cases)}</td>
+                  <td class="py-3 px-3 text-right font-medium text-blue-600">${fmt(r.async_cv)}</td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(r.sync_cases)}</td>
+                  <td class="py-3 px-3 text-right font-medium text-purple-600">${fmt(r.sync_cv)}</td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(r.orderly_cases)}</td>
+                  <td class="py-3 px-3 text-right font-medium text-amber-600">${fmt(r.orderly_cv)}</td>
+                  <td class="py-3 px-3 text-right font-bold text-gray-800">${fmt(r.total_cv)}</td>
+                </tr>`).join('')}
+            </tbody>
+            <tfoot class="bg-gray-50 border-t-2 border-gray-300">
+              <tr>
+                <td class="py-3 px-4 font-bold text-gray-700" colspan="2">TOTAL</td>
+                <td class="py-3 px-3 text-right font-bold text-gray-700">${fmtNum(colTotals.cases)}</td>
+                <td class="py-3 px-3 text-right font-bold text-blue-600">${fmtNum(colTotals.async_cases)}</td>
+                <td class="py-3 px-3 text-right font-bold text-blue-600">${fmt(colTotals.async_cv)}</td>
+                <td class="py-3 px-3 text-right font-bold text-purple-600">${fmtNum(colTotals.sync_cases)}</td>
+                <td class="py-3 px-3 text-right font-bold text-purple-600">${fmt(colTotals.sync_cv)}</td>
+                <td class="py-3 px-3 text-right font-bold text-amber-600">${fmtNum(colTotals.orderly_cases)}</td>
+                <td class="py-3 px-3 text-right font-bold text-amber-600">${fmt(colTotals.orderly_cv)}</td>
+                <td class="py-3 px-3 text-right font-bold text-gray-800">${fmt(colTotals.total_cv)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Period selector -->
       ${state.periods.length > 1 ? `
         <div class="card p-5">
           <h3 class="font-semibold text-gray-700 mb-3">All Periods</h3>

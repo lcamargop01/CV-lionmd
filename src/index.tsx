@@ -945,9 +945,36 @@ app.get('/api/cv-summary/period/:period_key', async (c) => {
     WHERE s.period_key=?
   `).bind(pk).first()
 
+  // Breakdown by contractor: async, sync, orderly counts + CV amounts
+  const byContractorRaw = await c.env.DB.prepare(`
+    SELECT
+      ct.id                                                            AS contractor_id,
+      ct.name                                                          AS contractor_name,
+      ct.contractor_type,
+      COUNT(*)                                                         AS total_cases,
+      SUM(c.carevalidate_fee)                                          AS total_cv,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL'
+               THEN 1 ELSE 0 END)                                     AS async_cases,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL'
+               THEN c.carevalidate_fee ELSE 0 END)                    AS async_cv,
+      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
+               THEN 1 ELSE 0 END)                                     AS sync_cases,
+      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
+               THEN c.carevalidate_fee ELSE 0 END)                    AS sync_cv,
+      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END)                 AS orderly_cases,
+      SUM(CASE WHEN c.is_orderly=1 THEN c.carevalidate_fee ELSE 0 END) AS orderly_cv
+    FROM consults c
+    JOIN upload_sessions s  ON c.session_id = s.id
+    JOIN contractors ct     ON c.contractor_id = ct.id
+    WHERE s.period_key=?
+    GROUP BY ct.id, ct.name, ct.contractor_type
+    ORDER BY total_cv DESC
+  `).bind(pk).all()
+
   return c.json({
     session: { period_label: periodLabel, period_key: pk, files: sessions.results },
     byVisitType: byVisitType.results,
+    byContractor: byContractorRaw.results,
     total
   })
 })
