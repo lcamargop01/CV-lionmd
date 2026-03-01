@@ -88,8 +88,8 @@
 <div id="roleModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center">
   <div class="card p-8 w-full max-w-md mx-4">
     <div class="text-center mb-6">
-      <div class="w-24 h-24 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
-        <img src="/static/lion-logo.png" alt="Lion MD" class="w-20 h-20 object-contain drop-shadow-lg"/>
+      <div class="w-24 h-24 rounded-2xl mx-auto mb-4 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
+        <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
       </div>
       <h1 class="text-2xl font-bold text-gray-800">Lion MD Payroll Portal</h1>
       <p class="text-gray-500 text-sm mt-1">Select your access level to continue</p>
@@ -125,8 +125,8 @@
   <!-- Sidebar -->
   <div id="sidebar" class="sidebar flex flex-col fixed left-0 top-0 z-40 h-screen">
     <div class="p-4 border-b border-white/10 flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
-        <img src="/static/lion-logo.png" alt="Lion MD" class="w-9 h-9 object-contain"/>
+      <div class="w-10 h-10 rounded-xl flex-shrink-0 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
+        <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
       </div>
       <div id="sidebarTitle" class="overflow-hidden">
         <div class="font-bold text-white text-sm">Lion MD</div>
@@ -2239,8 +2239,8 @@ async function renderCVDashboard() {
       ${isCV ? `
         <div class="bg-blue-600 rounded-2xl p-6 text-white">
           <div class="flex items-center gap-4 mb-2">
-            <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.15)">
-              <img src="/static/lion-logo.png" alt="Lion MD" class="w-12 h-12 object-contain"/>
+            <div class="w-14 h-14 rounded-xl flex-shrink-0 overflow-hidden" style="background:rgba(255,255,255,0.15)">
+              <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
             </div>
             <div>
               <h2 class="text-xl font-bold">CareValidate Invoice Summary</h2>
