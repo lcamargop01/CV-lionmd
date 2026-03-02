@@ -1028,4 +1028,55 @@ app.get('/api/debug/contractor-totals/:period_key', async (c) => {
   return c.json(rows.results)
 })
 
+// Find unmatched consults (null contractor_id) for a period
+app.get('/api/debug/unmatched/:period_key', async (c) => {
+  const pk = c.req.param('period_key')
+  const rows = await c.env.DB.prepare(`
+    SELECT c.id, c.doctor_name, c.visit_type, c.is_orderly, c.carevalidate_fee, c.contractor_fee, c.organization_name
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    WHERE s.period_key = ?
+      AND (c.contractor_id IS NULL OR c.contractor_id = 0)
+      AND c.visit_type != 'NO_SHOW'
+    ORDER BY c.doctor_name, c.id
+  `).bind(pk).all()
+  return c.json(rows.results)
+})
+
+// Find non-standard fee consults for a contractor in a period
+app.get('/api/debug/bad-fees/:period_key/:contractor_id', async (c) => {
+  const pk  = c.req.param('period_key')
+  const cid = c.req.param('contractor_id')
+  const rows = await c.env.DB.prepare(`
+    SELECT c.id, c.visit_type, c.is_orderly, c.carevalidate_fee, c.contractor_fee, c.doctor_name, c.organization_name
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    WHERE s.period_key = ? AND c.contractor_id = ?
+      AND c.visit_type != 'NO_SHOW'
+      AND NOT (
+        (c.is_orderly = 1 AND c.contractor_fee = 10) OR
+        (c.is_orderly = 0 AND c.visit_type = 'ASYNC_TEXT_EMAIL' AND c.contractor_fee = 10) OR
+        (c.is_orderly = 0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') AND c.contractor_fee = 30)
+      )
+    ORDER BY c.id
+  `).bind(pk, cid).all()
+  return c.json(rows.results)
+})
+
+// Find SYNC consults wrongly flagged as orderly for a contractor in a period
+app.get('/api/debug/orderly-sync/:period_key/:contractor_id', async (c) => {
+  const pk  = c.req.param('period_key')
+  const cid = c.req.param('contractor_id')
+  const rows = await c.env.DB.prepare(`
+    SELECT c.id, c.visit_type, c.is_orderly, c.carevalidate_fee, c.contractor_fee, c.doctor_name, c.organization_name
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    WHERE s.period_key = ? AND c.contractor_id = ?
+      AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
+      AND c.is_orderly = 1
+    ORDER BY c.id
+  `).bind(pk, cid).all()
+  return c.json(rows.results)
+})
+
 export default app
