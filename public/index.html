@@ -2635,33 +2635,6 @@ async function exportDashboardPDF() {
     })
     y += 23
 
-    // ── Visit Type Breakdown ──
-    const vtData = s.byVisitType || []
-    if (vtData.length > 0) {
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(50, 50, 50)
-      doc.text('Visit Type Breakdown', ML, y + 4)
-      const vtRows = vtData.map(d => [
-        visitTypeLabel(d.visit_type),
-        fmtNum(d.case_count),
-        fmt(d.total_cv),
-        fmt(d.total_pay)
-      ])
-      doc.autoTable({
-        startY: y + 6,
-        head: [['Visit Type', 'Cases', 'CV Amount', 'Contractor Pay']],
-        body: vtRows,
-        theme: 'grid',
-        headStyles: { fillColor: [26,26,46], textColor: [201,168,76], fontStyle:'bold', fontSize:7, cellPadding:2 },
-        styles: { fontSize:7, cellPadding:2 },
-        columnStyles: { 1:{halign:'right'}, 2:{halign:'right'}, 3:{halign:'right'} },
-        margin: { left: ML, right: MR },
-        tableWidth: PW - ML - MR
-      })
-      y = doc.lastAutoTable.finalY + 4
-    }
-
     // ── Payroll Summary by Doctor ──
     const doctors = s.byDoctor || []
     if (doctors.length > 0) {
