@@ -534,6 +534,9 @@ function renderDashboard() {
             <button onclick="navigate('payroll')" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium">
               <i class="fas fa-file-invoice-dollar mr-2"></i>View Payroll
             </button>
+            <button onclick="exportDashboardPDF()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" style="border-color:#ef4444;color:#ef4444">
+              <i class="fas fa-file-pdf mr-2"></i>Export PDF
+            </button>
             <button onclick="exportGusto()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
               <i class="fas fa-file-csv mr-2"></i>Export Gusto CSV
             </button>
@@ -2540,6 +2543,225 @@ async function renderCVDetail() {
   if (!state.currentPeriod) { $('mainContent').innerHTML = noDataMsg(); return }
   consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', sortBy: 'decision_date', sortDir: 'desc' }
   await renderConsults()
+}
+
+// ════════════════════════════════════════════════════
+// DASHBOARD PDF EXPORT
+// ════════════════════════════════════════════════════
+async function exportDashboardPDF() {
+  if (!state.currentPeriod || !state.currentSummary) {
+    showToast('Please select a period first', 'warning'); return
+  }
+  showLoading('Generating dashboard PDF…')
+  try {
+    const { jsPDF } = window.jspdf
+    const s = state.currentSummary
+    const t = s.totals || {}
+    const pk = state.currentPeriod.period_key
+    const periodLabel = state.currentPeriod.period_label || pk
+
+    // Fetch commission data
+    let commData = { commission_total: 0, by_contractor: [] }
+    try { commData = await api(`/api/commission/${pk}`) } catch(_) {}
+    const commTotal = commData.commission_total || 0
+    const commByC = {}
+    ;(commData.by_contractor || []).forEach(c => { commByC[c.contractor_id] = c.commission })
+
+    // ── Page setup: US Letter 8.5×11 in = 215.9×279.4 mm ──
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+    const PW = doc.internal.pageSize.getWidth()   // 215.9
+    const PH = doc.internal.pageSize.getHeight()  // 279.4
+    const ML = 12, MR = 12  // left/right margins
+
+    // ── Logo pre-load ──
+    const logoDataUrl = await new Promise(resolve => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth; c.height = img.naturalHeight
+        c.getContext('2d').drawImage(img, 0, 0)
+        resolve(c.toDataURL('image/png'))
+      }
+      img.onerror = () => resolve(null)
+      img.src = '/static/lion-logo.png'
+    })
+
+    // ── Header bar ──
+    doc.setFillColor(26, 26, 46)
+    doc.rect(0, 0, PW, 26, 'F')
+    if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', ML, 2, 22, 22)
+    doc.setTextColor(201, 168, 76)
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text("LION MD's, PLLC", ML + 26, 13)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(180, 180, 180)
+    doc.text('Payroll Dashboard Report', ML + 26, 20)
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.text(periodLabel, PW - MR, 13, { align: 'right' })
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(180, 180, 180)
+    doc.text('Generated: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), PW - MR, 20, { align: 'right' })
+
+    // ── KPI summary row ──
+    let y = 32
+    const adjMargin = (t.total_carevalidate || 0) - (t.total_contractor || 0) - commTotal
+    const adjPct = (t.total_carevalidate || 0) > 0 ? ((adjMargin / t.total_carevalidate) * 100).toFixed(1) : 0
+    const kpis = [
+      { label: 'Total Cases',        value: fmtNum(t.total_cases),       color: [201,168,76] },
+      { label: 'CV Owes Us',         value: fmt(t.total_carevalidate),   color: [59,130,246] },
+      { label: 'We Owe Contractors', value: fmt(t.total_contractor),     color: [139,92,246] },
+      { label: 'Chris Commission',   value: fmt(commTotal),              color: [59,130,246] },
+      { label: `Net Margin (${adjPct}%)`, value: fmt(adjMargin),        color: adjMargin >= 0 ? [22,163,74] : [220,38,38] },
+    ]
+    const kpiW = (PW - ML - MR) / kpis.length
+    kpis.forEach((k, i) => {
+      const kx = ML + i * kpiW
+      doc.setFillColor(248, 249, 252)
+      doc.roundedRect(kx, y, kpiW - 2, 18, 2, 2, 'F')
+      doc.setTextColor(...k.color)
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.text(k.value, kx + (kpiW - 2) / 2, y + 9, { align: 'center' })
+      doc.setTextColor(100, 100, 100)
+      doc.setFontSize(6)
+      doc.setFont('helvetica', 'normal')
+      doc.text(k.label, kx + (kpiW - 2) / 2, y + 15, { align: 'center' })
+    })
+    y += 23
+
+    // ── Visit Type Breakdown ──
+    const vtData = s.byVisitType || []
+    if (vtData.length > 0) {
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(50, 50, 50)
+      doc.text('Visit Type Breakdown', ML, y + 4)
+      const vtRows = vtData.map(d => [
+        visitTypeLabel(d.visit_type),
+        fmtNum(d.case_count),
+        fmt(d.total_cv),
+        fmt(d.total_pay)
+      ])
+      doc.autoTable({
+        startY: y + 6,
+        head: [['Visit Type', 'Cases', 'CV Amount', 'Contractor Pay']],
+        body: vtRows,
+        theme: 'grid',
+        headStyles: { fillColor: [26,26,46], textColor: [201,168,76], fontStyle:'bold', fontSize:7, cellPadding:2 },
+        styles: { fontSize:7, cellPadding:2 },
+        columnStyles: { 1:{halign:'right'}, 2:{halign:'right'}, 3:{halign:'right'} },
+        margin: { left: ML, right: MR },
+        tableWidth: PW - ML - MR
+      })
+      y = doc.lastAutoTable.finalY + 4
+    }
+
+    // ── Payroll Summary by Doctor ──
+    const doctors = s.byDoctor || []
+    if (doctors.length > 0) {
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(50, 50, 50)
+      doc.text('Payroll Summary by Doctor', ML, y + 4)
+
+      const totalCV   = doctors.reduce((a, d) => a + (d.total_carevalidate || 0), 0)
+      const totalPay  = doctors.reduce((a, d) => a + (d.total_contractor  || 0), 0)
+      const totalCases= doctors.reduce((a, d) => a + (d.case_count        || 0), 0)
+      const totalAsync= doctors.reduce((a, d) => a + (d.async_count       || 0), 0)
+      const totalSync = doctors.reduce((a, d) => a + (d.sync_count        || 0), 0)
+      const totalOrd  = doctors.reduce((a, d) => a + (d.orderly_count     || 0), 0)
+
+      const docRows = doctors.map(d => {
+        const comm = commByC[d.contractor_id] || 0
+        const margin = (d.total_carevalidate || 0) - (d.total_contractor || 0) - comm
+        return [
+          d.doctor_name || 'Unmatched',
+          fmtNum(d.case_count),
+          fmtNum(d.async_count),
+          fmtNum(d.sync_count),
+          fmtNum(d.orderly_count),
+          fmt(d.total_carevalidate),
+          fmt(d.total_contractor),
+          comm > 0 ? fmt(comm) : '—',
+          fmt(margin)
+        ]
+      })
+      // Totals footer row
+      const totalComm = commTotal
+      const totalMargin = (totalCV) - (totalPay) - totalComm
+      docRows.push([
+        'TOTAL',
+        fmtNum(totalCases),
+        fmtNum(totalAsync),
+        fmtNum(totalSync),
+        fmtNum(totalOrd),
+        fmt(totalCV),
+        fmt(totalPay),
+        fmt(totalComm),
+        fmt(totalMargin)
+      ])
+
+      doc.autoTable({
+        startY: y + 6,
+        head: [['Doctor / Contractor','Cases','Async','Sync','Orderly','CV Pays Us','We Pay','Chris Comm','Margin']],
+        body: docRows.slice(0, docRows.length - 1),
+        foot: [docRows[docRows.length - 1]],
+        theme: 'striped',
+        headStyles: { fillColor:[26,26,46], textColor:[201,168,76], fontStyle:'bold', fontSize:7, cellPadding:2 },
+        footStyles: { fillColor:[235,235,245], textColor:[40,40,80], fontStyle:'bold', fontSize:7, cellPadding:2 },
+        styles: { fontSize:7, cellPadding:2, overflow:'ellipsize' },
+        columnStyles: {
+          0: { cellWidth: 38 },
+          1: { halign:'right', cellWidth:16 },
+          2: { halign:'right', cellWidth:14 },
+          3: { halign:'right', cellWidth:14 },
+          4: { halign:'right', cellWidth:14 },
+          5: { halign:'right', cellWidth:22, textColor:[30,80,180] },
+          6: { halign:'right', cellWidth:22, textColor:[100,40,160] },
+          7: { halign:'right', cellWidth:22, textColor:[30,80,180] },
+          8: { halign:'right', cellWidth:22 }
+        },
+        margin: { left: ML, right: MR },
+        tableWidth: PW - ML - MR,
+        didParseCell: (data) => {
+          // Color margin cells green/red
+          if (data.column.index === 8 && data.section !== 'head') {
+            const raw = parseFloat((data.cell.raw || '').toString().replace(/[$,]/g,''))
+            if (!isNaN(raw)) data.cell.styles.textColor = raw >= 0 ? [22,163,74] : [220,38,38]
+          }
+        }
+      })
+      y = doc.lastAutoTable.finalY + 4
+    }
+
+    // ── Footer on every page ──
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i)
+      doc.setFillColor(26, 26, 46)
+      doc.rect(0, PH - 10, PW, 10, 'F')
+      doc.setTextColor(140, 140, 160)
+      doc.setFontSize(6)
+      doc.setFont('helvetica', 'normal')
+      doc.text("Lion MD's, PLLC · Payroll Dashboard · Confidential", ML, PH - 3)
+      doc.text(`Page ${i} of ${totalPages}`, PW - MR, PH - 3, { align: 'right' })
+    }
+
+    const safePeriod = periodLabel.replace(/\s+/g, '_')
+    doc.save(`LionMD_Dashboard_${safePeriod}.pdf`)
+    hideLoading()
+    showToast('Dashboard PDF downloaded!', 'success')
+  } catch(e) {
+    hideLoading()
+    showToast('PDF export failed: ' + e.message, 'error')
+    console.error(e)
+  }
 }
 
 // ════════════════════════════════════════════════════
