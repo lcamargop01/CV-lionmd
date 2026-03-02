@@ -1936,10 +1936,192 @@ function renderPaystubContent(data) {
 
 async function downloadPaystub() {
   if (!currentPaystubData) return
-  const { contractor, session, summary } = currentPaystubData
+  const { contractor, session, summary, commission } = currentPaystubData
   const { jsPDF } = window.jspdf
 
-  // Pre-load logo as data URL for PDF
+  // ── Christopher Garcia: commission statement PDF ──
+  const cnamePdf = (contractor?.name || '').toLowerCase()
+  if (commission && cnamePdf.includes('garcia') && cnamePdf.includes('chris')) {
+    const comm = commission
+    const fmt2 = n => '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+
+    const logoDataUrl = await new Promise(resolve => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const cv = document.createElement('canvas')
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight
+        cv.getContext('2d').drawImage(img, 0, 0)
+        resolve(cv.toDataURL('image/png'))
+      }
+      img.onerror = () => resolve(null)
+      img.src = '/static/lion-logo.png'
+    })
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+    const PW = doc.internal.pageSize.getWidth()
+    const PH = doc.internal.pageSize.getHeight()
+    const ML = 15, MR = 15
+
+    // Header bar
+    doc.setFillColor(26, 26, 46)
+    doc.rect(0, 0, PW, 28, 'F')
+    if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', ML, 2, 22, 22)
+    doc.setTextColor(201, 168, 76)
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.text("LION MD's, PLLC", ML + 26, 13)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(180, 180, 180)
+    doc.text('Commission Statement — Independent Contractor', ML + 26, 21)
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.text(session?.period_label || '', PW - MR, 13, { align: 'right' })
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(180, 180, 180)
+    doc.text('Issued: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), PW - MR, 21, { align: 'right' })
+
+    // Contractor info box + Commission total box side by side
+    let y = 34
+    doc.setFillColor(248, 249, 252)
+    doc.roundedRect(ML, y, 88, 28, 2, 2, 'F')
+    doc.setTextColor(120, 120, 140)
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'bold')
+    doc.text('CONTRACTOR', ML + 4, y + 7)
+    doc.setTextColor(40, 40, 60)
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.text(contractor?.name || '', ML + 4, y + 14)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(90, 90, 110)
+    doc.text(contractor?.company || "Lion MD's, PLLC", ML + 4, y + 20)
+    if (contractor?.ein_ssn) doc.text('EIN/SSN: ' + contractor.ein_ssn, ML + 4, y + 26)
+
+    const boxRight = PW - MR
+    doc.setFillColor(235, 242, 255)
+    doc.roundedRect(PW - MR - 88, y, 88, 28, 2, 2, 'F')
+    doc.setTextColor(120, 120, 140)
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'bold')
+    doc.text('TOTAL COMMISSION', PW - MR - 84, y + 7)
+    doc.setTextColor(30, 80, 200)
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.text(fmt2(comm.commission_total), PW - MR - 4, y + 18, { align: 'right' })
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(90, 110, 160)
+    doc.text('25% × (CV − Pay) per contractor', PW - MR - 4, y + 25, { align: 'right' })
+
+    y += 35
+
+    // Commission calculation summary table
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(50, 50, 50)
+    doc.text('COMMISSION CALCULATION', ML, y + 4)
+    const calcRows = [
+      ['Total CV Pays Us',          fmt2(comm.total_cv)],
+      ['Total We Pay Contractors',  '− ' + fmt2(comm.total_contractor)],
+    ]
+    if ((comm.ringside_deduction || 0) > 0) {
+      calcRows.push([`Ringside deduction (${comm.ringside_count} × $20 — Ana Lisa)`, '− ' + fmt2(comm.ringside_deduction)])
+    }
+    calcRows.push(['Net Base', fmt2(comm.net_base)])
+    calcRows.push(['Commission Rate', '25%'])
+    calcRows.push(['Total Commission', fmt2(comm.commission_total)])
+
+    doc.autoTable({
+      startY: y + 6,
+      body: calcRows,
+      theme: 'plain',
+      styles: { fontSize: 8, cellPadding: 2.5 },
+      columnStyles: {
+        0: { textColor: [80,80,100], cellWidth: 130 },
+        1: { halign: 'right', fontStyle: 'bold', textColor: [30,80,200] }
+      },
+      didParseCell: (data) => {
+        const lastIdx = calcRows.length - 1
+        if (data.row.index === lastIdx) {
+          data.cell.styles.fillColor = [235, 242, 255]
+          data.cell.styles.fontStyle = 'bold'
+          data.cell.styles.fontSize = 9
+        }
+      },
+      margin: { left: ML, right: MR },
+      tableWidth: PW - ML - MR
+    })
+    y = doc.lastAutoTable.finalY + 6
+
+    // Per-contractor detail table
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(50, 50, 50)
+    doc.text('PER-CONTRACTOR DETAIL', ML, y + 4)
+
+    const detailRows = (comm.by_contractor || []).map(row => {
+      const cv  = row.cv_total        || 0
+      const pay = row.contractor_total || 0
+      const rd  = row.ringside_deduction || 0
+      let formula = `(${fmt2(cv)} − ${fmt2(pay)}) × 25%`
+      if (rd > 0) formula += `\n− ${fmt2(rd)} (${row.ringside_count} Ringside × $20)`
+      return [
+        row.contractor_name,
+        row.contractor_type === 'owner' ? 'Owner' : 'Regular',
+        fmt2(cv),
+        fmt2(pay),
+        formula,
+        fmt2(row.commission)
+      ]
+    })
+    const totalComm = comm.commission_total || 0
+
+    doc.autoTable({
+      startY: y + 6,
+      head: [['Contractor', 'Type', 'CV Pays Us', 'We Pay', 'Formula', 'Commission']],
+      body: detailRows,
+      foot: [['', '', '', '', 'TOTAL', fmt2(totalComm)]],
+      theme: 'striped',
+      headStyles: { fillColor:[26,26,46], textColor:[201,168,76], fontStyle:'bold', fontSize:7, cellPadding:2 },
+      footStyles: { fillColor:[235,242,255], textColor:[30,80,200], fontStyle:'bold', fontSize:8, cellPadding:2.5 },
+      styles: { fontSize:7, cellPadding:2, overflow:'ellipsize' },
+      columnStyles: {
+        0: { cellWidth: 44 },
+        1: { cellWidth: 18, halign:'center' },
+        2: { cellWidth: 26, halign:'right', textColor:[30,80,180] },
+        3: { cellWidth: 26, halign:'right', textColor:[100,40,160] },
+        4: { cellWidth: 52, textColor:[80,80,100], fontSize:6.5 },
+        5: { cellWidth: 24, halign:'right', fontStyle:'bold', textColor:[30,80,200] }
+      },
+      margin: { left: ML, right: MR },
+      tableWidth: PW - ML - MR
+    })
+
+    // Footer on every page
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i)
+      doc.setFillColor(26, 26, 46)
+      doc.rect(0, PH - 10, PW, 10, 'F')
+      doc.setTextColor(140, 140, 160)
+      doc.setFontSize(6)
+      doc.setFont('helvetica', 'normal')
+      doc.text("Lion MD's, PLLC · Commission Statement · Confidential", ML, PH - 3)
+      doc.text(`Page ${i} of ${totalPages}`, PW - MR, PH - 3, { align: 'right' })
+    }
+
+    const safePeriod = (session?.period_label || 'period').replace(/\s+/g, '_')
+    doc.save(`${(contractor?.name || 'ChrisGarcia').replace(/\s+/g,'_')}_Commission_${safePeriod}.pdf`)
+    showToast('Commission statement downloaded!', 'success')
+    return
+  }
+
+  // ── Regular contractor paystub PDF ──
   const logoDataUrl = await new Promise(resolve => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
