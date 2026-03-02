@@ -233,6 +233,11 @@ app.get('/api/contractors', async (c) => {
   await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN gusto_type TEXT DEFAULT 'Individual'`).run().catch(() => {})
   await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN first_name TEXT DEFAULT ''`).run().catch(() => {})
   await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN last_name TEXT DEFAULT ''`).run().catch(() => {})
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN earns_commission INTEGER DEFAULT 0`).run().catch(() => {})
+  // Default earns_commission=1 for Lion MD, PLLC contractors (Ana Lisa Carr, Kelly Tenbrink)
+  await c.env.DB.prepare(
+    `UPDATE contractors SET earns_commission=1 WHERE (LOWER(company) LIKE '%lion md%') AND earns_commission=0`
+  ).run().catch(() => {})
   const rows = await c.env.DB.prepare('SELECT * FROM contractors WHERE is_active=1 ORDER BY name').all()
   return c.json(rows.results)
 })
@@ -247,11 +252,21 @@ app.post('/api/contractors', async (c) => {
 
 app.put('/api/contractors/:id', async (c) => {
   const id = c.req.param('id')
-  const { name, first_name, last_name, company, ein_ssn, email, is_active, contractor_type, gusto_type } = await c.req.json()
+  const { name, first_name, last_name, company, ein_ssn, email, is_active, contractor_type, gusto_type, earns_commission } = await c.req.json()
   await c.env.DB.prepare(
-    `UPDATE contractors SET name=?, first_name=?, last_name=?, company=?, ein_ssn=?, email=?, is_active=?, contractor_type=?, gusto_type=? WHERE id=?`
-  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', is_active ?? 1, contractor_type || 'regular', gusto_type || 'Individual', id).run()
+    `UPDATE contractors SET name=?, first_name=?, last_name=?, company=?, ein_ssn=?, email=?, is_active=?, contractor_type=?, gusto_type=?, earns_commission=? WHERE id=?`
+  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', is_active ?? 1, contractor_type || 'regular', gusto_type || 'Individual', earns_commission ? 1 : 0, id).run()
   return c.json({ ok: true })
+})
+
+// Dedicated endpoint to toggle earns_commission flag
+app.patch('/api/contractors/:id/earns-commission', async (c) => {
+  const id = c.req.param('id')
+  const { earns_commission } = await c.req.json()
+  await c.env.DB.prepare(
+    `UPDATE contractors SET earns_commission=? WHERE id=?`
+  ).bind(earns_commission ? 1 : 0, id).run()
+  return c.json({ ok: true, id, earns_commission: earns_commission ? 1 : 0 })
 })
 
 app.delete('/api/contractors/:id', async (c) => {
@@ -782,7 +797,11 @@ const COMMISSION_RATE          = 0.25   // 25% of net (CV − contractor pay)
 const RINGSIDE_DEDUCTION_RATE  = 20     // $20 per Ringside Health consult
 
 async function calcCommission(db: D1Database, pk: string) {
-  // 1. Pull period totals: total CV and total contractor pay (excluding Garcia)
+  // Ensure earns_commission column exists and defaults are set for Lion MD contractors
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN earns_commission INTEGER DEFAULT 0`).run().catch(() => {})
+  await db.prepare(`UPDATE contractors SET earns_commission=1 WHERE (LOWER(company) LIKE '%lion md%') AND earns_commission=0`).run().catch(() => {})
+
+  // 1. Pull period totals: only contractors with earns_commission = 1
   const totalsRow = await db.prepare(`
     SELECT
       SUM(c.carevalidate_fee)  as total_cv,
@@ -791,7 +810,7 @@ async function calcCommission(db: D1Database, pk: string) {
     LEFT JOIN upload_sessions s  ON c.session_id = s.id
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
     WHERE s.period_key = ?
-      AND LOWER(ct.name) NOT LIKE '%garcia%'
+      AND ct.earns_commission = 1
   `).bind(pk).first() as any
 
   const total_cv         = totalsRow?.total_cv         || 0
@@ -811,11 +830,12 @@ async function calcCommission(db: D1Database, pk: string) {
   const ringside_count     = ringsideRow?.ringside_count || 0
   const ringside_deduction = ringside_count * RINGSIDE_DEDUCTION_RATE
 
-  // 3. Net base = (total CV − total contractor pay) − Ringside deduction
-  const net_base      = (total_cv - total_contractor) - ringside_deduction
-  const commission_total = net_base * COMMISSION_RATE
+  // 3. Commission total = SUM of per-contractor commissions (earns_commission only)
+  //    Each contractor: cv * 0.25 - ringside_deduction (only for Ana Lisa)
+  //    Net base for display = total_cv - total_contractor (earns_commission contractors only)
+  const net_base = total_cv - total_contractor
 
-  // 4. Per-contractor breakdown (for display purposes)
+  // 4. Per-contractor breakdown — only earns_commission = 1 contractors
   const rows = await db.prepare(`
     SELECT
       ct.id       as contractor_id,
@@ -833,7 +853,7 @@ async function calcCommission(db: D1Database, pk: string) {
     LEFT JOIN upload_sessions s  ON c.session_id = s.id
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
     WHERE s.period_key = ?
-      AND LOWER(ct.name) NOT LIKE '%garcia%'
+      AND ct.earns_commission = 1
     GROUP BY ct.id, ct.name, ct.contractor_type
     ORDER BY ct.name
   `).bind(pk).all()
@@ -842,9 +862,11 @@ async function calcCommission(db: D1Database, pk: string) {
     const isAnaLisa = (r.contractor_name || '').toLowerCase().includes('ana lisa carr')
     const cv  = r.cv_total         || 0
     const pay = r.contractor_total || 0
-    // For Ana Lisa Carr: deduct the Ringside deduction from her CV contribution
-    const adjustedNet = (cv - pay) - (isAnaLisa ? ringside_deduction : 0)
-    const commission  = adjustedNet * COMMISSION_RATE
+    // Formula: commission = cv * 25% - ringside_deduction (for Ana Lisa only)
+    // Note: pay is subtracted via the earns_commission filter on totals,
+    // but per-contractor we show the gross commission on their CV contribution
+    const net        = cv - pay   // net for this contractor
+    const commission = net * COMMISSION_RATE - (isAnaLisa ? ringside_deduction : 0)
     return {
       contractor_id:   r.contractor_id,
       contractor_name: r.contractor_name,
@@ -859,10 +881,14 @@ async function calcCommission(db: D1Database, pk: string) {
       other_cases:     0,
       cv_total:        cv,
       contractor_total: pay,
+      ringside_count:   isAnaLisa ? ringside_count : 0,
       ringside_deduction: isAnaLisa ? ringside_deduction : 0,
       commission
     }
   })
+
+  // commission_total = sum of per-contractor commissions
+  const commission_total = details.reduce((sum, d) => sum + d.commission, 0)
 
   return {
     period_key:          pk,
@@ -879,7 +905,7 @@ async function calcCommission(db: D1Database, pk: string) {
     commission_async_orderly: 0,
     commission_sync:          0,
     commission_owner:         0,
-    by_contractor: details.sort((a, b) => b.commission - a.commission)
+    by_contractor: details.sort((a: any, b: any) => b.commission - a.commission)
   }
 }
 
