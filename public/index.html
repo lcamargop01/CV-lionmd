@@ -1939,258 +1939,56 @@ async function downloadPaystub() {
   const { contractor, session, summary, commission } = currentPaystubData
   const { jsPDF } = window.jspdf
 
-  // ── Christopher Garcia: commission statement PDF ──
+  // ── Christopher Garcia: commission statement PDF via print window ──
   const cnamePdf = (contractor?.name || '').toLowerCase()
   if (commission && cnamePdf.includes('garcia') && cnamePdf.includes('chris')) {
-    const comm = commission
-    const fmt2 = n => '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+    // Grab the already-rendered HTML from the modal preview
+    const printArea = document.getElementById('paystubPrintArea')
+    if (!printArea) { showToast('Preview not loaded yet', 'warning'); return }
 
-    // Logo
-    const logoDataUrl = await new Promise(resolve => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        const cv = document.createElement('canvas')
-        cv.width = img.naturalWidth; cv.height = img.naturalHeight
-        cv.getContext('2d').drawImage(img, 0, 0)
-        resolve(cv.toDataURL('image/png'))
-      }
-      img.onerror = () => resolve(null)
-      img.src = '/static/lion-logo.png'
-    })
+    // Pull in all stylesheet links from the current page
+    const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map(l => `<link rel="stylesheet" href="${l.href}">`)
+      .join('\n')
+    // Also pull all <style> tags
+    const styleTags = Array.from(document.querySelectorAll('style'))
+      .map(s => `<style>${s.innerHTML}</style>`)
+      .join('\n')
 
-    // Letter page, 12mm margins
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
-    const PW = doc.internal.pageSize.getWidth()   // 215.9
-    const PH = doc.internal.pageSize.getHeight()  // 279.4
-    const ML = 14, MR = 14, TW = PW - ML - MR     // 187.9 usable
-
-    // Helper: draw a filled rounded rect
-    const roundRect = (x, y, w, h, r, fillRgb) => {
-      doc.setFillColor(...fillRgb)
-      doc.roundedRect(x, y, w, h, r, r, 'F')
+    const printWin = window.open('', '_blank', 'width=900,height=700')
+    printWin.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${(contractor?.name || 'Commission')} — ${session?.period_label || ''}</title>
+  ${styleLinks}
+  ${styleTags}
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  <style>
+    @page { size: letter portrait; margin: 18mm 16mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: white; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none !important; }
     }
-    // Helper: draw a horizontal rule
-    const hRule = (y, rgb) => {
-      doc.setDrawColor(...rgb)
-      doc.setLineWidth(0.2)
-      doc.line(ML, y, ML + TW, y)
-    }
-
-    // ── SECTION 1: Header (mirrors flex justify-between) ──
-    let y = 14
-    // Left: LION MD  +  subtitle
-    if (logoDataUrl) doc.addImage(logoDataUrl, 'PNG', ML, y - 1, 10, 10)
-    doc.setFontSize(18)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(201, 168, 76)
-    doc.text('LION', ML + 12, y + 6)
-    const lionW = doc.getTextWidth('LION')
-    doc.setTextColor(30, 30, 50)
-    doc.text(' MD', ML + 12 + lionW, y + 6)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(120, 120, 140)
-    doc.text('Commission Statement \u2014 Independent Contractor', ML + 12, y + 12)
-    // Right: period label + issued date
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(50, 50, 70)
-    doc.text(session?.period_label || '', ML + TW, y + 6, { align: 'right' })
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(160, 160, 170)
-    doc.text('Issued: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), ML + TW, y + 12, { align: 'right' })
-
-    y += 18
-    hRule(y, [220, 220, 225])
-    y += 6
-
-    // ── SECTION 2: Two info boxes side-by-side ──
-    // Left box: Contractor (bg-gray-50)
-    const boxH = 28, boxW = (TW - 4) / 2
-    roundRect(ML, y, boxW, boxH, 3, [248, 249, 251])
-    doc.setFontSize(6)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(160, 160, 170)
-    doc.text('CONTRACTOR', ML + 4, y + 6)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(30, 30, 50)
-    doc.text(contractor?.name || '', ML + 4, y + 13)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(80, 80, 100)
-    doc.text(contractor?.company || "Lion MD's, PLLC", ML + 4, y + 19)
-    if (contractor?.ein_ssn) {
-      doc.setFontSize(7.5)
-      doc.setTextColor(100, 100, 120)
-      doc.text('EIN/SSN: ' + contractor.ein_ssn, ML + 4, y + 25)
-    }
-    // Right box: Total Commission (bg-blue-50)
-    const rx = ML + boxW + 4
-    roundRect(rx, y, boxW, boxH, 3, [235, 242, 255])
-    doc.setFontSize(6)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(160, 160, 170)
-    doc.text('TOTAL COMMISSION', rx + 4, y + 6)
-    doc.setFontSize(18)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(30, 90, 210)
-    doc.text(fmt2(comm.commission_total), rx + 4, y + 18)
-    doc.setFontSize(6.5)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(100, 120, 170)
-    const ruleNote = '25% \u00d7 (CV Pays Us \u2212 We Pay Contractor) per contractor'
-      + (comm.ringside_deduction > 0 ? ' \u00b7 Ana Lisa: \u2212 Ringside after \u00d725%' : '')
-    doc.text(ruleNote, rx + 4, y + 24, { maxWidth: boxW - 6 })
-
-    y += boxH + 8
-
-    // ── SECTION 3: Commission Calculation (bg-gray-50 box, flex rows) ──
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(160, 160, 170)
-    doc.text('COMMISSION CALCULATION', ML, y)
-    y += 4
-
-    // Draw outer rounded bg
-    const calcItems = [
-      { label: 'Total CV Pays Us',               value: '+ ' + fmt2(comm.total_cv),          labelRgb:[100,100,120], valueRgb:[30,90,210],  bold:false },
-      { label: 'Total We Pay Contractors',        value: '\u2212 ' + fmt2(comm.total_contractor), labelRgb:[100,100,120], valueRgb:[130,50,200], bold:false },
-    ]
-    if ((comm.ringside_deduction || 0) > 0) {
-      calcItems.push({ label: `Ringside Health deduction (${comm.ringside_count} consults \u00d7 $20 \u2014 Ana Lisa Carr)`, value: '\u2212 ' + fmt2(comm.ringside_deduction), labelRgb:[100,100,120], valueRgb:[180,120,0], bold:false })
-    }
-    calcItems.push({ label: 'Net (CV \u2212 Pay, earns_commission only)', value: fmt2(comm.net_base),         labelRgb:[80,80,100],  valueRgb:[30,30,50],   bold:true, topRule:true })
-    if ((comm.ringside_deduction || 0) > 0) {
-      calcItems.push({ label: '\u00d7 25% then \u2212 Ringside deduction (Ana Lisa only)', value: '',  labelRgb:[140,140,150], valueRgb:[140,140,150], italic:true })
-    }
-    calcItems.push({ label: 'Total Commission',                            value: fmt2(comm.commission_total), labelRgb:[30,90,210],  valueRgb:[30,90,210],  bold:true,  highlight:true })
-
-    const calcBoxH = calcItems.length * 7 + 6
-    roundRect(ML, y, TW, calcBoxH, 3, [248, 249, 251])
-
-    let cy = y + 6
-    calcItems.forEach(item => {
-      if (item.topRule) {
-        doc.setDrawColor(210, 210, 218)
-        doc.setLineWidth(0.15)
-        doc.line(ML + 3, cy - 2, ML + TW - 3, cy - 2)
-      }
-      if (item.highlight) {
-        roundRect(ML + 2, cy - 4, TW - 4, 8, 2, [230, 240, 255])
-        doc.setDrawColor(190, 210, 240)
-        doc.setLineWidth(0.2)
-        doc.rect(ML + 2, cy - 4, TW - 4, 8)
-      }
-      doc.setFontSize(item.bold ? 8.5 : 8)
-      doc.setFont('helvetica', item.italic ? 'italic' : (item.bold ? 'bold' : 'normal'))
-      doc.setTextColor(...item.labelRgb)
-      doc.text(item.label, ML + 5, cy)
-      if (item.value) {
-        doc.setFont('helvetica', item.bold ? 'bold' : 'normal')
-        doc.setTextColor(...item.valueRgb)
-        doc.text(item.value, ML + TW - 5, cy, { align: 'right' })
-      }
-      cy += 7
-    })
-
-    y += calcBoxH + 8
-
-    // ── SECTION 4: Per-Contractor Detail table ──
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(160, 160, 170)
-    doc.text('PER-CONTRACTOR DETAIL', ML, y)
-    y += 4
-
-    // Build table rows matching the HTML: Contractor | Type | CV Pays Us | We Pay | Formula | Commission
-    const detailRows = (comm.by_contractor || []).map(row => {
-      const cv  = row.cv_total        || 0
-      const pay = row.contractor_total || 0
-      const net = cv - pay
-      const rd  = row.ringside_deduction || 0
-      // Formula as compact text (no embedded newlines)
-      let formula
-      if (rd > 0) {
-        formula = `(${fmt2(cv)}\u2212${fmt2(pay)})\u00d725% = ${fmt2(net*0.25)}\n\u2212${fmt2(rd)} (${row.ringside_count} Ringside\u00d7$20)`
-      } else {
-        formula = `(${fmt2(cv)}\u2212${fmt2(pay)})\u00d725%`
-      }
-      return [
-        row.contractor_name,
-        row.contractor_type === 'owner' ? 'Owner' : 'Regular',
-        fmt2(cv),
-        fmt2(pay),
-        formula,
-        fmt2(row.commission)
-      ]
-    })
-
-    // TW = 187.9  →  col widths must sum to 187.9
-    // Name:50  Type:16  CV:28  Pay:28  Formula:42  Comm:24  → 188 ✓
-    doc.autoTable({
-      startY: y,
-      head: [['Contractor', 'Type', 'CV Pays Us', 'We Pay', 'Formula', 'Commission']],
-      body: detailRows,
-      foot: [['', '', '', '', 'TOTAL COMMISSION', fmt2(comm.commission_total)]],
-      theme: 'striped',
-      headStyles: {
-        fillColor: [248, 249, 251], textColor: [100, 100, 120],
-        fontStyle: 'bold', fontSize: 7, cellPadding: { top:3, bottom:3, left:3, right:3 }
-      },
-      footStyles: {
-        fillColor: [235, 242, 255], textColor: [30, 90, 210],
-        fontStyle: 'bold', fontSize: 8, cellPadding: { top:3, bottom:3, left:3, right:3 }
-      },
-      alternateRowStyles: { fillColor: [252, 252, 254] },
-      styles: { fontSize: 7, cellPadding: { top:2.5, bottom:2.5, left:3, right:3 }, overflow: 'linebreak', lineColor:[230,230,235], lineWidth:0.1 },
-      columnStyles: {
-        0: { cellWidth: 50, textColor:[40,40,60], fontStyle:'bold' },
-        1: { cellWidth: 16, halign:'center', textColor:[80,80,110] },
-        2: { cellWidth: 28, halign:'right', textColor:[30,90,210] },
-        3: { cellWidth: 28, halign:'right', textColor:[110,40,180] },
-        4: { cellWidth: 42, textColor:[100,100,120], fontSize:6.5 },
-        5: { cellWidth: 24, halign:'right', fontStyle:'bold', textColor:[30,90,210] }
-      },
-      margin: { left: ML, right: MR },
-      tableWidth: TW,
-      didParseCell: (data) => {
-        // Footer: right-align the last cell, left-align the label
-        if (data.section === 'foot') {
-          if (data.column.index === 4) data.cell.styles.halign = 'right'
-        }
-      }
-    })
-
-    y = doc.lastAutoTable.finalY + 6
-
-    // ── FOOTER NOTE ──
-    hRule(y, [220, 220, 225])
-    y += 4
-    doc.setFontSize(6.5)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(160, 160, 170)
-    const footNote = `Commission = 25% \u00d7 (CV Pays Us \u2212 We Pay Contractor) for every contractor. Ana Lisa Carr only: subtract (Ringside Health cases \u00d7 $20) AFTER applying the 25% rate. Period: ${session?.period_label || ''}.`
-    doc.text(footNote, ML + TW / 2, y + 3, { align: 'center', maxWidth: TW })
-
-    // ── PAGE FOOTER on every page ──
-    const totalPages = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i)
-      doc.setFillColor(26, 26, 46)
-      doc.rect(0, PH - 10, PW, 10, 'F')
-      doc.setTextColor(140, 140, 160)
-      doc.setFontSize(6)
-      doc.setFont('helvetica', 'normal')
-      doc.text("Lion MD's, PLLC \u00b7 Commission Statement \u00b7 Confidential", ML, PH - 3)
-      doc.text(`Page ${i} of ${totalPages}`, PW - MR, PH - 3, { align: 'right' })
-    }
-
-    const safePeriod = (session?.period_label || 'period').replace(/\s+/g, '_')
-    doc.save(`${(contractor?.name || 'ChrisGarcia').replace(/\s+/g,'_')}_Commission_${safePeriod}.pdf`)
-    showToast('Commission statement downloaded!', 'success')
+  </style>
+</head>
+<body class="p-6">
+  <div class="no-print" style="margin-bottom:16px">
+    <button onclick="window.print()" style="background:#1a1a2e;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;margin-right:8px">
+      🖨️ Print / Save as PDF
+    </button>
+    <button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer">
+      ✕ Close
+    </button>
+  </div>
+  ${printArea.outerHTML}
+</body>
+</html>`)
+    printWin.document.close()
+    printWin.focus()
+    showToast('Print window opened — use "Save as PDF" in the print dialog', 'success')
     return
   }
 
