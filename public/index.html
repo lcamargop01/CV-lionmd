@@ -1079,7 +1079,7 @@ async function deletePeriod(periodKey, label) {
 // ════════════════════════════════════════════════════
 // CONSULTS TABLE PAGE
 // ════════════════════════════════════════════════════
-let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', sortBy: 'decision_date', sortDir: 'desc' }
+let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', isOrderly: '', organization: '', sortBy: 'decision_date', sortDir: 'desc' }
 
 async function renderConsults() {
   if (!state.currentPeriod) { $('mainContent').innerHTML = noDataMsg(); return }
@@ -1098,6 +1098,16 @@ async function renderConsults() {
           <option value="ASYNC_TEXT_EMAIL" ${consultsState.visitType==='ASYNC_TEXT_EMAIL'?'selected':''}>Async</option>
           <option value="SYNC_PHONE" ${consultsState.visitType==='SYNC_PHONE'?'selected':''}>Sync Phone</option>
           <option value="SYNC_VIDEO" ${consultsState.visitType==='SYNC_VIDEO'?'selected':''}>Sync Video</option>
+          <option value="SYNC_IN_PERSON" ${consultsState.visitType==='SYNC_IN_PERSON'?'selected':''}>Sync In-Person</option>
+          <option value="NO_SHOW" ${consultsState.visitType==='NO_SHOW'?'selected':''}>No Show</option>
+        </select>
+        <select id="orderlyFilter" onchange="filterConsults()" class="min-w-[150px]">
+          <option value="" ${consultsState.isOrderly===''?'selected':''}>All Consult Types</option>
+          <option value="1" ${consultsState.isOrderly==='1'?'selected':''}>OrderlyMeds Only</option>
+          <option value="0" ${consultsState.isOrderly==='0'?'selected':''}>Non-OrderlyMeds</option>
+        </select>
+        <select id="orgFilter" onchange="filterConsults()" class="min-w-[180px]">
+          <option value="">All Organizations</option>
         </select>
         <span id="countLabel" class="text-sm text-gray-500"></span>
       </div>
@@ -1116,7 +1126,21 @@ async function renderConsults() {
       <div class="p-4 border-t border-gray-100 flex items-center justify-between" id="pagination"></div>
     </div>`
 
-  await loadConsultsPage(1)
+  await Promise.all([
+    loadConsultsPage(1),
+    loadOrgFilterOptions()
+  ])
+}
+
+async function loadOrgFilterOptions() {
+  const sel = $('orgFilter')
+  if (!sel || !state.currentPeriod) return
+  try {
+    const orgs = await api(`/api/consults/organizations?period_key=${state.currentPeriod.period_key}`)
+    const current = consultsState.organization
+    sel.innerHTML = '<option value="">All Organizations</option>' +
+      orgs.map(o => `<option value="${escHtml(o)}" ${current === o ? 'selected' : ''}>${escHtml(o)}</option>`).join('')
+  } catch(_) {}
 }
 
 let searchTimer = null
@@ -1127,8 +1151,10 @@ function debounceSearch(val) {
 }
 
 async function filterConsults() {
-  consultsState.doctor = $('doctorFilter')?.value || ''
-  consultsState.visitType = $('vtFilter')?.value || ''
+  consultsState.doctor       = $('doctorFilter')?.value  || ''
+  consultsState.visitType    = $('vtFilter')?.value      || ''
+  consultsState.isOrderly    = $('orderlyFilter')?.value ?? ''
+  consultsState.organization = $('orgFilter')?.value     || ''
   await loadConsultsPage(1)
 }
 
@@ -1181,9 +1207,11 @@ async function loadConsultsPage(page) {
     sort_by:  consultsState.sortBy,
     sort_dir: consultsState.sortDir
   })
-  if (consultsState.search)    params.set('search',      consultsState.search)
-  if (consultsState.doctor)    params.set('doctor_name', consultsState.doctor)
-  if (consultsState.visitType) params.set('visit_type',  consultsState.visitType)
+  if (consultsState.search)       params.set('search',       consultsState.search)
+  if (consultsState.doctor)       params.set('doctor_name',  consultsState.doctor)
+  if (consultsState.visitType)    params.set('visit_type',   consultsState.visitType)
+  if (consultsState.isOrderly)    params.set('is_orderly',   consultsState.isOrderly)
+  if (consultsState.organization) params.set('organization', consultsState.organization)
 
   try {
     const result = await api('/api/consults?' + params)

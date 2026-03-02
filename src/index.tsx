@@ -524,12 +524,14 @@ app.post('/api/upload/chunk', async (c) => {
 app.get('/api/consults', async (c) => {
   const period_key  = c.req.query('period_key')
   const session_id  = c.req.query('session_id')
-  const doctor_name = c.req.query('doctor_name')
-  const visit_type  = c.req.query('visit_type')
-  const page        = c.req.query('page')  || '1'
-  const limit       = c.req.query('limit') || '50'
-  const search      = c.req.query('search')
-  const offset      = (parseInt(page) - 1) * parseInt(limit)
+  const doctor_name  = c.req.query('doctor_name')
+  const visit_type   = c.req.query('visit_type')
+  const is_orderly   = c.req.query('is_orderly')    // '1' = OrderlyMeds only
+  const organization = c.req.query('organization')  // exact org name
+  const page         = c.req.query('page')  || '1'
+  const limit        = c.req.query('limit') || '50'
+  const search       = c.req.query('search')
+  const offset       = (parseInt(page) - 1) * parseInt(limit)
 
   // Sorting — whitelist allowed columns to prevent SQL injection
   const SORT_COLS: Record<string, string> = {
@@ -557,8 +559,11 @@ app.get('/api/consults', async (c) => {
   } else if (session_id) {
     where += ' AND c.session_id=?'; params.push(session_id)
   }
-  if (doctor_name) { where += ' AND c.doctor_name=?'; params.push(doctor_name) }
-  if (visit_type)  { where += ' AND c.visit_type=?';  params.push(visit_type)  }
+  if (doctor_name)  { where += ' AND c.doctor_name=?';    params.push(doctor_name)  }
+  if (visit_type)   { where += ' AND c.visit_type=?';     params.push(visit_type)   }
+  if (is_orderly === '1') { where += ' AND c.is_orderly=1' }
+  if (is_orderly === '0') { where += ' AND c.is_orderly=0' }
+  if (organization) { where += ' AND c.organization_name=?'; params.push(organization) }
   if (search) {
     where += ' AND (c.patient_name LIKE ? OR c.case_id_short LIKE ? OR c.organization_name LIKE ?)'
     params.push(`%${search}%`, `%${search}%`, `%${search}%`)
@@ -580,6 +585,22 @@ app.get('/api/consults', async (c) => {
   ).bind(...params, parseInt(limit), offset).all()
 
   return c.json({ total: countResult?.total || 0, page: parseInt(page), limit: parseInt(limit), data: rows.results })
+})
+
+// Distinct organizations for the filter dropdown (scoped to current period)
+app.get('/api/consults/organizations', async (c) => {
+  const period_key = c.req.query('period_key')
+  let where = 'WHERE c.organization_name IS NOT NULL AND c.organization_name != \'\''
+  const params: any[] = []
+  if (period_key) { where += ' AND s.period_key=?'; params.push(period_key) }
+  const rows = await c.env.DB.prepare(
+    `SELECT DISTINCT c.organization_name
+     FROM consults c
+     LEFT JOIN upload_sessions s ON c.session_id = s.id
+     ${where}
+     ORDER BY c.organization_name ASC`
+  ).bind(...params).all()
+  return c.json((rows.results as any[]).map(r => r.organization_name))
 })
 
 app.get('/api/consults/:id', async (c) => {
