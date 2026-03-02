@@ -1001,4 +1001,25 @@ app.get('/api/cv-summary/:session_id', async (c) => {
   return c.json({ session, byVisitType: byVisitType.results, total })
 })
 
+// Diagnostic: per-contractor totals for a period (fast, single query)
+app.get('/api/debug/contractor-totals/:period_key', async (c) => {
+  const pk = c.req.param('period_key')
+  const rows = await c.env.DB.prepare(`
+    SELECT
+      ct.id as contractor_id,
+      ct.name as contractor_name,
+      c.doctor_name as raw_doctor_name,
+      COUNT(*) as cases,
+      SUM(c.carevalidate_fee) as total_cv,
+      SUM(c.contractor_fee)  as total_pay
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    LEFT JOIN contractors ct    ON c.contractor_id = ct.id
+    WHERE s.period_key = ?
+    GROUP BY ct.id, ct.name, c.doctor_name
+    ORDER BY ct.name, c.doctor_name
+  `).bind(pk).all()
+  return c.json(rows.results)
+})
+
 export default app
