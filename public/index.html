@@ -2564,9 +2564,14 @@ async function exportGusto() {
       const wage = row.total_pay || 0
       const asyncCount = row.async_count || 0
       const syncCount = row.sync_count || 0
+      const orderlyCount = row.orderly_count || 0
 
-      // Memo: "{Month Year} - {async} ASYNC & {sync} SYNC" — blank if wage is 0
-      const memo = wage > 0 ? `${periodLabel} - ${asyncCount} ASYNC & ${syncCount} SYNC` : ''
+      // Memo: "{Month Year} - {async} ASYNC & {sync} SYNC[ & {orderly} OrderlyMeds]"
+      // OrderlyMeds invoice number appended when orderly consults are present.
+      // Blank if wage is 0.
+      let memoParts = [`${asyncCount} ASYNC`, `${syncCount} SYNC`]
+      if (orderlyCount > 0) memoParts.push(`${orderlyCount} OrderlyMeds`)
+      const memo = wage > 0 ? `${periodLabel} - ${memoParts.join(' & ')}` : ''
 
       if (gustoType === 'Business') {
         // Business row: business_name + ein filled; first_name/last_name/ssn blank
