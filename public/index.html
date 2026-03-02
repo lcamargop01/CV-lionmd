@@ -1747,20 +1747,33 @@ function renderPaystubContent(data) {
                 <th class="text-center px-3 py-2 text-gray-500 font-semibold">Type</th>
                 <th class="text-right px-3 py-2 text-gray-500 font-semibold">CV Pays Us</th>
                 <th class="text-right px-3 py-2 text-gray-500 font-semibold">We Pay</th>
-                <th class="text-right px-3 py-2 text-gray-500 font-semibold">Adj.</th>
-                <th class="text-right px-3 py-2 text-gray-500 font-semibold rounded-r-xl">Commission (25%)</th>
+                <th class="text-right px-3 py-2 text-gray-500 font-semibold">Formula</th>
+                <th class="text-right px-3 py-2 text-gray-500 font-semibold rounded-r-xl">Commission</th>
               </tr>
             </thead>
             <tbody>
               ${(comm.by_contractor || []).map(row => {
-                const net = (row.cv_total || 0) - (row.contractor_total || 0) - (row.ringside_deduction || 0)
-                const adjNote = row.ringside_deduction > 0 ? `<div class="text-amber-500 text-xs">−${fmt2(row.ringside_deduction)} Ringside</div>` : ''
+                const cv  = row.cv_total        || 0
+                const pay = row.contractor_total || 0
+                const net = cv - pay
+                const rd  = row.ringside_deduction || 0
+                // Build formula cell
+                let formulaHtml
+                if (rd > 0) {
+                  // Ana Lisa: show each step on its own line
+                  formulaHtml = `
+                    <div class="text-xs text-gray-500">(${fmt2(cv)} &minus; ${fmt2(pay)}) &times; 25%</div>
+                    <div class="text-xs text-gray-500">= ${fmt2(net * 0.25)}</div>
+                    <div class="text-xs text-amber-600">&minus; ${fmt2(rd)} (${row.ringside_count} Ringside cases &times; $20)</div>`
+                } else {
+                  formulaHtml = `<div class="text-xs text-gray-500">(${fmt2(cv)} &minus; ${fmt2(pay)}) &times; 25%</div>`
+                }
                 return `<tr class="border-b border-gray-50 hover:bg-gray-50">
                   <td class="px-3 py-2 font-medium text-gray-700">${row.contractor_name}</td>
                   <td class="px-3 py-2 text-center">${contractorTypeBadge(row.contractor_type)}</td>
-                  <td class="px-3 py-2 text-right text-blue-600">${fmt2(row.cv_total || 0)}</td>
-                  <td class="px-3 py-2 text-right text-purple-600">${fmt2(row.contractor_total || 0)}</td>
-                  <td class="px-3 py-2 text-right text-gray-600">${adjNote}${fmt2(net)}</td>
+                  <td class="px-3 py-2 text-right text-blue-600">${fmt2(cv)}</td>
+                  <td class="px-3 py-2 text-right text-purple-600">${fmt2(pay)}</td>
+                  <td class="px-3 py-2 text-right text-gray-600 leading-snug">${formulaHtml}</td>
                   <td class="px-3 py-2 text-right font-bold text-blue-600">${fmt2(row.commission)}</td>
                 </tr>`
               }).join('')}
