@@ -2571,16 +2571,12 @@ async function exportGusto() {
 
       const gustoType = row.gusto_type || 'Individual'
       const wage = row.total_pay || 0
-      const asyncCount = row.async_count || 0
-      const syncCount = row.sync_count || 0
-      const orderlyCount = row.orderly_count || 0
+      const totalCases = row.total_cases || 0
 
-      // Build memo: "{Month Year} - {N} ASYNC & {N} SYNC[ & {N} OrderlyMeds]"
-      // Truncated to 25 characters max. Blank if wage is 0.
-      let memoParts = [`${asyncCount} ASYNC`, `${syncCount} SYNC`]
-      if (orderlyCount > 0) memoParts.push(`${orderlyCount} OrderlyMeds`)
-      const memoFull = wage > 0 ? `${periodLabel} - ${memoParts.join(' & ')}` : ''
-      const memo = memoFull.slice(0, 25)
+      // Memo: "{Month Year} - {N,NNN} cases"  e.g. "January 2026 - 3,315 cases"
+      // Blank if wage is 0.
+      const casesFormatted = totalCases.toLocaleString('en-US')
+      const memo = wage > 0 ? `${periodLabel} - ${casesFormatted} cases` : ''
 
       if (gustoType === 'Business') {
         rows.push([
@@ -2591,12 +2587,12 @@ async function exportGusto() {
           '',                                            // ssn
           row.company || row.contractor_name || '',      // business_name
           row.ein_ssn || '',                             // ein
-          memo,                                          // memo (max 25)
+          memo,                                          // memo
           '',                                            // hours_worked
           wage,                                          // wage
           '',                                            // reimbursement
           '',                                            // bonus
-          memo                                           // invoice_number (max 25)
+          memo                                           // invoice_number
         ])
       } else {
         let firstName = row.first_name || ''
@@ -2615,12 +2611,12 @@ async function exportGusto() {
           row.ein_ssn || '',                             // ssn
           '',                                            // business_name
           '',                                            // ein
-          memo,                                          // memo (max 25)
+          memo,                                          // memo
           '',                                            // hours_worked
           wage,                                          // wage
           '',                                            // reimbursement
           '',                                            // bonus
-          memo                                           // invoice_number (max 25)
+          memo                                           // invoice_number
         ])
       }
     })
