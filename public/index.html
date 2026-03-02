@@ -535,7 +535,7 @@ function renderDashboard() {
               <i class="fas fa-file-invoice-dollar mr-2"></i>View Payroll
             </button>
             <button onclick="exportGusto()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
-              <i class="fas fa-file-excel mr-2"></i>Export Gusto
+              <i class="fas fa-file-csv mr-2"></i>Export Gusto CSV
             </button>
           </div>
         </div>
@@ -1250,7 +1250,7 @@ function renderPayroll() {
             <i class="fas fa-sync-alt mr-2"></i>Recalculate Period
           </button>
           <button onclick="exportGusto()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
-            <i class="fas fa-file-excel mr-2"></i>Export All to Gusto
+            <i class="fas fa-file-csv mr-2"></i>Export All to Gusto CSV
           </button>
         </div>
       </div>
@@ -2550,49 +2550,55 @@ async function exportGusto() {
   showLoading('Generating Gusto export...')
   try {
     const data = await api(`/api/export/gusto/period/${state.currentPeriod.period_key}`)
-    
+
     // Exact 13-column format matching Gusto upload template
-    const ws_data = [
+    const rows = [
       ['contractor_type', 'first_name', 'last_name', 'Name', 'ssn', 'business_name', 'ein', 'memo', 'hours_worked', 'wage', 'reimbursement', 'bonus', 'invoice_number']
     ]
 
     // Get the month/year label for memo (e.g. "January 2026")
     const periodLabel = state.currentPeriod.period_label || ''
 
+    // Helper: escape a CSV field (quote if contains comma, quote, or newline)
+    function csvField(val) {
+      const s = val === null || val === undefined ? '' : String(val)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+
     data.forEach(row => {
+      // Skip owners — they are not paid through Gusto
+      if ((row.contractor_type || 'regular') === 'owner') return
+
       const gustoType = row.gusto_type || 'Individual'
       const wage = row.total_pay || 0
       const asyncCount = row.async_count || 0
       const syncCount = row.sync_count || 0
       const orderlyCount = row.orderly_count || 0
 
-      // Memo: "{Month Year} - {async} ASYNC & {sync} SYNC[ & {orderly} OrderlyMeds]"
-      // OrderlyMeds invoice number appended when orderly consults are present.
-      // Blank if wage is 0.
+      // Build memo: "{Month Year} - {N} ASYNC & {N} SYNC[ & {N} OrderlyMeds]"
+      // Truncated to 25 characters max. Blank if wage is 0.
       let memoParts = [`${asyncCount} ASYNC`, `${syncCount} SYNC`]
       if (orderlyCount > 0) memoParts.push(`${orderlyCount} OrderlyMeds`)
-      const memo = wage > 0 ? `${periodLabel} - ${memoParts.join(' & ')}` : ''
+      const memoFull = wage > 0 ? `${periodLabel} - ${memoParts.join(' & ')}` : ''
+      const memo = memoFull.slice(0, 25)
 
       if (gustoType === 'Business') {
-        // Business row: business_name + ein filled; first_name/last_name/ssn blank
-        ws_data.push([
-          'Business',           // contractor_type
-          '',                   // first_name
-          '',                   // last_name
-          '',                   // Name (blank for business)
-          '',                   // ssn
-          row.company || row.contractor_name || '',  // business_name
-          row.ein_ssn || '',    // ein
-          memo,                 // memo
-          '',                   // hours_worked
-          wage,                 // wage
-          '',                   // reimbursement
-          '',                   // bonus
-          memo                  // invoice_number = memo
+        rows.push([
+          'Business',                                    // contractor_type
+          '',                                            // first_name
+          '',                                            // last_name
+          '',                                            // Name
+          '',                                            // ssn
+          row.company || row.contractor_name || '',      // business_name
+          row.ein_ssn || '',                             // ein
+          memo,                                          // memo (max 25)
+          '',                                            // hours_worked
+          wage,                                          // wage
+          '',                                            // reimbursement
+          '',                                            // bonus
+          memo                                           // invoice_number (max 25)
         ])
       } else {
-        // Individual row: first_name + last_name + ssn filled; business_name/ein blank
-        // Derive first/last name: prefer stored fields, fallback to splitting full name
         let firstName = row.first_name || ''
         let lastName = row.last_name || ''
         if (!firstName && !lastName && row.contractor_name) {
@@ -2601,31 +2607,37 @@ async function exportGusto() {
           lastName = parts.slice(1).join(' ') || ''
         }
         const displayName = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : (row.contractor_name || '')
-        ws_data.push([
-          'Individual',         // contractor_type
-          firstName,            // first_name
-          lastName,             // last_name
-          displayName,          // Name = first + last
-          row.ein_ssn || '',    // ssn
-          '',                   // business_name
-          '',                   // ein
-          memo,                 // memo
-          '',                   // hours_worked
-          wage,                 // wage
-          '',                   // reimbursement
-          '',                   // bonus
-          memo                  // invoice_number = memo
+        rows.push([
+          'Individual',                                  // contractor_type
+          firstName,                                     // first_name
+          lastName,                                      // last_name
+          displayName,                                   // Name
+          row.ein_ssn || '',                             // ssn
+          '',                                            // business_name
+          '',                                            // ein
+          memo,                                          // memo (max 25)
+          '',                                            // hours_worked
+          wage,                                          // wage
+          '',                                            // reimbursement
+          '',                                            // bonus
+          memo                                           // invoice_number (max 25)
         ])
       }
     })
 
-    const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.aoa_to_sheet(ws_data)
-    ws['!cols'] = [12, 14, 16, 22, 10, 30, 10, 40, 12, 12, 14, 10, 40].map(w => ({ wch: w }))
-    XLSX.utils.book_append_sheet(wb, ws, 'Gusto Upload')
+    // Build CSV string
+    const csv = rows.map(r => r.map(csvField).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `LionMD_Gusto_${state.currentPeriod.period_label.replace(/\s+/g,'_')}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
 
-    XLSX.writeFile(wb, `LionMD_Gusto_${state.currentPeriod.period_label.replace(/\s+/g,'_')}.xlsx`)
-    showToast('Gusto Excel exported!', 'success')
+    showToast('Gusto CSV exported!', 'success')
   } catch(e) { showToast('Export failed: ' + e.message, 'error') }
   finally { hideLoading() }
 }

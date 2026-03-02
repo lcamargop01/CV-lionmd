@@ -923,6 +923,7 @@ app.get('/api/export/gusto/period/:period_key', async (c) => {
   const rows = await c.env.DB.prepare(`
     SELECT ct.name as contractor_name, ct.first_name, ct.last_name, ct.company, ct.ein_ssn, ct.email,
       COALESCE(ct.gusto_type, 'Individual') as gusto_type,
+      COALESCE(ct.contractor_type, 'regular') as contractor_type,
       s.period_label,
       COUNT(*) as total_cases, SUM(c.contractor_fee) as total_pay,
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
