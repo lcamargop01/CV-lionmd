@@ -1096,4 +1096,20 @@ app.get('/api/debug/orderly-sync/:period_key/:contractor_id', async (c) => {
   return c.json(rows.results)
 })
 
+// Find ALL SYNC rows from OrderlyMeds in a period (any is_orderly value)
+app.get('/api/debug/orderly-sync-all/:period_key', async (c) => {
+  const pk = c.req.param('period_key')
+  const rows = await c.env.DB.prepare(`
+    SELECT c.id, c.contractor_id, c.visit_type, c.is_orderly,
+           c.carevalidate_fee, c.contractor_fee, c.doctor_name, c.organization_name
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    WHERE s.period_key = ?
+      AND LOWER(c.organization_name) LIKE '%orderly%'
+      AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
+    ORDER BY c.id
+  `).bind(pk).all()
+  return c.json(rows.results)
+})
+
 export default app
