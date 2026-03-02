@@ -2573,10 +2573,12 @@ async function exportGusto() {
       const wage = row.total_pay || 0
       const totalCases = row.total_cases || 0
 
-      // Memo: "{Month Year} - {N,NNN} cases"  e.g. "January 2026 - 3,315 cases"
-      // Blank if wage is 0.
+      // memo:           "January 2026 - 3,315 cases"
+      // invoice_number: "January 2026"
+      // Both blank if wage is 0.
       const casesFormatted = totalCases.toLocaleString('en-US')
-      const memo = wage > 0 ? `${periodLabel} - ${casesFormatted} cases` : ''
+      const memo          = wage > 0 ? `${periodLabel} - ${casesFormatted} cases` : ''
+      const invoiceNumber = wage > 0 ? periodLabel : ''
 
       if (gustoType === 'Business') {
         rows.push([
@@ -2592,7 +2594,7 @@ async function exportGusto() {
           wage,                                          // wage
           '',                                            // reimbursement
           '',                                            // bonus
-          memo                                           // invoice_number
+          invoiceNumber                                  // invoice_number
         ])
       } else {
         let firstName = row.first_name || ''
@@ -2616,7 +2618,7 @@ async function exportGusto() {
           wage,                                          // wage
           '',                                            // reimbursement
           '',                                            // bonus
-          memo                                           // invoice_number
+          invoiceNumber                                  // invoice_number
         ])
       }
     })
