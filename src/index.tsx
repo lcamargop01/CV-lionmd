@@ -7,11 +7,19 @@ type Bindings = {
 
 // ──────────────────────────────────────────────
 // Helper: detect if a row is an OrderlyMeds consult
-// Rule: organization_name contains 'orderly' (case-insensitive)
-// The rawFee fallback has been removed — org name is the authoritative signal.
+//
+// Rule: organization_name contains 'orderly' AND visit_type is ASYNC_TEXT_EMAIL.
+// SYNC visits from OrderlyMeds (SYNC_PHONE, SYNC_VIDEO, SYNC_IN_PERSON) are real
+// sync consults and must use the sync rate ($50 CV / $30 pay), NOT the orderly
+// flat rate ($17/$10).  Flagging them is_orderly=1 was the root cause of repeated
+// payout errors (Rachel Dec 2025, Jacqueline/LaurenMarie Jan 2026).
 // ──────────────────────────────────────────────
-function isOrderlyRow(orgName?: string | null, rawFee?: number | null): boolean {
-  if (orgName && orgName.toLowerCase().includes('orderly')) return true
+function isOrderlyRow(orgName?: string | null, rawFee?: number | null, visitType?: string | null): boolean {
+  if (!orgName || !orgName.toLowerCase().includes('orderly')) return false
+  // Only ASYNC_TEXT_EMAIL rows from OrderlyMeds get the orderly flat rate
+  const vt = (visitType || '').toUpperCase()
+  if (vt === 'ASYNC_TEXT_EMAIL' || vt === 'ORDERLY' || vt === '' || vt === 'NO_SHOW') return true
+  // SYNC visits from OrderlyMeds are real syncs — do NOT mark as orderly
   return false
 }
 
@@ -24,8 +32,9 @@ function computeFee(
   if (!visitType) return { cv: 0, ct: 0 }
   const vt = visitType.toUpperCase()
 
-  // OrderlyMeds flat rate ($17/$10) applies to ALL visit types including NO_SHOW.
-  if (isOrderlyRow(orgName, rawFee)) {
+  // OrderlyMeds flat rate ($17/$10) applies only to ASYNC and NO_SHOW rows.
+  // SYNC rows from OrderlyMeds use the normal sync rate.
+  if (isOrderlyRow(orgName, rawFee, visitType)) {
     const orderly = ratesMap['ORDERLY']
     return orderly ? { cv: orderly.cv, ct: orderly.ct } : { cv: rawFee ?? 0, ct: rawFee ?? 0 }
   }
@@ -57,14 +66,22 @@ async function ensureSchema(db: D1Database) {
   await db.prepare(
     `UPDATE upload_sessions SET period_key = printf('%04d-%02d', period_year, period_month) WHERE period_key IS NULL OR period_key = ''`
   ).run().catch(() => {})
-  // Backfill is_orderly based on organization name only (authoritative rule)
-  // and fix any non-ASYNC orderly rows to use their correct visit-type rate
-  // Backfill is_orderly for ALL visit types from OrderlyMeds (not just ASYNC_TEXT_EMAIL)
+  // Backfill is_orderly: only ASYNC_TEXT_EMAIL and NO_SHOW from OrderlyMeds get the orderly flag.
+  // SYNC visits from OrderlyMeds are real syncs and must NOT be flagged is_orderly=1.
   await db.prepare(
-    `UPDATE consults SET is_orderly=1 WHERE is_orderly=0 AND LOWER(organization_name) LIKE '%orderly%'`
+    `UPDATE consults SET is_orderly=1
+     WHERE is_orderly=0
+       AND LOWER(organization_name) LIKE '%orderly%'
+       AND visit_type IN ('ASYNC_TEXT_EMAIL','NO_SHOW','')`
   ).run().catch(() => {})
-  // NOTE: NO_SHOW from OrderlyMeds uses the ORDERLY rate ($17/$10), same as all other orderly rows.
-  // Do NOT zero out these fees here — computeFee and recalculate handle this correctly.
+  // Correct any previously mis-flagged SYNC rows from OrderlyMeds: clear the orderly flag
+  // and restore sync rates ($50 CV / $30 pay).
+  await db.prepare(
+    `UPDATE consults SET is_orderly=0, carevalidate_fee=50, contractor_fee=30
+     WHERE is_orderly=1
+       AND LOWER(organization_name) LIKE '%orderly%'
+       AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')`
+  ).run().catch(() => {})
 }
 
 // ──────────────────────────────────────────────
@@ -404,7 +421,7 @@ async function insertRows(
     const batch = rows.slice(i, i + batchSize)
     const statements = batch.map((row: any) => {
       const fees = computeFee(row.visit_type, ratesMap, row.raw_fee, row.organization_name)
-      const orderly = isOrderlyRow(row.organization_name, row.raw_fee) ? 1 : 0
+      const orderly = isOrderlyRow(row.organization_name, row.raw_fee, row.visit_type) ? 1 : 0
       const contractorId = contractorMap[(row.doctor_name || '').toLowerCase().trim()] || null
       // Override CT fee with contractor-type-specific rate if available
       const ctype = contractorId ? (contractorTypeMap[contractorId] || 'regular') : 'regular'
@@ -606,10 +623,10 @@ app.put('/api/consults/:id', async (c) => {
   const newIsFlagged     = is_flagged     !== undefined ? (is_flagged     ? 1 : 0) : current.is_flagged
   const newFlagReason    = flag_reason    !== undefined ? (flag_reason    || null) : current.flag_reason
 
-  // Recompute is_orderly: explicit > org name check > keep existing
+  // Recompute is_orderly: explicit override > org+visitType rule > keep existing
   const newIsOrderly = is_orderly !== undefined
     ? (is_orderly ? 1 : 0)
-    : (newOrgName?.toLowerCase().includes('orderly') ? 1 : current.is_orderly)
+    : (isOrderlyRow(newOrgName, null, newVisitType) ? 1 : current.is_orderly)
 
   await c.env.DB.prepare(`
     UPDATE consults SET
