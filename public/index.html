@@ -2042,8 +2042,8 @@ async function downloadPaystub() {
       theme: 'plain',
       styles: { fontSize: 8, cellPadding: 2.5 },
       columnStyles: {
-        0: { textColor: [80,80,100], cellWidth: 130 },
-        1: { halign: 'right', fontStyle: 'bold', textColor: [30,80,200] }
+        0: { textColor: [80,80,100], cellWidth: 'auto' },
+        1: { halign: 'right', fontStyle: 'bold', textColor: [30,80,200], cellWidth: 42 }
       },
       didParseCell: (data) => {
         const lastIdx = calcRows.length - 1
@@ -2067,36 +2067,38 @@ async function downloadPaystub() {
     const detailRows = (comm.by_contractor || []).map(row => {
       const cv  = row.cv_total        || 0
       const pay = row.contractor_total || 0
+      const net = cv - pay
       const rd  = row.ringside_deduction || 0
-      let formula = `(${fmt2(cv)} − ${fmt2(pay)}) × 25%`
-      if (rd > 0) formula += `\n− ${fmt2(rd)} (${row.ringside_count} Ringside × $20)`
+      const comm_amt = row.commission || 0
       return [
         row.contractor_name,
         row.contractor_type === 'owner' ? 'Owner' : 'Regular',
         fmt2(cv),
         fmt2(pay),
-        formula,
-        fmt2(row.commission)
+        fmt2(net),
+        rd > 0 ? '− ' + fmt2(rd) : '—',
+        fmt2(comm_amt)
       ]
     })
     const totalComm = comm.commission_total || 0
 
     doc.autoTable({
       startY: y + 6,
-      head: [['Contractor', 'Type', 'CV Pays Us', 'We Pay', 'Formula', 'Commission']],
+      head: [['Contractor', 'Type', 'CV Pays Us', 'We Pay', 'Net', 'Ringside Ded.', 'Commission']],
       body: detailRows,
-      foot: [['', '', '', '', 'TOTAL', fmt2(totalComm)]],
+      foot: [['', '', fmt2(comm.total_cv), fmt2(comm.total_contractor), '', '', fmt2(totalComm)]],
       theme: 'striped',
       headStyles: { fillColor:[26,26,46], textColor:[201,168,76], fontStyle:'bold', fontSize:7, cellPadding:2 },
-      footStyles: { fillColor:[235,242,255], textColor:[30,80,200], fontStyle:'bold', fontSize:8, cellPadding:2.5 },
+      footStyles: { fillColor:[235,242,255], textColor:[30,80,200], fontStyle:'bold', fontSize:7.5, cellPadding:2 },
       styles: { fontSize:7, cellPadding:2, overflow:'ellipsize' },
       columnStyles: {
-        0: { cellWidth: 44 },
-        1: { cellWidth: 18, halign:'center' },
+        0: { cellWidth: 48 },
+        1: { cellWidth: 15, halign:'center' },
         2: { cellWidth: 26, halign:'right', textColor:[30,80,180] },
         3: { cellWidth: 26, halign:'right', textColor:[100,40,160] },
-        4: { cellWidth: 52, textColor:[80,80,100], fontSize:6.5 },
-        5: { cellWidth: 24, halign:'right', fontStyle:'bold', textColor:[30,80,200] }
+        4: { cellWidth: 26, halign:'right', textColor:[60,60,80] },
+        5: { cellWidth: 22, halign:'right', textColor:[180,120,0] },
+        6: { cellWidth: 23, halign:'right', fontStyle:'bold', textColor:[30,80,200] }
       },
       margin: { left: ML, right: MR },
       tableWidth: PW - ML - MR
