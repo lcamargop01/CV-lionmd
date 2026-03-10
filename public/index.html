@@ -1609,14 +1609,46 @@ async function saveEditConsult(id) {
     await api(`/api/consults/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
     closeEditConsult()
     showToast('Record updated successfully', 'success')
-    // Reload consults table and refresh dashboard summary
+    // Reload consults table and refresh all stale data
     await loadConsultsPage(consultsState.page)
-    if (state.currentPeriod) {
-      const summary = await api(`/api/summary/period/${state.currentPeriod.period_key}`)
-      state.currentSummary = summary
-    }
+    await refreshAfterConsultUpdate()
   } catch(e) {
     showToast('Error saving: ' + e.message, 'error')
+  }
+}
+
+// ════════════════════════════════════════════════════
+// REFRESH AFTER CONSULT UPDATE
+// ════════════════════════════════════════════════════
+async function refreshAfterConsultUpdate() {
+  if (!state.currentPeriod) return
+  const pk = state.currentPeriod.period_key
+
+  // 1. Always refresh the in-memory summary
+  state.currentSummary = await api(`/api/summary/period/${pk}`)
+
+  // 2. If the dashboard is visible, re-render it silently in place
+  if (state.currentPage === 'dashboard') {
+    renderDashboard()
+  }
+
+  // 3. If the payroll page is visible, re-render it too
+  if (state.currentPage === 'payroll') {
+    renderPayroll()
+  }
+
+  // 4. If a paystub modal is open with data, refresh it
+  const modal = $('paystubModal')
+  if (modal && !modal.classList.contains('hidden') && currentPaystubData) {
+    const { session, contractor } = currentPaystubData
+    const periodKey = session?.period_key || pk
+    const contractorId = contractor?.id
+    if (contractorId) {
+      try {
+        currentPaystubData = await api(`/api/paystub/period/${periodKey}/${contractorId}`)
+        renderPaystubContent(currentPaystubData)
+      } catch(_) {}
+    }
   }
 }
 
@@ -2461,10 +2493,8 @@ async function recalculatePeriods(periodKey) {
     const body = targetPeriod ? { period_key: targetPeriod } : {}
     const res = await api('/api/recalculate', { method: 'POST', body: JSON.stringify(body) })
     showToast(`✅ Recalculated ${res.updated?.toLocaleString()} consults across ${res.sessions} sessions`, 'success')
-    // Reload summary
-    if (state.currentPeriod) {
-      state.currentSummary = await api(`/api/summary/period/${state.currentPeriod.period_key}`)
-    }
+    // Reload summary and re-render whatever is on screen
+    await refreshAfterConsultUpdate()
     state.periods = await api('/api/sessions')
     populateSessionSelector()
   } catch(e) {
