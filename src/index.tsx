@@ -8,19 +8,13 @@ type Bindings = {
 // ──────────────────────────────────────────────
 // Helper: detect if a row is an OrderlyMeds consult
 //
-// Rule: organization_name contains 'orderly' AND visit_type is ASYNC_TEXT_EMAIL.
-// SYNC visits from OrderlyMeds (SYNC_PHONE, SYNC_VIDEO, SYNC_IN_PERSON) are real
-// sync consults and must use the sync rate ($50 CV / $30 pay), NOT the orderly
-// flat rate ($17/$10).  Flagging them is_orderly=1 was the root cause of repeated
-// payout errors (Rachel Dec 2025, Jacqueline/LaurenMarie Jan 2026).
+// Rule: organization_name contains 'orderly' → always OrderlyMeds flat rate.
+// ALL visit types (ASYNC, SYNC, NO_SHOW) from OrderlyMeds use CV=$17, CT=$10.
 // ──────────────────────────────────────────────
 function isOrderlyRow(orgName?: string | null, rawFee?: number | null, visitType?: string | null): boolean {
   if (!orgName || !orgName.toLowerCase().includes('orderly')) return false
-  // Only ASYNC_TEXT_EMAIL rows from OrderlyMeds get the orderly flat rate
-  const vt = (visitType || '').toUpperCase()
-  if (vt === 'ASYNC_TEXT_EMAIL' || vt === 'ORDERLY' || vt === '' || vt === 'NO_SHOW') return true
-  // SYNC visits from OrderlyMeds are real syncs — do NOT mark as orderly
-  return false
+  // ALL visit types from OrderlyMeds are orderly-rated (CV=$17, CT=$10)
+  return true
 }
 
 function computeFee(
@@ -32,8 +26,7 @@ function computeFee(
   if (!visitType) return { cv: 0, ct: 0 }
   const vt = visitType.toUpperCase()
 
-  // OrderlyMeds flat rate ($17/$10) applies only to ASYNC and NO_SHOW rows.
-  // SYNC rows from OrderlyMeds use the normal sync rate.
+  // OrderlyMeds flat rate ($17/$10) applies to ALL visit types from this org.
   if (isOrderlyRow(orgName, rawFee, visitType)) {
     const orderly = ratesMap['ORDERLY']
     return orderly ? { cv: orderly.cv, ct: orderly.ct } : { cv: rawFee ?? 0, ct: rawFee ?? 0 }
@@ -72,9 +65,9 @@ async function ensureSchema(db: D1Database) {
      WHERE is_orderly=0
        AND LOWER(organization_name) LIKE '%orderly%'`
   ).run().catch(() => {})
-  // Fix orderly SYNC rows: CV=$17, CT=$30 (unless manually overridden)
+  // Fix orderly SYNC rows: CV=$17, CT=$10 (same as async — orderly is always flat rate)
   await db.prepare(
-    `UPDATE consults SET carevalidate_fee=17, contractor_fee=30
+    `UPDATE consults SET carevalidate_fee=17, contractor_fee=10
      WHERE is_orderly=1
        AND LOWER(organization_name) LIKE '%orderly%'
        AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
@@ -197,12 +190,9 @@ app.post('/api/recalculate', async (c) => {
         cvFee = ratesMap[vt.toUpperCase()]?.cv ?? 0
       }
 
-      // CT fee: orderly sync ($30) vs orderly async ($10), else normal contractor-type rate
+      // CT fee: orderly always $10 (flat rate regardless of visit type), else normal contractor-type rate
       let ctFee = 0
-      const isSync = vt === 'SYNC_PHONE' || vt === 'SYNC_VIDEO' || vt === 'SYNC_IN_PERSON'
-      if (isOrderly && isSync) {
-        ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 30
-      } else if (isOrderly) {
+      if (isOrderly) {
         ctFee = ctRatesMap[ctype]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 10
       } else {
         ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0

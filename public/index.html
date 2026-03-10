@@ -1519,7 +1519,7 @@ async function openEditConsult(id) {
         <!-- Orderly info banner shown when orderly is checked -->
         <div id="ec_orderly_banner" class="${r.is_orderly ? '' : 'hidden'} bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-700">
           <i class="fas fa-info-circle mr-1"></i>
-          <strong>OrderlyMeds:</strong> CV is always <strong>$17</strong>. Contractor fee follows visit type — <strong>$10</strong> for Async/No-Show, <strong>$30</strong> for Sync.
+          <strong>OrderlyMeds:</strong> CV is always <strong>$17</strong>, Contractor fee is always <strong>$10</strong> regardless of visit type.
         </div>
 
         <!-- Preset buttons for quick fee assignment -->
@@ -1528,7 +1528,7 @@ async function openEditConsult(id) {
           <div class="flex flex-wrap gap-2">
             <button onclick="applyFeePreset(20,10,'ASYNC_TEXT_EMAIL',false)" class="px-3 py-1 rounded-lg bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200">Async $20/$10</button>
             <button onclick="applyFeePreset(17,10,'ASYNC_TEXT_EMAIL',true)" class="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold hover:bg-purple-200">Orderly Async $17/$10</button>
-            <button onclick="applyFeePreset(17,30,'SYNC_PHONE',true)" class="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold hover:bg-purple-200">Orderly Sync $17/$30</button>
+            <button onclick="applyFeePreset(17,10,'SYNC_PHONE',true)" class="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold hover:bg-purple-200">Orderly Sync $17/$10</button>
             <button onclick="applyFeePreset(50,30,null,false)" class="px-3 py-1 rounded-lg bg-green-100 text-green-700 text-xs font-semibold hover:bg-green-200">Sync $50/$30</button>
             <button onclick="applyFeePreset(0,0,null,false)" class="px-3 py-1 rounded-lg bg-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-300">No Show $0/$0</button>
           </div>
@@ -1587,10 +1587,7 @@ function applyOrderlyFees(vt) {
   const cvEl = document.getElementById('ec_cv_fee')
   const ctEl = document.getElementById('ec_ct_fee')
   if (cvEl) cvEl.value = 17  // CV always $17 for OrderlyMeds
-  if (ctEl) {
-    const isSync = vt === 'SYNC_PHONE' || vt === 'SYNC_VIDEO' || vt === 'SYNC_IN_PERSON'
-    ctEl.value = isSync ? 30 : 10
-  }
+  if (ctEl) ctEl.value = 10  // CT always $10 for OrderlyMeds regardless of visit type
 }
 
 function onEditOrgChange() {
@@ -2482,7 +2479,7 @@ function renderRates() {
         <div class="flex items-start gap-3">
           <i class="fas fa-lightbulb text-amber-500 mt-0.5 flex-shrink-0"></i>
           <div class="text-sm text-amber-700">
-            <strong>OrderlyMeds Note:</strong> If the organization name contains "OrderlyMeds", the consult uses the <strong>OrderlyMeds</strong> CV rate (currently $17) regardless of visit type. Contractor payout uses the <strong>ORDERLY</strong> row for that contractor's type.
+            <strong>OrderlyMeds Note:</strong> If the organization name contains "OrderlyMeds", the consult uses a flat rate of <strong>CV $17 / CT $10</strong> regardless of visit type (async, sync, or no-show).
           </div>
         </div>
       </div>
