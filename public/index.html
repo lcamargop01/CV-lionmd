@@ -1502,7 +1502,7 @@ async function openEditConsult(id) {
         <div class="grid grid-cols-2 gap-4">
           <div class="flex items-center gap-3 bg-purple-50 rounded-lg px-3 py-2.5">
             <input id="ec_orderly" type="checkbox" class="w-4 h-4 accent-purple-600" ${r.is_orderly ? 'checked' : ''} onchange="onEditOrderlyChange()"/>
-            <label for="ec_orderly" class="text-sm font-medium text-purple-700 cursor-pointer">OrderlyMeds Rate ($17/$10)</label>
+            <label for="ec_orderly" class="text-sm font-medium text-purple-700 cursor-pointer">OrderlyMeds (CV always $17)</label>
           </div>
           <div class="flex items-center gap-3 bg-yellow-50 rounded-lg px-3 py-2.5">
             <input id="ec_flagged" type="checkbox" class="w-4 h-4 accent-yellow-500" ${r.is_flagged ? 'checked' : ''}/>
@@ -1516,12 +1516,19 @@ async function openEditConsult(id) {
           <textarea id="ec_notes" rows="2" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Optional notes...">${r.notes||''}</textarea>
         </div>
 
+        <!-- Orderly info banner shown when orderly is checked -->
+        <div id="ec_orderly_banner" class="${r.is_orderly ? '' : 'hidden'} bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-700">
+          <i class="fas fa-info-circle mr-1"></i>
+          <strong>OrderlyMeds:</strong> CV is always <strong>$17</strong>. Contractor fee follows visit type — <strong>$10</strong> for Async/No-Show, <strong>$30</strong> for Sync.
+        </div>
+
         <!-- Preset buttons for quick fee assignment -->
         <div class="bg-gray-50 rounded-xl p-3">
           <p class="text-xs font-semibold text-gray-400 mb-2">Quick Fee Presets</p>
           <div class="flex flex-wrap gap-2">
             <button onclick="applyFeePreset(20,10,'ASYNC_TEXT_EMAIL',false)" class="px-3 py-1 rounded-lg bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200">Async $20/$10</button>
-            <button onclick="applyFeePreset(17,10,'ASYNC_TEXT_EMAIL',true)" class="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold hover:bg-purple-200">Orderly $17/$10</button>
+            <button onclick="applyFeePreset(17,10,'ASYNC_TEXT_EMAIL',true)" class="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold hover:bg-purple-200">Orderly Async $17/$10</button>
+            <button onclick="applyFeePreset(17,30,'SYNC_PHONE',true)" class="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold hover:bg-purple-200">Orderly Sync $17/$30</button>
             <button onclick="applyFeePreset(50,30,null,false)" class="px-3 py-1 rounded-lg bg-green-100 text-green-700 text-xs font-semibold hover:bg-green-200">Sync $50/$30</button>
             <button onclick="applyFeePreset(0,0,null,false)" class="px-3 py-1 rounded-lg bg-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-300">No Show $0/$0</button>
           </div>
@@ -1550,40 +1557,63 @@ function applyFeePreset(cv, ct, vt, orderly) {
   const ctEl = document.getElementById('ec_ct_fee')
   const vtEl = document.getElementById('ec_visit_type')
   const orEl = document.getElementById('ec_orderly')
+  const banner = document.getElementById('ec_orderly_banner')
   if (cvEl) cvEl.value = cv
   if (ctEl) ctEl.value = ct
   if (vt && vtEl) vtEl.value = vt
   if (orEl) orEl.checked = orderly
+  if (banner) banner.classList.toggle('hidden', !orderly)
 }
 
 function onEditVisitTypeChange() {
-  // Auto-suggest fees based on visit type, respecting orderly checkbox
   const vt = document.getElementById('ec_visit_type')?.value
   const orderly = document.getElementById('ec_orderly')?.checked
-  if (orderly) return // don't override if orderly is set
-  const rates = state.rates || []
-  const rate = rates.find(r => r.visit_type === vt)
-  if (rate) {
-    const cvEl = document.getElementById('ec_cv_fee')
-    const ctEl = document.getElementById('ec_ct_fee')
-    if (cvEl) cvEl.value = rate.carevalidate_rate
-    if (ctEl) ctEl.value = rate.contractor_rate
+  if (orderly) {
+    // OrderlyMeds: CV always $17, CT depends on visit type
+    applyOrderlyFees(vt)
+  } else {
+    const rates = state.rates || []
+    const rate = rates.find(r => r.visit_type === vt)
+    if (rate) {
+      const cvEl = document.getElementById('ec_cv_fee')
+      const ctEl = document.getElementById('ec_ct_fee')
+      if (cvEl) cvEl.value = rate.carevalidate_rate
+      if (ctEl) ctEl.value = rate.contractor_rate
+    }
+  }
+}
+
+function applyOrderlyFees(vt) {
+  const cvEl = document.getElementById('ec_cv_fee')
+  const ctEl = document.getElementById('ec_ct_fee')
+  if (cvEl) cvEl.value = 17  // CV always $17 for OrderlyMeds
+  if (ctEl) {
+    const isSync = vt === 'SYNC_PHONE' || vt === 'SYNC_VIDEO' || vt === 'SYNC_IN_PERSON'
+    ctEl.value = isSync ? 30 : 10
   }
 }
 
 function onEditOrgChange() {
   const org = document.getElementById('ec_org')?.value || ''
   const orEl = document.getElementById('ec_orderly')
-  if (orEl && org.toLowerCase().includes('orderly')) {
-    orEl.checked = true
-    applyFeePreset(17, 10, 'ASYNC_TEXT_EMAIL', true)
+  const banner = document.getElementById('ec_orderly_banner')
+  if (org.toLowerCase().includes('orderly')) {
+    if (orEl) orEl.checked = true
+    if (banner) banner.classList.remove('hidden')
+    const vt = document.getElementById('ec_visit_type')?.value
+    applyOrderlyFees(vt)
+  } else {
+    // Don't uncheck automatically — user may have set it manually
   }
 }
 
 function onEditOrderlyChange() {
   const orderly = document.getElementById('ec_orderly')?.checked
+  const banner = document.getElementById('ec_orderly_banner')
+  if (banner) banner.classList.toggle('hidden', !orderly)
+  const vt = document.getElementById('ec_visit_type')?.value
   if (orderly) {
-    applyFeePreset(17, 10, 'ASYNC_TEXT_EMAIL', true)
+    applyOrderlyFees(vt)
   } else {
     onEditVisitTypeChange()
   }

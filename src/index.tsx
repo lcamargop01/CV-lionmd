@@ -66,21 +66,19 @@ async function ensureSchema(db: D1Database) {
   await db.prepare(
     `UPDATE upload_sessions SET period_key = printf('%04d-%02d', period_year, period_month) WHERE period_key IS NULL OR period_key = ''`
   ).run().catch(() => {})
-  // Backfill is_orderly: only ASYNC_TEXT_EMAIL and NO_SHOW from OrderlyMeds get the orderly flag.
-  // SYNC visits from OrderlyMeds are real syncs and must NOT be flagged is_orderly=1.
+  // Backfill is_orderly=1 for ALL OrderlyMeds rows (CV is always $17 for this org)
   await db.prepare(
     `UPDATE consults SET is_orderly=1
      WHERE is_orderly=0
-       AND LOWER(organization_name) LIKE '%orderly%'
-       AND visit_type IN ('ASYNC_TEXT_EMAIL','NO_SHOW','')`
+       AND LOWER(organization_name) LIKE '%orderly%'`
   ).run().catch(() => {})
-  // Correct any previously mis-flagged SYNC rows from OrderlyMeds: clear the orderly flag
-  // and restore sync rates ($50 CV / $30 pay).
+  // Fix orderly SYNC rows: CV=$17, CT=$30 (unless manually overridden)
   await db.prepare(
-    `UPDATE consults SET is_orderly=0, carevalidate_fee=50, contractor_fee=30
+    `UPDATE consults SET carevalidate_fee=17, contractor_fee=30
      WHERE is_orderly=1
        AND LOWER(organization_name) LIKE '%orderly%'
-       AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')`
+       AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
+       AND (is_override IS NULL OR is_override=0)`
   ).run().catch(() => {})
 }
 
@@ -199,9 +197,12 @@ app.post('/api/recalculate', async (c) => {
         cvFee = ratesMap[vt.toUpperCase()]?.cv ?? 0
       }
 
-      // CT fee: use contractor-type-specific rate if available, else fall back to payment_rates
+      // CT fee: orderly sync ($30) vs orderly async ($10), else normal contractor-type rate
       let ctFee = 0
-      if (isOrderly) {
+      const isSync = vt === 'SYNC_PHONE' || vt === 'SYNC_VIDEO' || vt === 'SYNC_IN_PERSON'
+      if (isOrderly && isSync) {
+        ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 30
+      } else if (isOrderly) {
         ctFee = ctRatesMap[ctype]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 10
       } else {
         ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
