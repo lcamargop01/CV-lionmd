@@ -569,7 +569,15 @@ app.get('/api/consults', async (c) => {
     where += ' AND c.session_id=?'; params.push(session_id)
   }
   if (doctor_name)  { where += ' AND c.doctor_name=?';    params.push(doctor_name)  }
-  if (visit_type)   { where += ' AND c.visit_type=?';     params.push(visit_type)   }
+  if (visit_type === '_SYNC') {
+    // All sync types (phone, video, in-person) — both orderly and non-orderly
+    where += ` AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')`
+  } else if (visit_type === '_OTHER') {
+    // Anything that is NOT a known type
+    where += ` AND (c.visit_type IS NULL OR c.visit_type NOT IN ('ASYNC_TEXT_EMAIL','SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON','NO_SHOW') OR c.visit_type = '')`
+  } else if (visit_type) {
+    where += ' AND c.visit_type=?';     params.push(visit_type)
+  }
   if (is_orderly === '1') { where += ' AND c.is_orderly=1' }
   if (is_orderly === '0') { where += ' AND c.is_orderly=0' }
   if (organization) { where += ' AND c.organization_name=?'; params.push(organization) }

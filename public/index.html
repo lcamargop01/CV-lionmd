@@ -1311,34 +1311,17 @@ async function loadConsultsPage(page) {
   if (consultsState.doctor)       params.set('doctor_name',  consultsState.doctor)
   if (consultsState.organization) params.set('organization', consultsState.organization)
 
-  // Special virtual visit types used for drilldown:
-  //   '_SYNC'  = SYNC_PHONE + SYNC_VIDEO + SYNC_IN_PERSON (non-orderly)
-  //   '_OTHER' = everything that is not ASYNC, SYNC variants, ORDERLY, or NO_SHOW
-  // These are filtered client-side after fetching without a VT filter.
+  // _SYNC and _OTHER are handled server-side via IN/NOT IN SQL clauses
   const vt = consultsState.visitType
-  if (vt && vt !== '_SYNC' && vt !== '_OTHER') {
-    params.set('visit_type', vt)
-  }
+  if (vt) params.set('visit_type', vt)
   if (consultsState.isOrderly !== '') {
     params.set('is_orderly', consultsState.isOrderly)
   }
 
   try {
     const result = await api('/api/consults?' + params)
-    let rows = result.data
-    let total = result.total
-
-    // Client-side post-filter for virtual types
-    if (vt === '_SYNC') {
-      const syncTypes = new Set(['SYNC_PHONE', 'SYNC_VIDEO', 'SYNC_IN_PERSON'])
-      rows = rows.filter(r => syncTypes.has(r.visit_type) && !r.is_orderly)
-      // total is approximate (server-paged); show exact count from filtered rows
-      total = result.total  // keep server total for pagination; table will show filtered
-    } else if (vt === '_OTHER') {
-      const knownTypes = new Set(['ASYNC_TEXT_EMAIL','SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON','NO_SHOW'])
-      rows = rows.filter(r => !knownTypes.has(r.visit_type) && !r.is_orderly)
-      total = result.total
-    }
+    const rows = result.data
+    const total = result.total
 
     consultsState.data = rows
     consultsState.total = total
@@ -1348,12 +1331,7 @@ async function loadConsultsPage(page) {
 
 function renderConsultsTable(rows, total, page) {
   renderConsultsHeader()
-  const vt = consultsState.visitType
-  const isVirtual = vt === '_SYNC' || vt === '_OTHER'
-  const countText = isVirtual
-    ? `${fmtNum(rows.length)} records${rows.length < 50 ? '' : '+'}`
-    : `${fmtNum(total)} records`
-  $('countLabel').textContent = countText
+  $('countLabel').textContent = `${fmtNum(total)} records`
   const tbody = $('consultsTbody')
   if (!tbody) return
   tbody.innerHTML = rows.map(r => `
@@ -1494,11 +1472,11 @@ function renderPayroll() {
               </div>
             </div>
             <div class="flex gap-2 text-xs mb-3 flex-wrap">
-              ${d.async_count > 0 ? `<span class="status-badge badge-async cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: 'ASYNC_TEXT_EMAIL', isOrderly: '0'})" title="Drill into these Async consults">${fmtNum(d.async_count)} Async</span>` : ''}
-              ${d.sync_count > 0 ? `<span class="status-badge badge-sync cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: '_SYNC', isOrderly: '0'})" title="Drill into these Sync consults">${fmtNum(d.sync_count)} Sync</span>` : ''}
-              ${d.orderly_count > 0 ? `<span class="status-badge badge-orderly cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', isOrderly: '1'})" title="Drill into these OrderlyMeds consults">${fmtNum(d.orderly_count)} Orderly</span>` : ''}
-              ${d.no_show_count > 0 ? `<span class="status-badge badge-default cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: 'NO_SHOW'})" title="Drill into No Show consults">${fmtNum(d.no_show_count)} No Show</span>` : ''}
-              ${d.other_count > 0 ? `<span class="status-badge badge-default cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: '_OTHER'})" title="Drill into other consults">${fmtNum(d.other_count)} Other</span>` : ''}
+              ${d.async_count > 0 ? '<span class="status-badge badge-async cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: \'' + escHtml(d.doctor_name) + '\', visitType: \'ASYNC_TEXT_EMAIL\', isOrderly: \'0\'})" title="Drill into these Async consults">' + fmtNum(d.async_count) + ' Async</span>' : ''}
+              ${d.sync_count > 0 ? '<span class="status-badge badge-sync cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: \'' + escHtml(d.doctor_name) + '\', visitType: \'_SYNC\', isOrderly: \'0\'})" title="Drill into these Sync consults">' + fmtNum(d.sync_count) + ' Sync</span>' : ''}
+              ${d.orderly_count > 0 ? '<span class="status-badge badge-orderly cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: \'' + escHtml(d.doctor_name) + '\', isOrderly: \'1\'})" title="Drill into these OrderlyMeds consults">' + fmtNum(d.orderly_count) + ' Orderly</span>' : ''}
+              ${d.no_show_count > 0 ? '<span class="status-badge badge-default cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: \'' + escHtml(d.doctor_name) + '\', visitType: \'NO_SHOW\'})" title="Drill into No Show consults">' + fmtNum(d.no_show_count) + ' No Show</span>' : ''}
+              ${d.other_count > 0 ? '<span class="status-badge badge-default cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: \'' + escHtml(d.doctor_name) + '\', visitType: \'_OTHER\'})" title="Drill into other consults">' + fmtNum(d.other_count) + ' Other</span>' : ''}
             </div>
             <div class="pt-3 border-t border-gray-100">
               <button onclick="event.stopPropagation(); openPaystubModal('${escHtml(pk)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')"
