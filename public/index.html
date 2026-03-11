@@ -551,6 +551,7 @@ function renderDashboard() {
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Async</th>
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Sync</th>
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Orderly</th>
+                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">No Show</th>
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">CV Pays Us</th>
                 <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">We Pay</th>
                 <th class="text-right pb-3 text-blue-500 font-semibold px-3 whitespace-nowrap">Chris Comm</th>
@@ -566,6 +567,7 @@ function renderDashboard() {
                   <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.async_count)}</td>
                   <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.sync_count)}</td>
                   <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.orderly_count)}</td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${d.no_show_count > 0 ? fmtNum(d.no_show_count) : '—'}</td>
                   <td class="py-3 px-3 text-right font-medium text-blue-600">${fmt(d.total_carevalidate)}</td>
                   <td class="py-3 px-3 text-right font-medium text-purple-600">${fmt(d.total_contractor)}</td>
                   <td class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="${d.contractor_id || ''}">—</td>
@@ -587,6 +589,7 @@ function renderDashboard() {
                 <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.async_count||0),0))}</td>
                 <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.sync_count||0),0))}</td>
                 <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.orderly_count||0),0))}</td>
+                <td class="py-3 px-3 text-right text-gray-600">${(s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0) > 0 ? fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0)) : '—'}</td>
                 <td class="py-3 px-3 text-right text-blue-700">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_carevalidate||0),0))}</td>
                 <td class="py-3 px-3 text-right text-purple-700">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_contractor||0),0))}</td>
                 <td class="py-3 px-3 text-right text-blue-700" id="dashTotalComm"><span class="text-gray-300">...</span></td>
@@ -1367,6 +1370,7 @@ function renderPayroll() {
               ${d.async_count > 0 ? `<span class="status-badge badge-async">${fmtNum(d.async_count)} Async</span>` : ''}
               ${d.sync_count > 0 ? `<span class="status-badge badge-sync">${fmtNum(d.sync_count)} Sync</span>` : ''}
               ${d.orderly_count > 0 ? `<span class="status-badge badge-orderly">${fmtNum(d.orderly_count)} Orderly</span>` : ''}
+              ${d.no_show_count > 0 ? `<span class="status-badge badge-default">${fmtNum(d.no_show_count)} No Show</span>` : ''}
             </div>
             <div class="pt-3 border-t border-gray-100">
               <button onclick="event.stopPropagation(); openPaystubModal('${escHtml(pk)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')"
@@ -1948,6 +1952,12 @@ function renderPaystubContent(data) {
             <div class="text-xs text-gray-500 font-medium">OrderlyMeds</div>
             <div class="text-sm font-semibold text-rose-700 mt-1">${fmt(sum.orderly_pay)}</div>
           </div>` : ''}
+        ${sum.no_show_count > 0 ? `
+          <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+            <div class="font-bold text-gray-500 text-lg">${fmtNum(sum.no_show_count)}</div>
+            <div class="text-xs text-gray-500 font-medium">No Show</div>
+            <div class="text-sm font-semibold text-gray-400 mt-1">$0.00</div>
+          </div>` : ''}
       </div>
 
       <!-- Consult Detail Table -->
@@ -2120,6 +2130,7 @@ async function downloadPaystub() {
   if (summary?.async_count > 0) rows.push([`${fmtNum(summary.async_count)} Async Text/Email`, `${fmtNum(summary.async_count)} × rate`, fmt(summary.async_pay)])
   if (summary?.sync_count > 0) rows.push([`${fmtNum(summary.sync_count)} Sync (Phone/Video)`, `${fmtNum(summary.sync_count)} × rate`, fmt(summary.sync_pay)])
   if (summary?.orderly_count > 0) rows.push([`${fmtNum(summary.orderly_count)} OrderlyMeds`, `${fmtNum(summary.orderly_count)} × rate`, fmt(summary.orderly_pay)])
+  if (summary?.no_show_count > 0) rows.push([`${fmtNum(summary.no_show_count)} No Show`, `${fmtNum(summary.no_show_count)} × $0`, '$0.00'])
 
   if (rows.length > 0) {
     doc.autoTable({
@@ -2787,6 +2798,7 @@ async function exportDashboardPDF() {
       const totalAsync= doctors.reduce((a, d) => a + (d.async_count       || 0), 0)
       const totalSync = doctors.reduce((a, d) => a + (d.sync_count        || 0), 0)
       const totalOrd  = doctors.reduce((a, d) => a + (d.orderly_count     || 0), 0)
+      const totalNoShow = doctors.reduce((a, d) => a + (d.no_show_count   || 0), 0)
 
       const docRows = doctors.map(d => {
         const comm = commByC[d.contractor_id] || 0
@@ -2797,6 +2809,7 @@ async function exportDashboardPDF() {
           fmtNum(d.async_count),
           fmtNum(d.sync_count),
           fmtNum(d.orderly_count),
+          d.no_show_count > 0 ? fmtNum(d.no_show_count) : '—',
           fmt(d.total_carevalidate),
           fmt(d.total_contractor),
           comm > 0 ? fmt(comm) : '—',
@@ -2812,6 +2825,7 @@ async function exportDashboardPDF() {
         fmtNum(totalAsync),
         fmtNum(totalSync),
         fmtNum(totalOrd),
+        totalNoShow > 0 ? fmtNum(totalNoShow) : '—',
         fmt(totalCV),
         fmt(totalPay),
         fmt(totalComm),
@@ -2820,7 +2834,7 @@ async function exportDashboardPDF() {
 
       doc.autoTable({
         startY: y + 6,
-        head: [['Doctor / Contractor','Cases','Async','Sync','Orderly','CV Pays Us','We Pay','Chris Comm','Margin']],
+        head: [['Doctor / Contractor','Cases','Async','Sync','Orderly','No Show','CV Pays Us','We Pay','Chris Comm','Margin']],
         body: docRows.slice(0, docRows.length - 1),
         foot: [docRows[docRows.length - 1]],
         theme: 'striped',
@@ -2828,21 +2842,22 @@ async function exportDashboardPDF() {
         footStyles: { fillColor:[235,235,245], textColor:[40,40,80], fontStyle:'bold', fontSize:7, cellPadding:2 },
         styles: { fontSize:7, cellPadding:2, overflow:'ellipsize' },
         columnStyles: {
-          0: { cellWidth: 38 },
-          1: { halign:'right', cellWidth:16 },
-          2: { halign:'right', cellWidth:14 },
-          3: { halign:'right', cellWidth:14 },
-          4: { halign:'right', cellWidth:14 },
-          5: { halign:'right', cellWidth:22, textColor:[30,80,180] },
-          6: { halign:'right', cellWidth:22, textColor:[100,40,160] },
-          7: { halign:'right', cellWidth:22, textColor:[30,80,180] },
-          8: { halign:'right', cellWidth:22 }
+          0: { cellWidth: 34 },
+          1: { halign:'right', cellWidth:14 },
+          2: { halign:'right', cellWidth:12 },
+          3: { halign:'right', cellWidth:12 },
+          4: { halign:'right', cellWidth:12 },
+          5: { halign:'right', cellWidth:12 },
+          6: { halign:'right', cellWidth:20, textColor:[30,80,180] },
+          7: { halign:'right', cellWidth:20, textColor:[100,40,160] },
+          8: { halign:'right', cellWidth:20, textColor:[30,80,180] },
+          9: { halign:'right', cellWidth:20 }
         },
         margin: { left: ML, right: MR },
         tableWidth: PW - ML - MR,
         didParseCell: (data) => {
           // Color margin cells green/red
-          if (data.column.index === 8 && data.section !== 'head') {
+          if (data.column.index === 9 && data.section !== 'head') {
             const raw = parseFloat((data.cell.raw || '').toString().replace(/[$,]/g,''))
             if (!isNaN(raw)) data.cell.styles.textColor = raw >= 0 ? [22,163,74] : [220,38,38]
           }
