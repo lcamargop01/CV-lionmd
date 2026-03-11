@@ -63,6 +63,24 @@
       border-color: var(--lion-gold);
     }
     .progress-bar { background: linear-gradient(90deg, var(--lion-gold), #f59e0b); height: 6px; border-radius: 3px; transition: width 0.5s; }
+    /* Drilldown clickable numbers */
+    .drilldown-link {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 3px;
+      transition: color 0.15s, opacity 0.15s;
+    }
+    .drilldown-link:hover { opacity: 0.7; }
+    /* Active filter chips above consults table */
+    .drilldown-chip {
+      display: inline-flex; align-items: center;
+      background: rgba(201,168,76,0.12); color: #92712a;
+      border: 1px solid rgba(201,168,76,0.35);
+      padding: 2px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 600;
+    }
+    .drilldown-chip.badge-orderly { background: #ffe4e6; color: #be123c; border-color: #fecdd3; }
 
     /* ── Sidebar ───────────────────────────────────────── */
     #sidebar {
@@ -457,31 +475,31 @@ function renderDashboard() {
     <div class="space-y-6">
       <!-- Stats Row -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <div class="card p-3 md:p-4 flex flex-col gap-2">
+        <div class="card p-3 md:p-4 flex flex-col gap-2 cursor-pointer hover:shadow-md transition-shadow" onclick="drillDownConsults({})" title="Click to view all consults">
           <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(201,168,76,0.1)">
             <i class="fas fa-file-medical text-yellow-500 text-base"></i>
           </div>
           <div>
             <div class="text-xl md:text-2xl font-bold text-gray-800 leading-tight break-all">${fmtNum(t.total_cases)}</div>
-            <div class="text-xs text-gray-500 font-medium mt-0.5">Total Cases</div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">Total Cases <i class="fas fa-external-link-alt text-gray-300 ml-1"></i></div>
           </div>
         </div>
-        <div class="card p-3 md:p-4 flex flex-col gap-2">
+        <div class="card p-3 md:p-4 flex flex-col gap-2 cursor-pointer hover:shadow-md transition-shadow" onclick="drillDownConsults({})" title="Click to view all consults contributing to CV amount">
           <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
             <i class="fas fa-building text-blue-500 text-base"></i>
           </div>
           <div>
             <div class="text-base md:text-xl font-bold text-gray-800 leading-tight break-all">${fmt(t.total_carevalidate)}</div>
-            <div class="text-xs text-gray-500 font-medium mt-0.5">CV Owes Us</div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">CV Owes Us <i class="fas fa-external-link-alt text-gray-300 ml-1"></i></div>
           </div>
         </div>
-        <div class="card p-3 md:p-4 flex flex-col gap-2">
+        <div class="card p-3 md:p-4 flex flex-col gap-2 cursor-pointer hover:shadow-md transition-shadow" onclick="drillDownConsults({})" title="Click to view all consults contributing to contractor pay">
           <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50">
             <i class="fas fa-user-md text-purple-500 text-base"></i>
           </div>
           <div>
             <div class="text-base md:text-xl font-bold text-gray-800 leading-tight break-all">${fmt(t.total_contractor)}</div>
-            <div class="text-xs text-gray-500 font-medium mt-0.5">We Owe Contractors</div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">We Owe Contractors <i class="fas fa-external-link-alt text-gray-300 ml-1"></i></div>
           </div>
         </div>
         <div class="card p-3 md:p-4 flex flex-col gap-2">
@@ -561,17 +579,36 @@ function renderDashboard() {
               </tr>
             </thead>
             <tbody>
-              ${(s.byDoctor || []).map(d => `
+              ${(s.byDoctor || []).map(d => {
+                const dn = d.doctor_name || ''
+                const drillDoc = dn ? `, doctor: '${escHtml(dn)}'` : ''
+                return `
                 <tr class="table-row border-b border-gray-50">
                   <td class="py-3 px-3 font-medium text-gray-800">${d.doctor_name || '<i class="text-gray-400">Unmatched</i>'}</td>
-                  <td class="py-3 px-3 text-right text-gray-600">${fmtNum(d.case_count)}</td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.async_count)}</td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.sync_count)}</td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${fmtNum(d.orderly_count)}</td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${d.no_show_count > 0 ? fmtNum(d.no_show_count) : '—'}</td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">${d.other_count > 0 ? fmtNum(d.other_count) : '—'}</td>
-                  <td class="py-3 px-3 text-right font-medium text-blue-600">${fmt(d.total_carevalidate)}</td>
-                  <td class="py-3 px-3 text-right font-medium text-purple-600">${fmt(d.total_contractor)}</td>
+                  <td class="py-3 px-3 text-right text-gray-600">
+                    <span class="drilldown-link" onclick="drillDownConsults({${drillDoc}})" title="View all consults for this doctor">${fmtNum(d.case_count)}</span>
+                  </td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
+                    ${d.async_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, visitType: 'ASYNC_TEXT_EMAIL', isOrderly: '0'})" title="View Async consults">${fmtNum(d.async_count)}</span>` : '—'}
+                  </td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
+                    ${d.sync_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, isOrderly: '0', visitType: '_SYNC'})" title="View Sync consults">${fmtNum(d.sync_count)}</span>` : '—'}
+                  </td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
+                    ${d.orderly_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, isOrderly: '1'})" title="View OrderlyMeds consults">${fmtNum(d.orderly_count)}</span>` : '—'}
+                  </td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
+                    ${d.no_show_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, visitType: 'NO_SHOW'})" title="View No Show consults">${fmtNum(d.no_show_count)}</span>` : '—'}
+                  </td>
+                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
+                    ${d.other_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, visitType: '_OTHER'})" title="View other consults">${fmtNum(d.other_count)}</span>` : '—'}
+                  </td>
+                  <td class="py-3 px-3 text-right font-medium text-blue-600">
+                    <span class="drilldown-link" onclick="drillDownConsults({${drillDoc}})" title="View all consults contributing to CV amount">${fmt(d.total_carevalidate)}</span>
+                  </td>
+                  <td class="py-3 px-3 text-right font-medium text-purple-600">
+                    <span class="drilldown-link" onclick="drillDownConsults({${drillDoc}})" title="View all consults contributing to contractor pay">${fmt(d.total_contractor)}</span>
+                  </td>
                   <td class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="${d.contractor_id || ''}">—</td>
                   <td class="py-3 px-3 text-right font-medium ${d.margin >= 0 ? 'text-green-600' : 'text-red-600'}" data-doctor-margin="${d.contractor_id || ''}">${fmt(d.margin)}</td>
                   <td class="py-3 px-3 text-center">
@@ -581,20 +618,36 @@ function renderDashboard() {
                         <i class="fas fa-file-pdf mr-1"></i>Paystub
                       </button>` : '<span class="text-gray-300 text-xs">No match</span>'}
                   </td>
-                </tr>
-              `).join('')}
+                </tr>`
+              }).join('')}
             </tbody>
             <tfoot>
               <tr class="border-t-2 border-gray-200 bg-gray-50 font-bold text-sm">
                 <td class="py-3 px-3 text-gray-700">TOTAL</td>
-                <td class="py-3 px-3 text-right text-gray-700">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.case_count||0),0))}</td>
-                <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.async_count||0),0))}</td>
-                <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.sync_count||0),0))}</td>
-                <td class="py-3 px-3 text-right text-gray-600">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.orderly_count||0),0))}</td>
-                <td class="py-3 px-3 text-right text-gray-600">${(s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0) > 0 ? fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0)) : '—'}</td>
-                <td class="py-3 px-3 text-right text-gray-600">${(s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0) > 0 ? fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0)) : '—'}</td>
-                <td class="py-3 px-3 text-right text-blue-700">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_carevalidate||0),0))}</td>
-                <td class="py-3 px-3 text-right text-purple-700">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_contractor||0),0))}</td>
+                <td class="py-3 px-3 text-right text-gray-700">
+                  <span class="drilldown-link" onclick="drillDownConsults({})" title="View all consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.case_count||0),0))}</span>
+                </td>
+                <td class="py-3 px-3 text-right text-gray-600">
+                  <span class="drilldown-link" onclick="drillDownConsults({visitType: 'ASYNC_TEXT_EMAIL', isOrderly: '0'})" title="View all Async consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.async_count||0),0))}</span>
+                </td>
+                <td class="py-3 px-3 text-right text-gray-600">
+                  <span class="drilldown-link" onclick="drillDownConsults({isOrderly: '0', visitType: '_SYNC'})" title="View all Sync consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.sync_count||0),0))}</span>
+                </td>
+                <td class="py-3 px-3 text-right text-gray-600">
+                  <span class="drilldown-link" onclick="drillDownConsults({isOrderly: '1'})" title="View all OrderlyMeds consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.orderly_count||0),0))}</span>
+                </td>
+                <td class="py-3 px-3 text-right text-gray-600">
+                  ${(s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0) > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({visitType: 'NO_SHOW'})" title="View all No Show consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0))}</span>` : '—'}
+                </td>
+                <td class="py-3 px-3 text-right text-gray-600">
+                  ${(s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0) > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({visitType: '_OTHER'})" title="View other consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0))}</span>` : '—'}
+                </td>
+                <td class="py-3 px-3 text-right text-blue-700">
+                  <span class="drilldown-link" onclick="drillDownConsults({})" title="View all consults">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_carevalidate||0),0))}</span>
+                </td>
+                <td class="py-3 px-3 text-right text-purple-700">
+                  <span class="drilldown-link" onclick="drillDownConsults({})" title="View all consults">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_contractor||0),0))}</span>
+                </td>
                 <td class="py-3 px-3 text-right text-blue-700" id="dashTotalComm"><span class="text-gray-300">...</span></td>
                 <td class="py-3 px-3 text-right" id="dashTotalMargin"><span class="text-gray-300">...</span></td>
                 <td></td>
@@ -1087,11 +1140,58 @@ async function deletePeriod(periodKey, label) {
 // ════════════════════════════════════════════════════
 let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', isOrderly: '', organization: '', sortBy: 'decision_date', sortDir: 'desc' }
 
+// drillDownConsults — navigate to consults page pre-filtered
+// opts: { doctor, visitType, isOrderly }
+// Special visitType values:
+//   'SYNC'    → clears visitType filter but sets isOrderly=0 so only non-orderly syncs show (handled server-side via multiple VT options — we show a label instead)
+//   'ORDERLY' → sets isOrderly=1, clears visitType
+function drillDownConsults(opts = {}) {
+  const { doctor = '', visitType = '', isOrderly = '' } = opts
+  consultsState = {
+    page: 1, data: [], total: 0,
+    search: '',
+    doctor:       doctor,
+    visitType:    visitType,
+    isOrderly:    isOrderly,
+    organization: '',
+    sortBy: 'decision_date',
+    sortDir: 'desc'
+  }
+  navigate('consults')
+}
+
 async function renderConsults() {
   if (!state.currentPeriod) { $('mainContent').innerHTML = noDataMsg(); return }
 
+  // Build active-filter banner chips
+  const chips = []
+  if (consultsState.doctor)    chips.push(`<span class="drilldown-chip"><i class="fas fa-user-md mr-1"></i>${escHtml(consultsState.doctor)}<button onclick="clearDrillFilter('doctor')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  const vtChipLabel = { ASYNC_TEXT_EMAIL: 'Async', SYNC_PHONE: 'Sync Phone', SYNC_VIDEO: 'Sync Video', SYNC_IN_PERSON: 'Sync In-Person', NO_SHOW: 'No Show', _SYNC: 'All Sync', _OTHER: 'Other' }
+  if (consultsState.visitType) chips.push(`<span class="drilldown-chip"><i class="fas fa-tag mr-1"></i>${vtChipLabel[consultsState.visitType] || consultsState.visitType}<button onclick="clearDrillFilter('visitType')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  if (consultsState.isOrderly === '1') chips.push(`<span class="drilldown-chip badge-orderly"><i class="fas fa-pills mr-1"></i>OrderlyMeds Only<button onclick="clearDrillFilter('isOrderly')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  if (consultsState.isOrderly === '0') chips.push(`<span class="drilldown-chip"><i class="fas fa-filter mr-1"></i>Non-OrderlyMeds<button onclick="clearDrillFilter('isOrderly')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+
+  // vtFilter select: include _SYNC/_OTHER options when active
+  const vtOptions = [
+    { v: '',               l: 'All Types' },
+    { v: 'ASYNC_TEXT_EMAIL', l: 'Async' },
+    { v: '_SYNC',          l: 'All Sync (Phone/Video/In-Person)' },
+    { v: 'SYNC_PHONE',     l: 'Sync Phone' },
+    { v: 'SYNC_VIDEO',     l: 'Sync Video' },
+    { v: 'SYNC_IN_PERSON', l: 'Sync In-Person' },
+    { v: 'NO_SHOW',        l: 'No Show' },
+    { v: '_OTHER',         l: 'Other' },
+  ]
+
   $('mainContent').innerHTML = `
     <div class="card">
+      <!-- Drilldown banner -->
+      ${chips.length > 0 ? `
+      <div class="px-4 pt-3 pb-0 flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Filters:</span>
+        ${chips.join('')}
+        <button onclick="clearAllDrillFilters()" class="text-xs text-red-400 hover:text-red-600 ml-1 font-medium">Clear all</button>
+      </div>` : ''}
       <!-- Filters -->
       <div class="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-center">
         <input type="text" id="searchInput" placeholder="Search patient, case ID, org..." class="flex-1 min-w-[200px]" value="${consultsState.search}" oninput="debounceSearch(this.value)"/>
@@ -1099,13 +1199,8 @@ async function renderConsults() {
           <option value="">All Doctors</option>
           ${state.contractors.map(c => `<option value="${c.name}" ${consultsState.doctor === c.name ? 'selected' : ''}>${c.name}</option>`).join('')}
         </select>
-        <select id="vtFilter" onchange="filterConsults()" class="min-w-[140px]">
-          <option value="">All Types</option>
-          <option value="ASYNC_TEXT_EMAIL" ${consultsState.visitType==='ASYNC_TEXT_EMAIL'?'selected':''}>Async</option>
-          <option value="SYNC_PHONE" ${consultsState.visitType==='SYNC_PHONE'?'selected':''}>Sync Phone</option>
-          <option value="SYNC_VIDEO" ${consultsState.visitType==='SYNC_VIDEO'?'selected':''}>Sync Video</option>
-          <option value="SYNC_IN_PERSON" ${consultsState.visitType==='SYNC_IN_PERSON'?'selected':''}>Sync In-Person</option>
-          <option value="NO_SHOW" ${consultsState.visitType==='NO_SHOW'?'selected':''}>No Show</option>
+        <select id="vtFilter" onchange="filterConsults()" class="min-w-[160px]">
+          ${vtOptions.map(o => `<option value="${o.v}" ${consultsState.visitType === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
         </select>
         <select id="orderlyFilter" onchange="filterConsults()" class="min-w-[150px]">
           <option value="" ${consultsState.isOrderly===''?'selected':''}>All Consult Types</option>
@@ -1136,6 +1231,22 @@ async function renderConsults() {
     loadConsultsPage(1),
     loadOrgFilterOptions()
   ])
+}
+
+function clearDrillFilter(field) {
+  if (field === 'doctor')    consultsState.doctor    = ''
+  if (field === 'visitType') consultsState.visitType = ''
+  if (field === 'isOrderly') consultsState.isOrderly = ''
+  renderConsults()
+}
+
+function clearAllDrillFilters() {
+  consultsState.doctor    = ''
+  consultsState.visitType = ''
+  consultsState.isOrderly = ''
+  consultsState.organization = ''
+  consultsState.search    = ''
+  renderConsults()
 }
 
 async function loadOrgFilterOptions() {
@@ -1215,21 +1326,51 @@ async function loadConsultsPage(page) {
   })
   if (consultsState.search)       params.set('search',       consultsState.search)
   if (consultsState.doctor)       params.set('doctor_name',  consultsState.doctor)
-  if (consultsState.visitType)    params.set('visit_type',   consultsState.visitType)
-  if (consultsState.isOrderly)    params.set('is_orderly',   consultsState.isOrderly)
   if (consultsState.organization) params.set('organization', consultsState.organization)
+
+  // Special virtual visit types used for drilldown:
+  //   '_SYNC'  = SYNC_PHONE + SYNC_VIDEO + SYNC_IN_PERSON (non-orderly)
+  //   '_OTHER' = everything that is not ASYNC, SYNC variants, ORDERLY, or NO_SHOW
+  // These are filtered client-side after fetching without a VT filter.
+  const vt = consultsState.visitType
+  if (vt && vt !== '_SYNC' && vt !== '_OTHER') {
+    params.set('visit_type', vt)
+  }
+  if (consultsState.isOrderly !== '') {
+    params.set('is_orderly', consultsState.isOrderly)
+  }
 
   try {
     const result = await api('/api/consults?' + params)
-    consultsState.data = result.data
-    consultsState.total = result.total
-    renderConsultsTable(result.data, result.total, page)
+    let rows = result.data
+    let total = result.total
+
+    // Client-side post-filter for virtual types
+    if (vt === '_SYNC') {
+      const syncTypes = new Set(['SYNC_PHONE', 'SYNC_VIDEO', 'SYNC_IN_PERSON'])
+      rows = rows.filter(r => syncTypes.has(r.visit_type) && !r.is_orderly)
+      // total is approximate (server-paged); show exact count from filtered rows
+      total = result.total  // keep server total for pagination; table will show filtered
+    } else if (vt === '_OTHER') {
+      const knownTypes = new Set(['ASYNC_TEXT_EMAIL','SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON','NO_SHOW'])
+      rows = rows.filter(r => !knownTypes.has(r.visit_type) && !r.is_orderly)
+      total = result.total
+    }
+
+    consultsState.data = rows
+    consultsState.total = total
+    renderConsultsTable(rows, total, page)
   } catch(e) { showToast('Error loading consults: ' + e.message, 'error') }
 }
 
 function renderConsultsTable(rows, total, page) {
   renderConsultsHeader()
-  $('countLabel').textContent = `${fmtNum(total)} records`
+  const vt = consultsState.visitType
+  const isVirtual = vt === '_SYNC' || vt === '_OTHER'
+  const countText = isVirtual
+    ? `${fmtNum(rows.length)} records${rows.length < 50 ? '' : '+'}`
+    : `${fmtNum(total)} records`
+  $('countLabel').textContent = countText
   const tbody = $('consultsTbody')
   if (!tbody) return
   tbody.innerHTML = rows.map(r => `
@@ -1370,11 +1511,11 @@ function renderPayroll() {
               </div>
             </div>
             <div class="flex gap-2 text-xs mb-3 flex-wrap">
-              ${d.async_count > 0 ? `<span class="status-badge badge-async">${fmtNum(d.async_count)} Async</span>` : ''}
-              ${d.sync_count > 0 ? `<span class="status-badge badge-sync">${fmtNum(d.sync_count)} Sync</span>` : ''}
-              ${d.orderly_count > 0 ? `<span class="status-badge badge-orderly">${fmtNum(d.orderly_count)} Orderly</span>` : ''}
-              ${d.no_show_count > 0 ? `<span class="status-badge badge-default">${fmtNum(d.no_show_count)} No Show</span>` : ''}
-              ${d.other_count > 0 ? `<span class="status-badge badge-default">${fmtNum(d.other_count)} Other</span>` : ''}
+              ${d.async_count > 0 ? `<span class="status-badge badge-async cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: 'ASYNC_TEXT_EMAIL', isOrderly: '0'})" title="Drill into these Async consults">${fmtNum(d.async_count)} Async</span>` : ''}
+              ${d.sync_count > 0 ? `<span class="status-badge badge-sync cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: '_SYNC', isOrderly: '0'})" title="Drill into these Sync consults">${fmtNum(d.sync_count)} Sync</span>` : ''}
+              ${d.orderly_count > 0 ? `<span class="status-badge badge-orderly cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', isOrderly: '1'})" title="Drill into these OrderlyMeds consults">${fmtNum(d.orderly_count)} Orderly</span>` : ''}
+              ${d.no_show_count > 0 ? `<span class="status-badge badge-default cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: 'NO_SHOW'})" title="Drill into No Show consults">${fmtNum(d.no_show_count)} No Show</span>` : ''}
+              ${d.other_count > 0 ? `<span class="status-badge badge-default cursor-pointer hover:opacity-75 transition-opacity" onclick="event.stopPropagation(); drillDownConsults({doctor: '${escHtml(d.doctor_name)}', visitType: '_OTHER'})" title="Drill into other consults">${fmtNum(d.other_count)} Other</span>` : ''}
             </div>
             <div class="pt-3 border-t border-gray-100">
               <button onclick="event.stopPropagation(); openPaystubModal('${escHtml(pk)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')"
