@@ -546,7 +546,7 @@ function renderDashboard() {
         <div class="flex items-center justify-between mb-4">
           <h3 class="font-semibold text-gray-700 flex items-center gap-2">
             <i class="fas fa-table text-blue-500"></i> Payroll Summary by Doctor
-            ${s.flaggedCount > 0 ? `<span class="status-badge badge-flagged"><i class="fas fa-flag mr-1"></i>${s.flaggedCount} Flagged</span>` : ''}
+            ${s.flaggedCount > 0 ? '<span class="status-badge badge-flagged"><i class="fas fa-flag mr-1"></i>' + s.flaggedCount + ' Flagged</span>' : ''}
           </h3>
           <div class="flex gap-2">
             <button onclick="navigate('payroll')" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium">
@@ -582,43 +582,26 @@ function renderDashboard() {
               ${(s.byDoctor || []).map(d => {
                 const dn = d.doctor_name || ''
                 const drillDoc = dn ? (', doctor: \'' + escHtml(dn) + '\'') : ''
-                return `
-                <tr class="table-row border-b border-gray-50">
-                  <td class="py-3 px-3 font-medium text-gray-800">${d.doctor_name || '<i class="text-gray-400">Unmatched</i>'}</td>
-                  <td class="py-3 px-3 text-right text-gray-600">
-                    <span class="drilldown-link" onclick="drillDownConsults({${drillDoc}})" title="View all consults for this doctor">${fmtNum(d.case_count)}</span>
-                  </td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
-                    ${d.async_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, visitType: 'ASYNC_TEXT_EMAIL', isOrderly: '0'})" title="View Async consults">${fmtNum(d.async_count)}</span>` : '—'}
-                  </td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
-                    ${d.sync_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, isOrderly: '0', visitType: '_SYNC'})" title="View Sync consults">${fmtNum(d.sync_count)}</span>` : '—'}
-                  </td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
-                    ${d.orderly_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, isOrderly: '1'})" title="View OrderlyMeds consults">${fmtNum(d.orderly_count)}</span>` : '—'}
-                  </td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
-                    ${d.no_show_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, visitType: 'NO_SHOW'})" title="View No Show consults">${fmtNum(d.no_show_count)}</span>` : '—'}
-                  </td>
-                  <td class="py-3 px-3 text-right text-gray-500 text-xs">
-                    ${d.other_count > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({${drillDoc}, visitType: '_OTHER'})" title="View other consults">${fmtNum(d.other_count)}</span>` : '—'}
-                  </td>
-                  <td class="py-3 px-3 text-right font-medium text-blue-600">
-                    <span class="drilldown-link" onclick="drillDownConsults({${drillDoc}})" title="View all consults contributing to CV amount">${fmt(d.total_carevalidate)}</span>
-                  </td>
-                  <td class="py-3 px-3 text-right font-medium text-purple-600">
-                    <span class="drilldown-link" onclick="drillDownConsults({${drillDoc}})" title="View all consults contributing to contractor pay">${fmt(d.total_contractor)}</span>
-                  </td>
-                  <td class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="${d.contractor_id || ''}">—</td>
-                  <td class="py-3 px-3 text-right font-medium ${d.margin >= 0 ? 'text-green-600' : 'text-red-600'}" data-doctor-margin="${d.contractor_id || ''}">${fmt(d.margin)}</td>
-                  <td class="py-3 px-3 text-center">
-                    ${d.contractor_id ? `
-                      <button onclick="openPaystubModal('${escHtml(state.currentPeriod.period_key)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')" 
-                        class="text-xs px-3 py-1.5 rounded-lg btn-outline font-medium">
-                        <i class="fas fa-file-pdf mr-1"></i>Paystub
-                      </button>` : '<span class="text-gray-300 text-xs">No match</span>'}
-                  </td>
-                </tr>`
+                const drillAll   = 'drillDownConsults({' + drillDoc.slice(2) + '})'
+                const drillAsync = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "visitType: 'ASYNC_TEXT_EMAIL', isOrderly: '0'})"
+                const drillSync  = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "visitType: '_SYNC', isOrderly: '0'})"
+                const drillOrd   = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "isOrderly: '1'})"
+                const drillNS    = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "visitType: 'NO_SHOW'})"
+                const drillOther = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "visitType: '_OTHER'})"
+                return '<tr class="table-row border-b border-gray-50">' +
+                  '<td class="py-3 px-3 font-medium text-gray-800">' + (d.doctor_name || '<i class="text-gray-400">Unmatched</i>') + '</td>' +
+                  '<td class="py-3 px-3 text-right text-gray-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults for this doctor">' + fmtNum(d.case_count) + '</span></td>' +
+                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.async_count > 0 ? '<span class="drilldown-link" onclick="' + drillAsync + '" title="View Async consults">' + fmtNum(d.async_count) + '</span>' : '—') + '</td>' +
+                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.sync_count > 0 ? '<span class="drilldown-link" onclick="' + drillSync + '" title="View Sync consults">' + fmtNum(d.sync_count) + '</span>' : '—') + '</td>' +
+                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.orderly_count > 0 ? '<span class="drilldown-link" onclick="' + drillOrd + '" title="View OrderlyMeds consults">' + fmtNum(d.orderly_count) + '</span>' : '—') + '</td>' +
+                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.no_show_count > 0 ? '<span class="drilldown-link" onclick="' + drillNS + '" title="View No Show consults">' + fmtNum(d.no_show_count) + '</span>' : '—') + '</td>' +
+                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.other_count > 0 ? '<span class="drilldown-link" onclick="' + drillOther + '" title="View other consults">' + fmtNum(d.other_count) + '</span>' : '—') + '</td>' +
+                  '<td class="py-3 px-3 text-right font-medium text-blue-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_carevalidate) + '</span></td>' +
+                  '<td class="py-3 px-3 text-right font-medium text-purple-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_contractor) + '</span></td>' +
+                  '<td class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="' + (d.contractor_id || '') + '">—</td>' +
+                  '<td class="py-3 px-3 text-right font-medium ' + (d.margin >= 0 ? 'text-green-600' : 'text-red-600') + '" data-doctor-margin="' + (d.contractor_id || '') + '">' + fmt(d.margin) + '</td>' +
+                  '<td class="py-3 px-3 text-center">' + (d.contractor_id ? '<button onclick="openPaystubModal(\'' + escHtml(state.currentPeriod.period_key) + '\', ' + d.contractor_id + ', \'' + escHtml(d.doctor_name) + '\')" class="text-xs px-3 py-1.5 rounded-lg btn-outline font-medium"><i class="fas fa-file-pdf mr-1"></i>Paystub</button>' : '<span class="text-gray-300 text-xs">No match</span>') + '</td>' +
+                  '</tr>'
               }).join('')}
             </tbody>
             <tfoot>
@@ -637,10 +620,10 @@ function renderDashboard() {
                   <span class="drilldown-link" onclick="drillDownConsults({isOrderly: '1'})" title="View all OrderlyMeds consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.orderly_count||0),0))}</span>
                 </td>
                 <td class="py-3 px-3 text-right text-gray-600">
-                  ${(s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0) > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({visitType: 'NO_SHOW'})" title="View all No Show consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0))}</span>` : '—'}
+                  ${(s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0) > 0 ? '<span class="drilldown-link" onclick="drillDownConsults({visitType: \'NO_SHOW\'})" title="View all No Show consults">' + fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0)) + '</span>' : '—'}
                 </td>
                 <td class="py-3 px-3 text-right text-gray-600">
-                  ${(s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0) > 0 ? `<span class="drilldown-link" onclick="drillDownConsults({visitType: '_OTHER'})" title="View other consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0))}</span>` : '—'}
+                  ${(s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0) > 0 ? '<span class="drilldown-link" onclick="drillDownConsults({visitType: \'_OTHER\'})" title="View other consults">' + fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0)) + '</span>' : '—'}
                 </td>
                 <td class="py-3 px-3 text-right text-blue-700">
                   <span class="drilldown-link" onclick="drillDownConsults({})" title="View all consults">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_carevalidate||0),0))}</span>
