@@ -680,7 +680,7 @@ async function buildSummary(db: D1Database, where: string, params: any[]) {
       SELECT c.doctor_name, ct.id as contractor_id, ct.company, ct.ein_ssn,
         COUNT(*) as case_count,
         SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
-        SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
+        SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
         SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
         SUM(c.carevalidate_fee) as total_carevalidate,
         SUM(c.contractor_fee) as total_contractor,
@@ -763,8 +763,8 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
       COUNT(*) as total_cases, SUM(contractor_fee) as total_pay,
       SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
       SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN contractor_fee ELSE 0 END) as async_pay,
-      SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
-      SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
+      SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
+      SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
       SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
       SUM(CASE WHEN is_orderly=1 THEN contractor_fee ELSE 0 END) as orderly_pay
     FROM consults c
@@ -801,8 +801,8 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
     SELECT COUNT(*) as total_cases, SUM(contractor_fee) as total_pay,
       SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
       SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN contractor_fee ELSE 0 END) as async_pay,
-      SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
-      SUM(CASE WHEN visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
+      SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
+      SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
       SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
       SUM(CASE WHEN is_orderly=1 THEN contractor_fee ELSE 0 END) as orderly_pay
     FROM consults WHERE session_id=? AND contractor_id=?
@@ -852,8 +852,8 @@ async function calcCommission(db: D1Database, pk: string) {
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END)                  as async_cases,
       SUM(CASE WHEN c.is_orderly=1 THEN c.carevalidate_fee ELSE 0 END)                                     as orderly_cv,
       SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END)                                                      as orderly_cases,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.carevalidate_fee ELSE 0 END) as sync_cv,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)                  as sync_cases
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.carevalidate_fee ELSE 0 END) as sync_cv,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)                  as sync_cases
     FROM consults c
     LEFT JOIN upload_sessions s  ON c.session_id = s.id
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
@@ -939,7 +939,7 @@ app.get('/api/export/gusto/period/:period_key', async (c) => {
       s.period_label,
       COUNT(*) as total_cases, SUM(c.contractor_fee) as total_pay,
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
       SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count
     FROM consults c
     LEFT JOIN contractors ct ON c.contractor_id = ct.id
@@ -958,8 +958,8 @@ app.get('/api/export/gusto/:session_id', async (c) => {
       COUNT(*) as total_cases, SUM(c.contractor_fee) as total_pay,
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN c.contractor_fee ELSE 0 END) as async_pay,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.contractor_fee ELSE 0 END) as sync_pay,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.contractor_fee ELSE 0 END) as sync_pay,
       SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
       SUM(CASE WHEN c.is_orderly=1 THEN c.contractor_fee ELSE 0 END) as orderly_pay
     FROM consults c LEFT JOIN contractors ct ON c.contractor_id = ct.id
@@ -1003,9 +1003,9 @@ app.get('/api/cv-summary/period/:period_key', async (c) => {
                THEN 1 ELSE 0 END)                                     AS async_cases,
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL'
                THEN c.carevalidate_fee ELSE 0 END)                    AS async_cv,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
                THEN 1 ELSE 0 END)                                     AS sync_cases,
-      SUM(CASE WHEN c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')
                THEN c.carevalidate_fee ELSE 0 END)                    AS sync_cv,
       SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END)                 AS orderly_cases,
       SUM(CASE WHEN c.is_orderly=1 THEN c.carevalidate_fee ELSE 0 END) AS orderly_cv
