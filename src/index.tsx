@@ -150,11 +150,13 @@ app.post('/api/recalculate', async (c) => {
     ctRatesMap[(r as any).contractor_type][(r as any).visit_type] = (r as any).contractor_rate
   }
 
-  // Load contractors with their types
+  // Load contractors with their types — also build name→id map for re-matching unlinked consults
   const contractorsResult = await c.env.DB.prepare('SELECT id, name, contractor_type FROM contractors WHERE is_active=1').all()
   const contractorTypeMap: Record<number, string> = {}
+  const contractorNameMap: Record<string, number> = {}  // doctor_name (lowercase) → contractor id
   for (const ct of contractorsResult.results as any[]) {
     contractorTypeMap[(ct as any).id] = (ct as any).contractor_type || 'regular'
+    contractorNameMap[(ct as any).name.toLowerCase().trim()] = (ct as any).id
   }
 
   // Fetch all consults (not overridden), optionally filtered by period
@@ -169,7 +171,7 @@ app.post('/api/recalculate', async (c) => {
 
   while (true) {
     const rows = await c.env.DB.prepare(
-      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.session_id
+      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.doctor_name, c.session_id
        FROM consults c ${whereClause} LIMIT ${PAGE_SIZE} OFFSET ${offset}`
     ).bind(...params).all()
 
@@ -180,7 +182,15 @@ app.post('/api/recalculate', async (c) => {
     for (const row of rows.results as any[]) {
       const vt: string = row.visit_type || ''
       const isOrderly: boolean = row.is_orderly === 1
-      const ctype: string = contractorTypeMap[row.contractor_id] || 'regular'
+
+      // Re-match contractor_id if missing (contractor added after upload)
+      let contractorId: number | null = row.contractor_id
+      if (!contractorId && row.doctor_name) {
+        const matched = contractorNameMap[(row.doctor_name as string).toLowerCase().trim()]
+        if (matched) contractorId = matched
+      }
+
+      const ctype: string = (contractorId ? contractorTypeMap[contractorId] : null) || 'regular'
 
       // CV fee: orderly always $17, else lookup by visit_type
       let cvFee = 0
@@ -198,10 +208,18 @@ app.post('/api/recalculate', async (c) => {
         ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
       }
 
-      stmts.push(
-        c.env.DB.prepare('UPDATE consults SET carevalidate_fee=?, contractor_fee=? WHERE id=?')
-          .bind(cvFee, ctFee, row.id)
-      )
+      // Update fees and re-link contractor_id if it changed
+      if (contractorId && contractorId !== row.contractor_id) {
+        stmts.push(
+          c.env.DB.prepare('UPDATE consults SET carevalidate_fee=?, contractor_fee=?, contractor_id=? WHERE id=?')
+            .bind(cvFee, ctFee, contractorId, row.id)
+        )
+      } else {
+        stmts.push(
+          c.env.DB.prepare('UPDATE consults SET carevalidate_fee=?, contractor_fee=? WHERE id=?')
+            .bind(cvFee, ctFee, row.id)
+        )
+      }
       updatedCount++
     }
 
