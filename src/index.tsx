@@ -701,6 +701,11 @@ async function buildSummary(db: D1Database, where: string, params: any[]) {
         SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
         SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
         SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count,
+        COUNT(*)
+          - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END)
+          - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)
+          - SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END)
+          - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count,
         SUM(c.carevalidate_fee) as total_carevalidate,
         SUM(c.contractor_fee) as total_contractor,
         SUM(c.carevalidate_fee) - SUM(c.contractor_fee) as margin
@@ -786,7 +791,12 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
       SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
       SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
       SUM(CASE WHEN is_orderly=1 THEN contractor_fee ELSE 0 END) as orderly_pay,
-      SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count
+      SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count,
+      COUNT(*)
+        - SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count
     FROM consults c
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE s.period_key=? AND c.contractor_id=?
@@ -825,7 +835,12 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
       SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN contractor_fee ELSE 0 END) as sync_pay,
       SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
       SUM(CASE WHEN is_orderly=1 THEN contractor_fee ELSE 0 END) as orderly_pay,
-      SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count
+      SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count,
+      COUNT(*)
+        - SUM(CASE WHEN is_orderly=0 AND visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN is_orderly=0 AND visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count
     FROM consults WHERE session_id=? AND contractor_id=?
   `).bind(sid, cid).first()
   return c.json({ contractor, session, consults: consults.results, summary })
@@ -962,7 +977,12 @@ app.get('/api/export/gusto/period/:period_key', async (c) => {
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
       SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
-      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count,
+      COUNT(*)
+        - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count
     FROM consults c
     LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
@@ -984,7 +1004,12 @@ app.get('/api/export/gusto/:session_id', async (c) => {
       SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN c.contractor_fee ELSE 0 END) as sync_pay,
       SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count,
       SUM(CASE WHEN c.is_orderly=1 THEN c.contractor_fee ELSE 0 END) as orderly_pay,
-      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as no_show_count,
+      COUNT(*)
+        - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END)
+        - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count
     FROM consults c LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE c.session_id=? GROUP BY c.contractor_id ORDER BY ct.name
