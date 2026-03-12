@@ -556,7 +556,7 @@ function renderDashboard() {
           </div>
           <div>
             <div class="text-xl md:text-2xl font-bold text-gray-800 leading-tight break-all">${fmtNum(t.total_cases)}</div>
-            <div class="text-xs text-gray-500 font-medium mt-0.5">Total Cases <i class="fas fa-external-link-alt text-gray-300 ml-1"></i></div>
+            <div class="text-xs text-gray-500 font-medium mt-0.5">Total Approved Cases <i class="fas fa-external-link-alt text-gray-300 ml-1"></i></div>
           </div>
         </div>
         <div class="card p-3 md:p-4 flex flex-col gap-2 cursor-pointer hover:shadow-md transition-shadow" onclick="drillDownConsults({})" title="Click to view all consults contributing to CV amount">
@@ -2263,7 +2263,7 @@ function renderPaystubContent(data) {
             </div>
             <div>
               <div class="text-2xl font-bold text-gray-700">${fmtNum(sum.total_cases)}</div>
-              <div class="text-xs text-gray-500">Total Cases</div>
+              <div class="text-xs text-gray-500">Total Approved Cases</div>
             </div>
           </div>
         </div>
@@ -3106,7 +3106,7 @@ async function exportDashboardPDF() {
     const adjMargin = (t.total_carevalidate || 0) - (t.total_contractor || 0) - commTotal
     const adjPct = (t.total_carevalidate || 0) > 0 ? ((adjMargin / t.total_carevalidate) * 100).toFixed(1) : 0
     const kpis = [
-      { label: 'Total Cases',        value: fmtNum(t.total_cases),       color: [201,168,76] },
+      { label: 'Total Approved Cases', value: fmtNum(t.total_cases),       color: [201,168,76] },
       { label: 'CV Owes Us',         value: fmt(t.total_carevalidate),   color: [59,130,246] },
       { label: 'We Owe Contractors', value: fmt(t.total_contractor),     color: [139,92,246] },
       { label: 'Chris Commission',   value: fmt(commTotal),              color: [59,130,246] },
