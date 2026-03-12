@@ -3146,23 +3146,38 @@ async function exportDashboardPDF() {
       const totalOther  = doctors.reduce((a, d) => a + (d.other_count     || 0), 0)
 
       // ── Build column list respecting dashColVisibility (Actions col excluded from PDF) ──
-      // All PDF columns in order: Doctor (always), then data cols keyed by DASH_COLS key
+      // Relative weight: Doctor always gets 3 units; count cols 1 unit each; money cols 1.6 units each
       const PDF_COL_DEFS = [
-        { key: 'cases',   label: 'Cases',            halign:'right', cellWidth:13 },
-        { key: 'async',   label: 'Async',            halign:'right', cellWidth:11 },
-        { key: 'sync',    label: 'Sync',             halign:'right', cellWidth:11 },
-        { key: 'orderly', label: 'Orderly',          halign:'right', cellWidth:11 },
-        { key: 'noshow',  label: 'No Show',          halign:'right', cellWidth:11 },
-        { key: 'other',   label: 'Other',            halign:'right', cellWidth:11 },
-        { key: 'cv',      label: 'CV Pays Us',       halign:'right', cellWidth:18, textColor:[30,80,180] },
-        { key: 'pay',     label: 'We Pay',           halign:'right', cellWidth:18, textColor:[100,40,160] },
-        { key: 'comm',    label: 'Chris Comm',       halign:'right', cellWidth:18, textColor:[30,80,180] },
-        { key: 'margin',  label: 'Margin',           halign:'right', cellWidth:18 },
+        { key: 'cases',   label: 'Cases',       halign:'right', weight:1,   textColor:null },
+        { key: 'async',   label: 'Async',       halign:'right', weight:1,   textColor:null },
+        { key: 'sync',    label: 'Sync',        halign:'right', weight:1,   textColor:null },
+        { key: 'orderly', label: 'Orderly',     halign:'right', weight:1,   textColor:null },
+        { key: 'noshow',  label: 'No Show',     halign:'right', weight:1,   textColor:null },
+        { key: 'other',   label: 'Other',       halign:'right', weight:1,   textColor:null },
+        { key: 'cv',      label: 'CV Pays Us',  halign:'right', weight:1.6, textColor:[30,80,180] },
+        { key: 'pay',     label: 'We Pay',      halign:'right', weight:1.6, textColor:[100,40,160] },
+        { key: 'comm',    label: 'Chris Comm',  halign:'right', weight:1.6, textColor:[30,80,180] },
+        { key: 'margin',  label: 'Margin',      halign:'right', weight:1.6, textColor:null },
       ]
       // Filter to only visible columns
       const visiblePdfCols = PDF_COL_DEFS.filter(c => dashColVisibility[c.key] !== false)
       // Track which col index is 'margin' (for green/red coloring)
       const marginPdfIdx = visiblePdfCols.findIndex(c => c.key === 'margin')
+
+      // ── Compute widths so they fill the full available table width ──
+      const tableW = PW - ML - MR  // e.g. 191.9 mm
+      const doctorWeight = 3
+      const totalWeight = doctorWeight + visiblePdfCols.reduce((s, c) => s + c.weight, 0)
+      const unitW = tableW / totalWeight
+      const doctorW = Math.floor(unitW * doctorWeight * 10) / 10
+      // Assign each data col its proportional width; last col gets any remaining mm to avoid rounding gap
+      const dataWidths = visiblePdfCols.map((c, i) => {
+        if (i === visiblePdfCols.length - 1) {
+          const used = doctorW + visiblePdfCols.slice(0, i).reduce((s, c2, j) => s + Math.floor(unitW * c2.weight * 10) / 10, 0)
+          return Math.round((tableW - used) * 10) / 10
+        }
+        return Math.floor(unitW * c.weight * 10) / 10
+      })
 
       const getColVal = (key, d, comm) => {
         switch(key) {
@@ -3206,10 +3221,10 @@ async function exportDashboardPDF() {
       const totalMargin = (totalCV) - (totalPay) - totalComm
       docRows.push(['TOTAL', ...visiblePdfCols.map(c => getTotalVal(c.key))])
 
-      // Build columnStyles dynamically
-      const colStyles = { 0: { cellWidth: 32 } }
+      // Build columnStyles dynamically using computed widths
+      const colStyles = { 0: { cellWidth: doctorW, halign: 'left' } }
       visiblePdfCols.forEach((c, i) => {
-        const s = { halign: c.halign, cellWidth: c.cellWidth }
+        const s = { halign: c.halign, cellWidth: dataWidths[i] }
         if (c.textColor) s.textColor = c.textColor
         colStyles[i + 1] = s
       })
@@ -3225,7 +3240,7 @@ async function exportDashboardPDF() {
         styles: { fontSize:7, cellPadding:2, overflow:'ellipsize' },
         columnStyles: colStyles,
         margin: { left: ML, right: MR },
-        tableWidth: PW - ML - MR,
+        tableWidth: tableW,
         didParseCell: (data) => {
           // Color margin cells green/red
           if (marginPdfIdx >= 0 && data.column.index === marginPdfIdx + 1 && data.section !== 'head') {
