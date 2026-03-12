@@ -698,6 +698,30 @@ app.put('/api/consults/:id', async (c) => {
 })
 
 // ──────────────────────────────────────────────
+// DELETE /api/consults/:id  — remove a single consult, recompute session totals
+// ──────────────────────────────────────────────
+app.delete('/api/consults/:id', async (c) => {
+  const id = c.req.param('id')
+  // Grab session_id before deletion so we can recompute totals
+  const existing = await c.env.DB.prepare('SELECT session_id FROM consults WHERE id=?').bind(id).first() as any
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+
+  await c.env.DB.prepare('DELETE FROM consults WHERE id=?').bind(id).run()
+
+  // Recompute session totals
+  if (existing.session_id) {
+    const totals = await c.env.DB.prepare(
+      'SELECT COUNT(*) as tc, SUM(carevalidate_fee) as cv, SUM(contractor_fee) as ct FROM consults WHERE session_id=?'
+    ).bind(existing.session_id).first() as any
+    await c.env.DB.prepare(
+      'UPDATE upload_sessions SET total_cases=?, total_carevalidate_amount=?, total_contractor_amount=? WHERE id=?'
+    ).bind(totals?.tc || 0, totals?.cv || 0, totals?.ct || 0, existing.session_id).run()
+  }
+
+  return c.json({ ok: true })
+})
+
+// ──────────────────────────────────────────────
 // SUMMARY — accepts period_key (aggregates all files) OR session_id
 // ──────────────────────────────────────────────
 async function buildSummary(db: D1Database, where: string, params: any[]) {

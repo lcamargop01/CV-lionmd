@@ -1087,35 +1087,99 @@ async function processUploadQueue() {
 
 // Delete a single file from a period
 async function deleteFile(sessionId, label) {
-  if (!confirm(`Remove file "${label}"? Its cases will be deleted from this period.`)) return
-  await api(`/api/sessions/${sessionId}`, { method: 'DELETE' })
-  state.periods = await api('/api/sessions')
-  if (state.currentPeriod) {
-    const stillExists = state.periods.find(p => p.period_key === state.currentPeriod.period_key)
-    if (stillExists) {
-      await selectPeriod(state.currentPeriod.period_key)
-    } else {
-      state.currentPeriod = state.periods[0] || null
-      state.currentSummary = null
+  document.getElementById('deleteFileModal')?.remove()
+  const html = `
+  <div id="deleteFileModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div class="p-6">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-file-times text-red-500 text-lg"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-gray-800">Remove File?</h3>
+            <p class="text-sm text-gray-500 mt-0.5">All cases in this file will be deleted.</p>
+          </div>
+        </div>
+        <div class="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-5">
+          <p class="text-sm text-red-700 font-medium break-all">${escHtml(label)}</p>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button onclick="document.getElementById('deleteFileModal').remove()" class="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+          <button onclick="executeDeleteFile(${sessionId})" class="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">
+            <i class="fas fa-trash mr-1.5"></i>Remove File
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`
+  document.body.insertAdjacentHTML('beforeend', html)
+}
+
+async function executeDeleteFile(sessionId) {
+  document.getElementById('deleteFileModal')?.remove()
+  try {
+    await api(`/api/sessions/${sessionId}`, { method: 'DELETE' })
+    state.periods = await api('/api/sessions')
+    if (state.currentPeriod) {
+      const stillExists = state.periods.find(p => p.period_key === state.currentPeriod.period_key)
+      if (stillExists) {
+        await selectPeriod(state.currentPeriod.period_key)
+      } else {
+        state.currentPeriod = state.periods[0] || null
+        state.currentSummary = null
+      }
     }
-  }
-  populateSessionSelector()
-  showToast('File removed', 'info')
-  renderUpload()
+    populateSessionSelector()
+    showToast('File removed', 'info')
+    renderUpload()
+  } catch(e) { showToast('Error: ' + e.message, 'error') }
 }
 
 // Delete entire period (all files)
 async function deletePeriod(periodKey, label) {
-  if (!confirm(`Delete ALL data for "${label}"? This removes all files for this month.`)) return
-  await api(`/api/periods/${periodKey}`, { method: 'DELETE' })
-  state.periods = await api('/api/sessions')
-  if (state.currentPeriod?.period_key === periodKey) {
-    state.currentPeriod = state.periods[0] || null
-    state.currentSummary = null
-  }
-  populateSessionSelector()
-  showToast(`Deleted ${label}`, 'info')
-  renderUpload()
+  document.getElementById('deletePeriodModal')?.remove()
+  const html = `
+  <div id="deletePeriodModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div class="p-6">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-calendar-times text-red-500 text-lg"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-gray-800">Delete Entire Period?</h3>
+            <p class="text-sm text-gray-500 mt-0.5">All files and cases for this month will be permanently deleted.</p>
+          </div>
+        </div>
+        <div class="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-5">
+          <p class="text-sm text-red-700 font-medium">${escHtml(label)}</p>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button onclick="document.getElementById('deletePeriodModal').remove()" class="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+          <button onclick="executeDeletePeriod('${escHtml(periodKey)}','${escHtml(label)}')" class="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">
+            <i class="fas fa-trash mr-1.5"></i>Delete Period
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`
+  document.body.insertAdjacentHTML('beforeend', html)
+}
+
+async function executeDeletePeriod(periodKey, label) {
+  document.getElementById('deletePeriodModal')?.remove()
+  try {
+    await api(`/api/periods/${periodKey}`, { method: 'DELETE' })
+    state.periods = await api('/api/sessions')
+    if (state.currentPeriod?.period_key === periodKey) {
+      state.currentPeriod = state.periods[0] || null
+      state.currentSummary = null
+    }
+    populateSessionSelector()
+    showToast(`Deleted ${label}`, 'info')
+    renderUpload()
+  } catch(e) { showToast('Error: ' + e.message, 'error') }
 }
 
 // ════════════════════════════════════════════════════
@@ -1281,11 +1345,11 @@ function renderConsultsHeader() {
     { key: 'carevalidate_fee', label: 'CV Fee',          align: 'right',  nowrap: true },
     { key: 'contractor_fee',   label: 'Contractor Fee',  align: 'right',  nowrap: true },
     { key: 'decision_status',  label: 'Status',          align: 'center', nowrap: true },
-    { key: null,               label: 'Edit',            align: 'center', nowrap: true },
+    { key: null,               label: 'Actions',         align: 'center', nowrap: true },
   ]
   headRow.innerHTML = cols.map(col => {
     if (!col.key) {
-      return `<th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Edit</th>`
+      return `<th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs whitespace-nowrap">Actions</th>`
     }
     const isActive = consultsState.sortBy === col.key
     const arrow = isActive
@@ -1349,9 +1413,14 @@ function renderConsultsTable(rows, total, page) {
       <td class="px-4 py-2.5 text-right font-medium text-purple-600">${fmt(r.contractor_fee)}</td>
       <td class="px-4 py-2.5 text-center"><span class="status-badge badge-approved">${r.decision_status || 'Approved'}</span></td>
       <td class="px-4 py-2.5 text-center">
-        <button onclick="openEditConsult(${r.id})" class="text-gray-400 hover:text-blue-600 transition-colors" title="Edit record">
-          <i class="fas fa-pen text-xs"></i>
-        </button>
+        <div class="flex items-center justify-center gap-2">
+          <button onclick="openEditConsult(${r.id})" class="text-gray-400 hover:text-blue-600 transition-colors p-1 rounded" title="Edit record">
+            <i class="fas fa-pen text-xs"></i>
+          </button>
+          <button onclick="confirmDeleteConsult(${r.id}, '${(r.case_id_short||r.case_id||'').replace(/'/g,'')}', '${(r.patient_name||'').replace(/'/g,'')}')" class="text-gray-300 hover:text-red-500 transition-colors p-1 rounded" title="Delete record">
+            <i class="fas fa-trash text-xs"></i>
+          </button>
+        </div>
       </td>
     </tr>`).join('') || '<tr><td colspan="10" class="text-center py-8 text-gray-400">No records found</td></tr>'
 
@@ -1755,8 +1824,58 @@ async function saveEditConsult(id) {
 }
 
 // ════════════════════════════════════════════════════
-// REFRESH AFTER CONSULT UPDATE
+// DELETE CONSULT
 // ════════════════════════════════════════════════════
+function confirmDeleteConsult(id, caseId, patientName) {
+  // Remove any existing modal
+  document.getElementById('deleteConsultModal')?.remove()
+
+  const label = [caseId, patientName].filter(Boolean).join(' · ') || 'this record'
+  const html = `
+  <div id="deleteConsultModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div class="p-6">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-trash text-red-500 text-lg"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-gray-800">Delete Record?</h3>
+            <p class="text-sm text-gray-500 mt-0.5">This cannot be undone.</p>
+          </div>
+        </div>
+        <div class="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-5">
+          <p class="text-sm text-red-700 font-medium break-all">${escHtml(label)}</p>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button onclick="document.getElementById('deleteConsultModal').remove()" class="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+          <button onclick="executeDeleteConsult(${id})" class="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">
+            <i class="fas fa-trash mr-1.5"></i>Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`
+  document.body.insertAdjacentHTML('beforeend', html)
+}
+
+async function executeDeleteConsult(id) {
+  document.getElementById('deleteConsultModal')?.remove()
+  try {
+    await api(`/api/consults/${id}`, { method: 'DELETE' })
+    showToast('Record deleted', 'success')
+    // If we just deleted the last item on a page > 1, go back one page
+    const newTotal = (consultsState.total || 1) - 1
+    const maxPage = Math.max(1, Math.ceil(newTotal / 50))
+    const targetPage = Math.min(consultsState.page, maxPage)
+    await loadConsultsPage(targetPage)
+    await refreshAfterConsultUpdate()
+  } catch(e) {
+    showToast('Error deleting: ' + e.message, 'error')
+  }
+}
+
+
 async function refreshAfterConsultUpdate() {
   if (!state.currentPeriod) return
   const pk = state.currentPeriod.period_key
