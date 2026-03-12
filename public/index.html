@@ -1185,7 +1185,7 @@ async function executeDeletePeriod(periodKey, label) {
 // ════════════════════════════════════════════════════
 // CONSULTS TABLE PAGE
 // ════════════════════════════════════════════════════
-let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', isOrderly: '', organization: '', sortBy: 'decision_date', sortDir: 'desc' }
+let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', isOrderly: '', organization: '', isFlagged: '', decisionStatus: '', sortBy: 'decision_date', sortDir: 'desc' }
 
 // drillDownConsults — navigate to consults page pre-filtered
 // opts: { doctor, visitType, isOrderly }
@@ -1193,14 +1193,16 @@ let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visit
 //   'SYNC'    → clears visitType filter but sets isOrderly=0 so only non-orderly syncs show (handled server-side via multiple VT options — we show a label instead)
 //   'ORDERLY' → sets isOrderly=1, clears visitType
 function drillDownConsults(opts = {}) {
-  const { doctor = '', visitType = '', isOrderly = '' } = opts
+  const { doctor = '', visitType = '', isOrderly = '', isFlagged = '', decisionStatus = '' } = opts
   consultsState = {
     page: 1, data: [], total: 0,
     search: '',
-    doctor:       doctor,
-    visitType:    visitType,
-    isOrderly:    isOrderly,
-    organization: '',
+    doctor:         doctor,
+    visitType:      visitType,
+    isOrderly:      isOrderly,
+    organization:   '',
+    isFlagged:      isFlagged,
+    decisionStatus: decisionStatus,
     sortBy: 'decision_date',
     sortDir: 'desc'
   }
@@ -1217,6 +1219,9 @@ async function renderConsults() {
   if (consultsState.visitType) chips.push(`<span class="drilldown-chip"><i class="fas fa-tag mr-1"></i>${vtChipLabel[consultsState.visitType] || consultsState.visitType}<button onclick="clearDrillFilter('visitType')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
   if (consultsState.isOrderly === '1') chips.push(`<span class="drilldown-chip badge-orderly"><i class="fas fa-pills mr-1"></i>OrderlyMeds Only<button onclick="clearDrillFilter('isOrderly')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
   if (consultsState.isOrderly === '0') chips.push(`<span class="drilldown-chip"><i class="fas fa-filter mr-1"></i>Non-OrderlyMeds<button onclick="clearDrillFilter('isOrderly')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  if (consultsState.isFlagged === '1') chips.push(`<span class="drilldown-chip" style="background:#fef9c3;color:#92400e;border-color:#fde68a"><i class="fas fa-flag mr-1"></i>Flagged Only<button onclick="clearDrillFilter('isFlagged')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  if (consultsState.isFlagged === '0') chips.push(`<span class="drilldown-chip"><i class="fas fa-flag mr-1 text-gray-400"></i>Not Flagged<button onclick="clearDrillFilter('isFlagged')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  if (consultsState.decisionStatus) chips.push(`<span class="drilldown-chip"><i class="fas fa-check-circle mr-1"></i>${escHtml(consultsState.decisionStatus)}<button onclick="clearDrillFilter('decisionStatus')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
 
   // vtFilter select: include _SYNC/_OTHER options when active
   const vtOptions = [
@@ -1254,6 +1259,17 @@ async function renderConsults() {
           <option value="1" ${consultsState.isOrderly==='1'?'selected':''}>OrderlyMeds Only</option>
           <option value="0" ${consultsState.isOrderly==='0'?'selected':''}>Non-OrderlyMeds</option>
         </select>
+        <select id="flagFilter" onchange="filterConsults()" class="min-w-[140px]">
+          <option value="" ${consultsState.isFlagged===''?'selected':''}>All Flag Status</option>
+          <option value="1" ${consultsState.isFlagged==='1'?'selected':''}>🚩 Flagged Only</option>
+          <option value="0" ${consultsState.isFlagged==='0'?'selected':''}>Not Flagged</option>
+        </select>
+        <select id="statusFilter" onchange="filterConsults()" class="min-w-[140px]">
+          <option value="" ${consultsState.decisionStatus===''?'selected':''}>All Statuses</option>
+          <option value="Approved" ${consultsState.decisionStatus==='Approved'?'selected':''}>Approved</option>
+          <option value="Denied" ${consultsState.decisionStatus==='Denied'?'selected':''}>Denied</option>
+          <option value="Pending" ${consultsState.decisionStatus==='Pending'?'selected':''}>Pending</option>
+        </select>
         <select id="orgFilter" onchange="filterConsults()" class="min-w-[180px]">
           <option value="">All Organizations</option>
         </select>
@@ -1281,18 +1297,22 @@ async function renderConsults() {
 }
 
 function clearDrillFilter(field) {
-  if (field === 'doctor')    consultsState.doctor    = ''
-  if (field === 'visitType') consultsState.visitType = ''
-  if (field === 'isOrderly') consultsState.isOrderly = ''
+  if (field === 'doctor')         consultsState.doctor         = ''
+  if (field === 'visitType')      consultsState.visitType      = ''
+  if (field === 'isOrderly')      consultsState.isOrderly      = ''
+  if (field === 'isFlagged')      consultsState.isFlagged      = ''
+  if (field === 'decisionStatus') consultsState.decisionStatus = ''
   renderConsults()
 }
 
 function clearAllDrillFilters() {
-  consultsState.doctor    = ''
-  consultsState.visitType = ''
-  consultsState.isOrderly = ''
-  consultsState.organization = ''
-  consultsState.search    = ''
+  consultsState.doctor         = ''
+  consultsState.visitType      = ''
+  consultsState.isOrderly      = ''
+  consultsState.isFlagged      = ''
+  consultsState.decisionStatus = ''
+  consultsState.organization   = ''
+  consultsState.search         = ''
   renderConsults()
 }
 
@@ -1315,10 +1335,12 @@ function debounceSearch(val) {
 }
 
 async function filterConsults() {
-  consultsState.doctor       = $('doctorFilter')?.value  || ''
-  consultsState.visitType    = $('vtFilter')?.value      || ''
-  consultsState.isOrderly    = $('orderlyFilter')?.value ?? ''
-  consultsState.organization = $('orgFilter')?.value     || ''
+  consultsState.doctor         = $('doctorFilter')?.value  || ''
+  consultsState.visitType      = $('vtFilter')?.value      || ''
+  consultsState.isOrderly      = $('orderlyFilter')?.value ?? ''
+  consultsState.isFlagged      = $('flagFilter')?.value    ?? ''
+  consultsState.decisionStatus = $('statusFilter')?.value  || ''
+  consultsState.organization   = $('orgFilter')?.value     || ''
   await loadConsultsPage(1)
 }
 
@@ -1371,16 +1393,16 @@ async function loadConsultsPage(page) {
     sort_by:  consultsState.sortBy,
     sort_dir: consultsState.sortDir
   })
-  if (consultsState.search)       params.set('search',       consultsState.search)
-  if (consultsState.doctor)       params.set('doctor_name',  consultsState.doctor)
-  if (consultsState.organization) params.set('organization', consultsState.organization)
+  if (consultsState.search)       params.set('search',          consultsState.search)
+  if (consultsState.doctor)       params.set('doctor_name',     consultsState.doctor)
+  if (consultsState.organization) params.set('organization',    consultsState.organization)
 
   // _SYNC and _OTHER are handled server-side via IN/NOT IN SQL clauses
   const vt = consultsState.visitType
   if (vt) params.set('visit_type', vt)
-  if (consultsState.isOrderly !== '') {
-    params.set('is_orderly', consultsState.isOrderly)
-  }
+  if (consultsState.isOrderly !== '')      params.set('is_orderly',      consultsState.isOrderly)
+  if (consultsState.isFlagged !== '')      params.set('is_flagged',      consultsState.isFlagged)
+  if (consultsState.decisionStatus)        params.set('decision_status', consultsState.decisionStatus)
 
   try {
     const result = await api('/api/consults?' + params)

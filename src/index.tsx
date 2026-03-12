@@ -531,16 +531,18 @@ app.post('/api/upload/chunk', async (c) => {
 // CONSULTS — accepts period_key OR session_id
 // ──────────────────────────────────────────────
 app.get('/api/consults', async (c) => {
-  const period_key  = c.req.query('period_key')
-  const session_id  = c.req.query('session_id')
-  const doctor_name  = c.req.query('doctor_name')
-  const visit_type   = c.req.query('visit_type')
-  const is_orderly   = c.req.query('is_orderly')    // '1' = OrderlyMeds only
-  const organization = c.req.query('organization')  // exact org name
-  const page         = c.req.query('page')  || '1'
-  const limit        = c.req.query('limit') || '50'
-  const search       = c.req.query('search')
-  const offset       = (parseInt(page) - 1) * parseInt(limit)
+  const period_key      = c.req.query('period_key')
+  const session_id      = c.req.query('session_id')
+  const doctor_name     = c.req.query('doctor_name')
+  const visit_type      = c.req.query('visit_type')
+  const is_orderly      = c.req.query('is_orderly')       // '1' | '0'
+  const is_flagged      = c.req.query('is_flagged')       // '1' | '0'
+  const decision_status = c.req.query('decision_status')  // 'Approved' | 'Denied' | 'Pending'
+  const organization    = c.req.query('organization')
+  const page            = c.req.query('page')  || '1'
+  const limit           = c.req.query('limit') || '50'
+  const search          = c.req.query('search')
+  const offset          = (parseInt(page) - 1) * parseInt(limit)
 
   // Sorting — whitelist allowed columns to prevent SQL injection
   const SORT_COLS: Record<string, string> = {
@@ -580,6 +582,9 @@ app.get('/api/consults', async (c) => {
   }
   if (is_orderly === '1') { where += ' AND c.is_orderly=1' }
   if (is_orderly === '0') { where += ' AND c.is_orderly=0' }
+  if (is_flagged === '1') { where += ' AND c.is_flagged=1' }
+  if (is_flagged === '0') { where += ' AND (c.is_flagged=0 OR c.is_flagged IS NULL)' }
+  if (decision_status)    { where += ' AND c.decision_status=?'; params.push(decision_status) }
   if (organization) { where += ' AND c.organization_name=?'; params.push(organization) }
   if (search) {
     where += ' AND (c.patient_name LIKE ? OR c.case_id_short LIKE ? OR c.organization_name LIKE ?)'
