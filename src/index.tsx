@@ -744,6 +744,9 @@ app.delete('/api/consults/:id', async (c) => {
 // SUMMARY — accepts period_key (aggregates all files) OR session_id
 // ──────────────────────────────────────────────
 async function buildSummary(db: D1Database, where: string, params: any[]) {
+  // Exclude Denied and No Decision from all counts/totals (they have $0 fees anyway,
+  // but should not inflate case counts either)
+  const whereEx = where + ` AND c.decision_status NOT IN ('Denied','No Decision')`
   const [byDoctor, byVisitType, byOrg, totals, flagged] = await Promise.all([
     db.prepare(`
       SELECT c.doctor_name, ct.id as contractor_id, ct.company, ct.ein_ssn,
@@ -763,20 +766,20 @@ async function buildSummary(db: D1Database, where: string, params: any[]) {
       FROM consults c
       LEFT JOIN contractors ct ON c.contractor_id = ct.id
       LEFT JOIN upload_sessions s ON c.session_id = s.id
-      ${where} GROUP BY c.doctor_name ORDER BY c.doctor_name
+      ${whereEx} GROUP BY c.doctor_name ORDER BY c.doctor_name
     `).bind(...params).all(),
     db.prepare(`
       SELECT visit_type, COUNT(*) as count,
         SUM(carevalidate_fee) as total_cv, SUM(contractor_fee) as total_ct
       FROM consults c
       LEFT JOIN upload_sessions s ON c.session_id = s.id
-      ${where} GROUP BY visit_type ORDER BY count DESC
+      ${whereEx} GROUP BY visit_type ORDER BY count DESC
     `).bind(...params).all(),
     db.prepare(`
       SELECT organization_name, COUNT(*) as count, SUM(carevalidate_fee) as total_cv
       FROM consults c
       LEFT JOIN upload_sessions s ON c.session_id = s.id
-      ${where} GROUP BY organization_name ORDER BY count DESC LIMIT 20
+      ${whereEx} GROUP BY organization_name ORDER BY count DESC LIMIT 20
     `).bind(...params).all(),
     db.prepare(`
       SELECT COUNT(*) as total_cases,
@@ -784,12 +787,12 @@ async function buildSummary(db: D1Database, where: string, params: any[]) {
         SUM(contractor_fee) as total_contractor,
         SUM(carevalidate_fee) - SUM(contractor_fee) as total_margin
       FROM consults c
-      LEFT JOIN upload_sessions s ON c.session_id = s.id ${where}
+      LEFT JOIN upload_sessions s ON c.session_id = s.id ${whereEx}
     `).bind(...params).first(),
     db.prepare(
       `SELECT COUNT(*) as count FROM consults c
        LEFT JOIN upload_sessions s ON c.session_id = s.id
-       ${where} AND c.is_flagged=1`
+       ${whereEx} AND c.is_flagged=1`
     ).bind(...params).first()
   ])
   return {
@@ -851,6 +854,7 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
     FROM consults c
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE s.period_key=? AND c.contractor_id=?
+      AND c.decision_status NOT IN ('Denied','No Decision')
   `).bind(pk, cid).first()
 
   // If this contractor is Christopher Garcia, attach commission data
@@ -893,6 +897,7 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
         - SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END)
         - SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count
     FROM consults WHERE session_id=? AND contractor_id=?
+      AND decision_status NOT IN ('Denied','No Decision')
   `).bind(sid, cid).first()
   return c.json({ contractor, session, consults: consults.results, summary })
 })
@@ -922,6 +927,7 @@ async function calcCommission(db: D1Database, pk: string) {
     WHERE s.period_key = ?
       AND LOWER(ct.name) LIKE '%ana lisa carr%'
       AND LOWER(c.organization_name) LIKE '%ringside%'
+      AND c.decision_status NOT IN ('Denied','No Decision')
   `).bind(pk).first() as any
 
   const ringside_count     = ringsideRow?.ringside_count || 0
@@ -946,6 +952,7 @@ async function calcCommission(db: D1Database, pk: string) {
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
     WHERE s.period_key = ?
       AND LOWER(ct.name) NOT LIKE '%garcia%'
+      AND c.decision_status NOT IN ('Denied','No Decision')
     GROUP BY ct.id, ct.name, ct.contractor_type
     ORDER BY ct.name
   `).bind(pk).all()
@@ -1038,6 +1045,7 @@ app.get('/api/export/gusto/period/:period_key', async (c) => {
     LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE s.period_key=?
+      AND c.decision_status NOT IN ('Denied','No Decision')
     GROUP BY c.contractor_id ORDER BY ct.name
   `).bind(pk).all()
   return c.json(rows.results)
@@ -1063,7 +1071,9 @@ app.get('/api/export/gusto/:session_id', async (c) => {
         - SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count
     FROM consults c LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
-    WHERE c.session_id=? GROUP BY c.contractor_id ORDER BY ct.name
+    WHERE c.session_id=?
+      AND c.decision_status NOT IN ('Denied','No Decision')
+    GROUP BY c.contractor_id ORDER BY ct.name
   `).bind(sid).all()
   return c.json(rows.results)
 })
@@ -1081,13 +1091,16 @@ app.get('/api/cv-summary/period/:period_key', async (c) => {
   const byVisitType = await c.env.DB.prepare(`
     SELECT visit_type, COUNT(*) as count, SUM(carevalidate_fee) as total_amount
     FROM consults c LEFT JOIN upload_sessions s ON c.session_id = s.id
-    WHERE s.period_key=? GROUP BY visit_type
+    WHERE s.period_key=?
+      AND c.decision_status NOT IN ('Denied','No Decision')
+    GROUP BY visit_type
   `).bind(pk).all()
 
   const total = await c.env.DB.prepare(`
     SELECT COUNT(*) as total_cases, SUM(carevalidate_fee) as total_owed
     FROM consults c LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE s.period_key=?
+      AND c.decision_status NOT IN ('Denied','No Decision')
   `).bind(pk).first()
 
   // Breakdown by contractor: async, sync, orderly counts + CV amounts
@@ -1112,6 +1125,7 @@ app.get('/api/cv-summary/period/:period_key', async (c) => {
     JOIN upload_sessions s  ON c.session_id = s.id
     JOIN contractors ct     ON c.contractor_id = ct.id
     WHERE s.period_key=?
+      AND c.decision_status NOT IN ('Denied','No Decision')
     GROUP BY ct.id, ct.name, ct.contractor_type
     ORDER BY total_cv DESC
   `).bind(pk).all()
@@ -1128,10 +1142,10 @@ app.get('/api/cv-summary/:session_id', async (c) => {
   const sid = c.req.param('session_id')
   const session = await c.env.DB.prepare('SELECT * FROM upload_sessions WHERE id=?').bind(sid).first()
   const byVisitType = await c.env.DB.prepare(
-    'SELECT visit_type, COUNT(*) as count, SUM(carevalidate_fee) as total_amount FROM consults WHERE session_id=? GROUP BY visit_type'
+    `SELECT visit_type, COUNT(*) as count, SUM(carevalidate_fee) as total_amount FROM consults WHERE session_id=? AND decision_status NOT IN ('Denied','No Decision') GROUP BY visit_type`
   ).bind(sid).all()
   const total = await c.env.DB.prepare(
-    'SELECT COUNT(*) as total_cases, SUM(carevalidate_fee) as total_owed FROM consults WHERE session_id=?'
+    `SELECT COUNT(*) as total_cases, SUM(carevalidate_fee) as total_owed FROM consults WHERE session_id=? AND decision_status NOT IN ('Denied','No Decision')`
   ).bind(sid).first()
   return c.json({ session, byVisitType: byVisitType.results, total })
 })
