@@ -171,7 +171,7 @@ app.post('/api/recalculate', async (c) => {
 
   while (true) {
     const rows = await c.env.DB.prepare(
-      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.doctor_name, c.session_id
+      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.doctor_name, c.session_id, c.decision_status
        FROM consults c ${whereClause} LIMIT ${PAGE_SIZE} OFFSET ${offset}`
     ).bind(...params).all()
 
@@ -206,6 +206,13 @@ app.post('/api/recalculate', async (c) => {
         ctFee = ctRatesMap[ctype]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 10
       } else {
         ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
+      }
+
+      // Denied and No Decision consults always get $0 fees
+      const decisionStatus = (row.decision_status || '').trim()
+      if (decisionStatus === 'Denied' || decisionStatus === 'No Decision') {
+        cvFee = 0
+        ctFee = 0
       }
 
       // Update fees and re-link contractor_id if it changed
@@ -435,15 +442,22 @@ async function insertRows(
       // Override CT fee with contractor-type-specific rate if available
       const ctype = contractorId ? (contractorTypeMap[contractorId] || 'regular') : 'regular'
       const vtKey = orderly ? 'ORDERLY' : (row.visit_type || '').toUpperCase()
-      const ctFee = (ctRatesMap[ctype]?.[vtKey] !== undefined) ? ctRatesMap[ctype][vtKey] : fees.ct
-      totalCV += fees.cv
+      let cvFee = fees.cv
+      let ctFee = (ctRatesMap[ctype]?.[vtKey] !== undefined) ? ctRatesMap[ctype][vtKey] : fees.ct
+      // Denied and No Decision consults always pay $0
+      const status = (row.decision_status || '').trim()
+      if (status === 'Denied' || status === 'No Decision') {
+        cvFee = 0
+        ctFee = 0
+      }
+      totalCV += cvFee
       totalCT += ctFee
       return stmt.bind(
         sessionId, row.case_id || '', row.case_id_short || '',
         row.organization_name || '', row.patient_name || '',
         row.doctor_name || '', row.decision_date || '',
         row.decision_status || '', row.visit_type || '',
-        fees.cv, ctFee, contractorId, row.is_flagged ? 1 : 0, orderly
+        cvFee, ctFee, contractorId, row.is_flagged ? 1 : 0, orderly
       )
     })
     await db.batch(statements)
