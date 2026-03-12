@@ -82,6 +82,15 @@
     }
     .drilldown-chip.badge-orderly { background: #ffe4e6; color: #be123c; border-color: #fecdd3; }
 
+    /* Dashboard column visibility */
+    .dash-col-hidden { display: none !important; }
+    #dashColPanel {
+      position: absolute; right: 0; top: calc(100% + 4px); z-index: 50;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 12px 14px;
+      min-width: 180px;
+    }
+
     /* ── Sidebar ───────────────────────────────────────── */
     #sidebar {
       transition: transform 0.3s cubic-bezier(.4,0,.2,1);
@@ -448,6 +457,72 @@ async function onSessionChange(pk) {
 }
 
 // ════════════════════════════════════════════════════
+// DASHBOARD COLUMN VISIBILITY
+// ════════════════════════════════════════════════════
+const DASH_COLS = [
+  { key: 'cases',    label: 'Cases' },
+  { key: 'async',    label: 'Async' },
+  { key: 'sync',     label: 'Sync' },
+  { key: 'orderly',  label: 'Orderly' },
+  { key: 'noshow',   label: 'No Show' },
+  { key: 'other',    label: 'Other' },
+  { key: 'cv',       label: 'CV Pays Us' },
+  { key: 'pay',      label: 'We Pay' },
+  { key: 'comm',     label: 'Chris Comm' },
+  { key: 'margin',   label: 'Margin' },
+  { key: 'actions',  label: 'Actions' },
+]
+
+// Load saved visibility from localStorage (default: all visible)
+function loadDashColVisibility() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('dashColVisibility') || '{}')
+    const vis = {}
+    DASH_COLS.forEach(c => { vis[c.key] = saved[c.key] !== false })
+    return vis
+  } catch(_) {
+    const vis = {}; DASH_COLS.forEach(c => { vis[c.key] = true }); return vis
+  }
+}
+
+let dashColVisibility = loadDashColVisibility()
+
+function saveDashColVisibility() {
+  try { localStorage.setItem('dashColVisibility', JSON.stringify(dashColVisibility)) } catch(_) {}
+}
+
+function applyDashColVisibility() {
+  DASH_COLS.forEach(c => {
+    document.querySelectorAll(`[data-col="${c.key}"]`).forEach(el => {
+      el.classList.toggle('dash-col-hidden', !dashColVisibility[c.key])
+    })
+  })
+  // Sync checkboxes in the panel if open
+  DASH_COLS.forEach(c => {
+    const cb = document.getElementById('dashcol_' + c.key)
+    if (cb) cb.checked = dashColVisibility[c.key]
+  })
+}
+
+function toggleDashColPanel() {
+  const panel = document.getElementById('dashColPanel')
+  if (!panel) return
+  panel.classList.toggle('hidden')
+}
+
+function toggleDashCol(key) {
+  dashColVisibility[key] = !dashColVisibility[key]
+  saveDashColVisibility()
+  applyDashColVisibility()
+}
+
+function dashColShowAll() {
+  DASH_COLS.forEach(c => { dashColVisibility[c.key] = true })
+  saveDashColVisibility()
+  applyDashColVisibility()
+}
+
+// ════════════════════════════════════════════════════
 // DASHBOARD PAGE
 // ════════════════════════════════════════════════════
 function renderDashboard() {
@@ -549,6 +624,18 @@ function renderDashboard() {
             ${s.flaggedCount > 0 ? '<span class="status-badge badge-flagged"><i class="fas fa-flag mr-1"></i>' + s.flaggedCount + ' Flagged</span>' : ''}
           </h3>
           <div class="flex gap-2">
+            <div class="relative">
+              <button onclick="toggleDashColPanel()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" title="Show/hide columns">
+                <i class="fas fa-columns mr-2"></i>Columns
+              </button>
+              <div id="dashColPanel" class="hidden">
+                <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+                  <span class="text-xs font-bold text-gray-600 uppercase tracking-wider">Show Columns</span>
+                  <button onclick="dashColShowAll()" class="text-xs text-blue-500 hover:text-blue-700 font-medium">Show all</button>
+                </div>
+                ${DASH_COLS.map(c => '<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="dashcol_' + c.key + '" ' + (dashColVisibility[c.key] ? 'checked' : '') + ' onchange="toggleDashCol(\'' + c.key + '\')" class="w-3.5 h-3.5 accent-blue-500"><span class="text-sm text-gray-700">' + c.label + '</span></label>').join('')}
+              </div>
+            </div>
             <button onclick="navigate('payroll')" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium">
               <i class="fas fa-file-invoice-dollar mr-2"></i>View Payroll
             </button>
@@ -565,17 +652,17 @@ function renderDashboard() {
             <thead>
               <tr class="border-b border-gray-100">
                 <th class="text-left pb-3 text-gray-500 font-semibold px-3">Doctor / Contractor</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Cases</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Async</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Sync</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Orderly</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">No Show</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Other</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">CV Pays Us</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">We Pay</th>
-                <th class="text-right pb-3 text-blue-500 font-semibold px-3 whitespace-nowrap">Chris Comm</th>
-                <th class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Margin</th>
-                <th class="text-center pb-3 text-gray-500 font-semibold px-3">Actions</th>
+                <th data-col="cases"   class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Cases</th>
+                <th data-col="async"   class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Async</th>
+                <th data-col="sync"    class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Sync</th>
+                <th data-col="orderly" class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Orderly</th>
+                <th data-col="noshow"  class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">No Show</th>
+                <th data-col="other"   class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Other</th>
+                <th data-col="cv"      class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">CV Pays Us</th>
+                <th data-col="pay"     class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">We Pay</th>
+                <th data-col="comm"    class="text-right pb-3 text-blue-500 font-semibold px-3 whitespace-nowrap">Chris Comm</th>
+                <th data-col="margin"  class="text-right pb-3 text-gray-500 font-semibold px-3 whitespace-nowrap">Margin</th>
+                <th data-col="actions" class="text-center pb-3 text-gray-500 font-semibold px-3">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -590,50 +677,50 @@ function renderDashboard() {
                 const drillOther = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "visitType: '_OTHER'})"
                 return '<tr class="table-row border-b border-gray-50">' +
                   '<td class="py-3 px-3 font-medium text-gray-800">' + (d.doctor_name || '<i class="text-gray-400">Unmatched</i>') + '</td>' +
-                  '<td class="py-3 px-3 text-right text-gray-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults for this doctor">' + fmtNum(d.case_count) + '</span></td>' +
-                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.async_count > 0 ? '<span class="drilldown-link" onclick="' + drillAsync + '" title="View Async consults">' + fmtNum(d.async_count) + '</span>' : '—') + '</td>' +
-                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.sync_count > 0 ? '<span class="drilldown-link" onclick="' + drillSync + '" title="View Sync consults">' + fmtNum(d.sync_count) + '</span>' : '—') + '</td>' +
-                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.orderly_count > 0 ? '<span class="drilldown-link" onclick="' + drillOrd + '" title="View OrderlyMeds consults">' + fmtNum(d.orderly_count) + '</span>' : '—') + '</td>' +
-                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.no_show_count > 0 ? '<span class="drilldown-link" onclick="' + drillNS + '" title="View No Show consults">' + fmtNum(d.no_show_count) + '</span>' : '—') + '</td>' +
-                  '<td class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.other_count > 0 ? '<span class="drilldown-link" onclick="' + drillOther + '" title="View other consults">' + fmtNum(d.other_count) + '</span>' : '—') + '</td>' +
-                  '<td class="py-3 px-3 text-right font-medium text-blue-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_carevalidate) + '</span></td>' +
-                  '<td class="py-3 px-3 text-right font-medium text-purple-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_contractor) + '</span></td>' +
-                  '<td class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="' + (d.contractor_id || '') + '">—</td>' +
-                  '<td class="py-3 px-3 text-right font-medium ' + (d.margin >= 0 ? 'text-green-600' : 'text-red-600') + '" data-doctor-margin="' + (d.contractor_id || '') + '">' + fmt(d.margin) + '</td>' +
-                  '<td class="py-3 px-3 text-center">' + (d.contractor_id ? '<button onclick="openPaystubModal(\'' + escHtml(state.currentPeriod.period_key) + '\', ' + d.contractor_id + ', \'' + escHtml(d.doctor_name) + '\')" class="text-xs px-3 py-1.5 rounded-lg btn-outline font-medium"><i class="fas fa-file-pdf mr-1"></i>Paystub</button>' : '<span class="text-gray-300 text-xs">No match</span>') + '</td>' +
+                  '<td data-col="cases"   class="py-3 px-3 text-right text-gray-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults for this doctor">' + fmtNum(d.case_count) + '</span></td>' +
+                  '<td data-col="async"   class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.async_count > 0 ? '<span class="drilldown-link" onclick="' + drillAsync + '" title="View Async consults">' + fmtNum(d.async_count) + '</span>' : '—') + '</td>' +
+                  '<td data-col="sync"    class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.sync_count > 0 ? '<span class="drilldown-link" onclick="' + drillSync + '" title="View Sync consults">' + fmtNum(d.sync_count) + '</span>' : '—') + '</td>' +
+                  '<td data-col="orderly" class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.orderly_count > 0 ? '<span class="drilldown-link" onclick="' + drillOrd + '" title="View OrderlyMeds consults">' + fmtNum(d.orderly_count) + '</span>' : '—') + '</td>' +
+                  '<td data-col="noshow"  class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.no_show_count > 0 ? '<span class="drilldown-link" onclick="' + drillNS + '" title="View No Show consults">' + fmtNum(d.no_show_count) + '</span>' : '—') + '</td>' +
+                  '<td data-col="other"   class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.other_count > 0 ? '<span class="drilldown-link" onclick="' + drillOther + '" title="View other consults">' + fmtNum(d.other_count) + '</span>' : '—') + '</td>' +
+                  '<td data-col="cv"      class="py-3 px-3 text-right font-medium text-blue-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_carevalidate) + '</span></td>' +
+                  '<td data-col="pay"     class="py-3 px-3 text-right font-medium text-purple-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_contractor) + '</span></td>' +
+                  '<td data-col="comm"    class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="' + (d.contractor_id || '') + '">—</td>' +
+                  '<td data-col="margin"  class="py-3 px-3 text-right font-medium ' + (d.margin >= 0 ? 'text-green-600' : 'text-red-600') + '" data-doctor-margin="' + (d.contractor_id || '') + '">' + fmt(d.margin) + '</td>' +
+                  '<td data-col="actions" class="py-3 px-3 text-center">' + (d.contractor_id ? '<button onclick="openPaystubModal(\'' + escHtml(state.currentPeriod.period_key) + '\', ' + d.contractor_id + ', \'' + escHtml(d.doctor_name) + '\')" class="text-xs px-3 py-1.5 rounded-lg btn-outline font-medium"><i class="fas fa-file-pdf mr-1"></i>Paystub</button>' : '<span class="text-gray-300 text-xs">No match</span>') + '</td>' +
                   '</tr>'
               }).join('')}
             </tbody>
             <tfoot>
               <tr class="border-t-2 border-gray-200 bg-gray-50 font-bold text-sm">
                 <td class="py-3 px-3 text-gray-700">TOTAL</td>
-                <td class="py-3 px-3 text-right text-gray-700">
+                <td data-col="cases" class="py-3 px-3 text-right text-gray-700">
                   <span class="drilldown-link" onclick="drillDownConsults({})" title="View all consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.case_count||0),0))}</span>
                 </td>
-                <td class="py-3 px-3 text-right text-gray-600">
+                <td data-col="async" class="py-3 px-3 text-right text-gray-600">
                   <span class="drilldown-link" onclick="drillDownConsults({visitType: 'ASYNC_TEXT_EMAIL', isOrderly: '0'})" title="View all Async consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.async_count||0),0))}</span>
                 </td>
-                <td class="py-3 px-3 text-right text-gray-600">
+                <td data-col="sync" class="py-3 px-3 text-right text-gray-600">
                   <span class="drilldown-link" onclick="drillDownConsults({isOrderly: '0', visitType: '_SYNC'})" title="View all Sync consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.sync_count||0),0))}</span>
                 </td>
-                <td class="py-3 px-3 text-right text-gray-600">
+                <td data-col="orderly" class="py-3 px-3 text-right text-gray-600">
                   <span class="drilldown-link" onclick="drillDownConsults({isOrderly: '1'})" title="View all OrderlyMeds consults">${fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.orderly_count||0),0))}</span>
                 </td>
-                <td class="py-3 px-3 text-right text-gray-600">
+                <td data-col="noshow" class="py-3 px-3 text-right text-gray-600">
                   ${(s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0) > 0 ? '<span class="drilldown-link" onclick="drillDownConsults({visitType: \'NO_SHOW\'})" title="View all No Show consults">' + fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.no_show_count||0),0)) + '</span>' : '—'}
                 </td>
-                <td class="py-3 px-3 text-right text-gray-600">
+                <td data-col="other" class="py-3 px-3 text-right text-gray-600">
                   ${(s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0) > 0 ? '<span class="drilldown-link" onclick="drillDownConsults({visitType: \'_OTHER\'})" title="View other consults">' + fmtNum((s.byDoctor||[]).reduce((a,d)=>a+(d.other_count||0),0)) + '</span>' : '—'}
                 </td>
-                <td class="py-3 px-3 text-right text-blue-700">
+                <td data-col="cv" class="py-3 px-3 text-right text-blue-700">
                   <span class="drilldown-link" onclick="drillDownConsults({})" title="View all consults">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_carevalidate||0),0))}</span>
                 </td>
-                <td class="py-3 px-3 text-right text-purple-700">
+                <td data-col="pay" class="py-3 px-3 text-right text-purple-700">
                   <span class="drilldown-link" onclick="drillDownConsults({})" title="View all consults">${fmt((s.byDoctor||[]).reduce((a,d)=>a+(d.total_contractor||0),0))}</span>
                 </td>
-                <td class="py-3 px-3 text-right text-blue-700" id="dashTotalComm"><span class="text-gray-300">...</span></td>
-                <td class="py-3 px-3 text-right" id="dashTotalMargin"><span class="text-gray-300">...</span></td>
-                <td></td>
+                <td data-col="comm" class="py-3 px-3 text-right text-blue-700" id="dashTotalComm"><span class="text-gray-300">...</span></td>
+                <td data-col="margin" class="py-3 px-3 text-right" id="dashTotalMargin"><span class="text-gray-300">...</span></td>
+                <td data-col="actions"></td>
               </tr>
             </tfoot>
           </table>
@@ -699,6 +786,9 @@ function renderDashboard() {
     const el = $('dashChrisComm')
     if (el) el.textContent = '—'
   })
+
+  // Apply saved column visibility after DOM is ready
+  applyDashColVisibility()
 }
 
 function renderVisitTypeChart(data) {
@@ -3055,67 +3145,90 @@ async function exportDashboardPDF() {
       const totalNoShow = doctors.reduce((a, d) => a + (d.no_show_count   || 0), 0)
       const totalOther  = doctors.reduce((a, d) => a + (d.other_count     || 0), 0)
 
+      // ── Build column list respecting dashColVisibility (Actions col excluded from PDF) ──
+      // All PDF columns in order: Doctor (always), then data cols keyed by DASH_COLS key
+      const PDF_COL_DEFS = [
+        { key: 'cases',   label: 'Cases',            halign:'right', cellWidth:13 },
+        { key: 'async',   label: 'Async',            halign:'right', cellWidth:11 },
+        { key: 'sync',    label: 'Sync',             halign:'right', cellWidth:11 },
+        { key: 'orderly', label: 'Orderly',          halign:'right', cellWidth:11 },
+        { key: 'noshow',  label: 'No Show',          halign:'right', cellWidth:11 },
+        { key: 'other',   label: 'Other',            halign:'right', cellWidth:11 },
+        { key: 'cv',      label: 'CV Pays Us',       halign:'right', cellWidth:18, textColor:[30,80,180] },
+        { key: 'pay',     label: 'We Pay',           halign:'right', cellWidth:18, textColor:[100,40,160] },
+        { key: 'comm',    label: 'Chris Comm',       halign:'right', cellWidth:18, textColor:[30,80,180] },
+        { key: 'margin',  label: 'Margin',           halign:'right', cellWidth:18 },
+      ]
+      // Filter to only visible columns
+      const visiblePdfCols = PDF_COL_DEFS.filter(c => dashColVisibility[c.key] !== false)
+      // Track which col index is 'margin' (for green/red coloring)
+      const marginPdfIdx = visiblePdfCols.findIndex(c => c.key === 'margin')
+
+      const getColVal = (key, d, comm) => {
+        switch(key) {
+          case 'cases':   return fmtNum(d.case_count)
+          case 'async':   return fmtNum(d.async_count)
+          case 'sync':    return fmtNum(d.sync_count)
+          case 'orderly': return fmtNum(d.orderly_count)
+          case 'noshow':  return d.no_show_count > 0 ? fmtNum(d.no_show_count) : '—'
+          case 'other':   return d.other_count > 0 ? fmtNum(d.other_count) : '—'
+          case 'cv':      return fmt(d.total_carevalidate)
+          case 'pay':     return fmt(d.total_contractor)
+          case 'comm':    return comm > 0 ? fmt(comm) : '—'
+          case 'margin':  return fmt((d.total_carevalidate || 0) - (d.total_contractor || 0) - comm)
+          default:        return '—'
+        }
+      }
+      const getTotalVal = (key) => {
+        const totalComm2 = commTotal
+        const totalMargin2 = totalCV - totalPay - totalComm2
+        switch(key) {
+          case 'cases':   return fmtNum(totalCases)
+          case 'async':   return fmtNum(totalAsync)
+          case 'sync':    return fmtNum(totalSync)
+          case 'orderly': return fmtNum(totalOrd)
+          case 'noshow':  return totalNoShow > 0 ? fmtNum(totalNoShow) : '—'
+          case 'other':   return totalOther > 0 ? fmtNum(totalOther) : '—'
+          case 'cv':      return fmt(totalCV)
+          case 'pay':     return fmt(totalPay)
+          case 'comm':    return fmt(totalComm2)
+          case 'margin':  return fmt(totalMargin2)
+          default:        return '—'
+        }
+      }
+
       const docRows = doctors.map(d => {
         const comm = commByC[d.contractor_id] || 0
-        const margin = (d.total_carevalidate || 0) - (d.total_contractor || 0) - comm
-        return [
-          d.doctor_name || 'Unmatched',
-          fmtNum(d.case_count),
-          fmtNum(d.async_count),
-          fmtNum(d.sync_count),
-          fmtNum(d.orderly_count),
-          d.no_show_count > 0 ? fmtNum(d.no_show_count) : '—',
-          d.other_count > 0 ? fmtNum(d.other_count) : '—',
-          fmt(d.total_carevalidate),
-          fmt(d.total_contractor),
-          comm > 0 ? fmt(comm) : '—',
-          fmt(margin)
-        ]
+        return [d.doctor_name || 'Unmatched', ...visiblePdfCols.map(c => getColVal(c.key, d, comm))]
       })
       // Totals footer row
       const totalComm = commTotal
       const totalMargin = (totalCV) - (totalPay) - totalComm
-      docRows.push([
-        'TOTAL',
-        fmtNum(totalCases),
-        fmtNum(totalAsync),
-        fmtNum(totalSync),
-        fmtNum(totalOrd),
-        totalNoShow > 0 ? fmtNum(totalNoShow) : '—',
-        totalOther > 0 ? fmtNum(totalOther) : '—',
-        fmt(totalCV),
-        fmt(totalPay),
-        fmt(totalComm),
-        fmt(totalMargin)
-      ])
+      docRows.push(['TOTAL', ...visiblePdfCols.map(c => getTotalVal(c.key))])
+
+      // Build columnStyles dynamically
+      const colStyles = { 0: { cellWidth: 32 } }
+      visiblePdfCols.forEach((c, i) => {
+        const s = { halign: c.halign, cellWidth: c.cellWidth }
+        if (c.textColor) s.textColor = c.textColor
+        colStyles[i + 1] = s
+      })
 
       doc.autoTable({
         startY: y + 6,
-        head: [['Doctor / Contractor','Cases','Async','Sync','Orderly','No Show','Other','CV Pays Us','We Pay','Chris Comm','Margin']],
+        head: [['Doctor / Contractor', ...visiblePdfCols.map(c => c.label)]],
         body: docRows.slice(0, docRows.length - 1),
         foot: [docRows[docRows.length - 1]],
         theme: 'striped',
         headStyles: { fillColor:[26,26,46], textColor:[201,168,76], fontStyle:'bold', fontSize:7, cellPadding:2 },
         footStyles: { fillColor:[235,235,245], textColor:[40,40,80], fontStyle:'bold', fontSize:7, cellPadding:2 },
         styles: { fontSize:7, cellPadding:2, overflow:'ellipsize' },
-        columnStyles: {
-          0: { cellWidth: 32 },
-          1: { halign:'right', cellWidth:13 },
-          2: { halign:'right', cellWidth:11 },
-          3: { halign:'right', cellWidth:11 },
-          4: { halign:'right', cellWidth:11 },
-          5: { halign:'right', cellWidth:11 },
-          6: { halign:'right', cellWidth:11 },
-          7: { halign:'right', cellWidth:18, textColor:[30,80,180] },
-          8: { halign:'right', cellWidth:18, textColor:[100,40,160] },
-          9: { halign:'right', cellWidth:18, textColor:[30,80,180] },
-          10: { halign:'right', cellWidth:18 }
-        },
+        columnStyles: colStyles,
         margin: { left: ML, right: MR },
         tableWidth: PW - ML - MR,
         didParseCell: (data) => {
           // Color margin cells green/red
-          if (data.column.index === 10 && data.section !== 'head') {
+          if (marginPdfIdx >= 0 && data.column.index === marginPdfIdx + 1 && data.section !== 'head') {
             const raw = parseFloat((data.cell.raw || '').toString().replace(/[$,]/g,''))
             if (!isNaN(raw)) data.cell.styles.textColor = raw >= 0 ? [22,163,74] : [220,38,38]
           }
