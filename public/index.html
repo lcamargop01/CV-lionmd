@@ -2152,7 +2152,7 @@ function renderPaystubContent(data) {
             <span class="font-semibold text-amber-600">− ${fmt2(comm.ringside_deduction)}</span>
           </div>` : ''}
           <div class="flex justify-between border-t border-gray-200 pt-2">
-            <span class="text-gray-600 font-medium">Net (CV − Pay, earns_commission only)</span>
+            <span class="text-gray-600 font-medium">Net (CV − Pay, mgmt fee earners only)</span>
             <span class="font-bold text-gray-800">${fmt2(comm.net_base)}</span>
           </div>
           ${(comm.ringside_deduction || 0) > 0 ? `
