@@ -675,8 +675,10 @@ function renderDashboard() {
                 const drillOrd   = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "isOrderly: '1'})"
                 const drillNS    = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "visitType: 'NO_SHOW'})"
                 const drillOther = 'drillDownConsults({' + drillDoc.slice(2) + (dn ? ', ' : '') + "visitType: '_OTHER'})"
-                return '<tr class="table-row border-b border-gray-50">' +
-                  '<td class="py-3 px-3 font-medium text-gray-800">' + (d.doctor_name || '<i class="text-gray-400">Unmatched</i>') + '</td>' +
+                const ctInfo = (state.contractors || []).find(c => c.id === d.contractor_id)
+                const isOwnerRow = (ctInfo?.contractor_type || '') === 'owner'
+                return '<tr class="table-row border-b border-gray-50' + (isOwnerRow ? ' bg-amber-50/30' : '') + '">' +
+                  '<td class="py-3 px-3 font-medium text-gray-800">' + (d.doctor_name || '<i class="text-gray-400">Unmatched</i>') + (isOwnerRow ? ' <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 ml-1">Owner</span>' : '') + '</td>' +
                   '<td data-col="cases"   class="py-3 px-3 text-right text-gray-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults for this doctor">' + fmtNum(d.case_count) + '</span></td>' +
                   '<td data-col="async"   class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.async_count > 0 ? '<span class="drilldown-link" onclick="' + drillAsync + '" title="View Async consults">' + fmtNum(d.async_count) + '</span>' : '—') + '</td>' +
                   '<td data-col="sync"    class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.sync_count > 0 ? '<span class="drilldown-link" onclick="' + drillSync + '" title="View Sync consults">' + fmtNum(d.sync_count) + '</span>' : '—') + '</td>' +
@@ -684,7 +686,7 @@ function renderDashboard() {
                   '<td data-col="noshow"  class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.no_show_count > 0 ? '<span class="drilldown-link" onclick="' + drillNS + '" title="View No Show consults">' + fmtNum(d.no_show_count) + '</span>' : '—') + '</td>' +
                   '<td data-col="other"   class="py-3 px-3 text-right text-gray-500 text-xs">' + (d.other_count > 0 ? '<span class="drilldown-link" onclick="' + drillOther + '" title="View other consults">' + fmtNum(d.other_count) + '</span>' : '—') + '</td>' +
                   '<td data-col="cv"      class="py-3 px-3 text-right font-medium text-blue-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_carevalidate) + '</span></td>' +
-                  '<td data-col="pay"     class="py-3 px-3 text-right font-medium text-purple-600"><span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_contractor) + '</span></td>' +
+                  '<td data-col="pay"     class="py-3 px-3 text-right font-medium ' + (isOwnerRow ? 'text-amber-400' : 'text-purple-600') + '">' + (isOwnerRow ? '<span class="text-xs italic">Not paid out</span>' : '<span class="drilldown-link" onclick="' + drillAll + '" title="View all consults">' + fmt(d.total_contractor) + '</span>') + '</td>' +
                   '<td data-col="comm"    class="py-3 px-3 text-right text-blue-500 text-xs" data-doctor-comm="' + (d.contractor_id || '') + '">—</td>' +
                   '<td data-col="margin"  class="py-3 px-3 text-right font-medium ' + (d.margin >= 0 ? 'text-green-600' : 'text-red-600') + '" data-doctor-margin="' + (d.contractor_id || '') + '">' + fmt(d.margin) + '</td>' +
                   '<td data-col="actions" class="py-3 px-3 text-center">' + (d.contractor_id ? '<button onclick="openPaystubModal(\'' + escHtml(state.currentPeriod.period_key) + '\', ' + d.contractor_id + ', \'' + escHtml(d.doctor_name) + '\')" class="text-xs px-3 py-1.5 rounded-lg btn-outline font-medium"><i class="fas fa-file-pdf mr-1"></i>Paystub</button>' : '<span class="text-gray-300 text-xs">No match</span>') + '</td>' +
@@ -1649,8 +1651,9 @@ function renderPayroll() {
                 <div class="text-xs text-gray-400">Cases</div>
               </div>
               <div class="${isOwner ? 'bg-amber-50' : 'bg-purple-50'} rounded-lg p-2 text-center">
-                <div class="font-bold ${isOwner ? 'text-amber-600' : 'text-purple-600'}">${fmt(d.total_contractor)}</div>
-                <div class="text-xs text-gray-400">Total Pay</div>
+                ${isOwner
+                  ? '<div class="font-semibold text-amber-500 text-xs">Not Paid Out</div><div class="text-xs text-amber-400">Owner</div>'
+                  : '<div class="font-bold text-purple-600">' + fmt(d.total_contractor) + '</div><div class="text-xs text-gray-400">Total Pay</div>'}
               </div>
             </div>
             <div class="flex gap-2 text-xs mb-3 flex-wrap">
@@ -1663,7 +1666,7 @@ function renderPayroll() {
             <div class="pt-3 border-t border-gray-100">
               <button onclick="event.stopPropagation(); openPaystubModal('${escHtml(pk)}', ${d.contractor_id}, '${escHtml(d.doctor_name)}')"
                 class="w-full text-xs py-2 btn-outline rounded-lg font-medium">
-                <i class="fas fa-file-pdf mr-1"></i>Paystub
+                <i class="fas fa-file-pdf mr-1"></i>${isOwner ? 'Activity Summary' : 'Paystub'}
               </button>
             </div>
           </div>`
