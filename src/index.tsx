@@ -55,6 +55,14 @@ async function ensureSchema(db: D1Database) {
     db.prepare(`ALTER TABLE upload_sessions ADD COLUMN period_key TEXT`).bind(),
     db.prepare(`ALTER TABLE consults ADD COLUMN is_orderly INTEGER DEFAULT 0`).bind(),
   ]).catch(() => {}) // ignore if columns already exist
+  // Create period_settings table for per-period configuration flags
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS period_settings (
+      period_key TEXT PRIMARY KEY,
+      denied_paid INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(() => {})
   // Backfill period_key for existing sessions
   await db.prepare(
     `UPDATE upload_sessions SET period_key = printf('%04d-%02d', period_year, period_month) WHERE period_key IS NULL OR period_key = ''`
@@ -159,6 +167,15 @@ app.post('/api/recalculate', async (c) => {
     contractorNameMap[(ct as any).name.toLowerCase().trim()] = (ct as any).id
   }
 
+  // Load period-level settings: denied_paid flag per period
+  // If period_key is specified, look it up; otherwise load all for per-row lookup
+  const periodSettingsMap: Record<string, number> = {}
+  await ensureSchema(c.env.DB)
+  const psRows = await c.env.DB.prepare('SELECT period_key, denied_paid FROM period_settings').all()
+  for (const r of psRows.results as any[]) {
+    periodSettingsMap[r.period_key] = r.denied_paid ?? 0
+  }
+
   // Fetch all consults (not overridden), optionally filtered by period
   const whereClause = period_key
     ? 'LEFT JOIN upload_sessions s ON c.session_id=s.id WHERE c.is_override=0 AND s.period_key=?'
@@ -171,7 +188,7 @@ app.post('/api/recalculate', async (c) => {
 
   while (true) {
     const rows = await c.env.DB.prepare(
-      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.doctor_name, c.session_id, c.decision_status
+      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.doctor_name, c.session_id, c.decision_status, s.period_key as period_key
        FROM consults c ${whereClause} LIMIT ${PAGE_SIZE} OFFSET ${offset}`
     ).bind(...params).all()
 
@@ -208,9 +225,11 @@ app.post('/api/recalculate', async (c) => {
         ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
       }
 
-      // Denied and No Decision consults always get $0 fees
+      // Denied and No Decision: zero out fees UNLESS this period has denied_paid=1
       const decisionStatus = (row.decision_status || '').trim()
-      if (decisionStatus === 'Denied' || decisionStatus === 'No Decision') {
+      const rowPeriodKey = row.period_key || period_key || ''
+      const deniedPaid = periodSettingsMap[rowPeriodKey] ?? 0
+      if ((decisionStatus === 'Denied' || decisionStatus === 'No Decision') && !deniedPaid) {
         cvFee = 0
         ctFee = 0
       }
@@ -255,6 +274,30 @@ app.post('/api/recalculate', async (c) => {
   if (sessionStmts.length) await c.env.DB.batch(sessionStmts)
 
   return c.json({ ok: true, updated: updatedCount, sessions: sessions.results.length })
+})
+
+// ──────────────────────────────────────────────
+// PERIOD SETTINGS — per-period flags (e.g. denied_paid)
+// ──────────────────────────────────────────────
+app.get('/api/period-settings/:period_key', async (c) => {
+  const pk = c.req.param('period_key')
+  await ensureSchema(c.env.DB)
+  const row = await c.env.DB.prepare(
+    `SELECT * FROM period_settings WHERE period_key=?`
+  ).bind(pk).first() as any
+  return c.json({ period_key: pk, denied_paid: row?.denied_paid ?? 0 })
+})
+
+app.post('/api/period-settings/:period_key', async (c) => {
+  const pk = c.req.param('period_key')
+  const body = await c.req.json() as any
+  const denied_paid = body.denied_paid ? 1 : 0
+  await c.env.DB.prepare(`
+    INSERT INTO period_settings (period_key, denied_paid, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(period_key) DO UPDATE SET denied_paid=excluded.denied_paid, updated_at=CURRENT_TIMESTAMP
+  `).bind(pk, denied_paid).run()
+  return c.json({ ok: true, period_key: pk, denied_paid })
 })
 
 // ──────────────────────────────────────────────
