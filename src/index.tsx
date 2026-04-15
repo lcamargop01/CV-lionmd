@@ -43,6 +43,14 @@ function periodKey(month: number, year: number) {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
+// From March 2026 onward, Denied cases are paid at normal rates.
+// Earlier periods always treat Denied as $0.
+const DENIED_PAID_FROM = '2026-03'
+function isDeniedPaid(pk: string | null | undefined): boolean {
+  if (!pk) return false
+  return pk >= DENIED_PAID_FROM
+}
+
 const app = new Hono<{ Bindings: Bindings }>()
 app.use('/api/*', cors())
 
@@ -225,11 +233,12 @@ app.post('/api/recalculate', async (c) => {
         ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
       }
 
-      // Denied and No Decision: zero out fees UNLESS this period has denied_paid=1
+      // Denied and No Decision: zero out fees UNLESS the period is 2026-03+
+      // (from March 2026 onward, denied cases are paid at normal rates)
       const decisionStatus = (row.decision_status || '').trim()
-      const rowPeriodKey = row.period_key || period_key || ''
-      const deniedPaid = periodSettingsMap[rowPeriodKey] ?? 0
-      if ((decisionStatus === 'Denied' || decisionStatus === 'No Decision') && !deniedPaid) {
+      const rowPeriodKey = (row.period_key || period_key || '') as string
+      if (decisionStatus === 'No Decision' ||
+          (decisionStatus === 'Denied' && !isDeniedPaid(rowPeriodKey))) {
         cvFee = 0
         ctFee = 0
       }
@@ -463,7 +472,8 @@ async function insertRows(
   ratesMap: Record<string, { cv: number; ct: number }>,
   contractorMap: Record<string, number>,
   contractorTypeMap: Record<number, string> = {},
-  ctRatesMap: Record<string, Record<string, number>> = {}
+  ctRatesMap: Record<string, Record<string, number>> = {},
+  periodKeyForDenied: string | null = null
 ) {
   let totalCV = 0
   let totalCT = 0
@@ -487,9 +497,10 @@ async function insertRows(
       const vtKey = orderly ? 'ORDERLY' : (row.visit_type || '').toUpperCase()
       let cvFee = fees.cv
       let ctFee = (ctRatesMap[ctype]?.[vtKey] !== undefined) ? ctRatesMap[ctype][vtKey] : fees.ct
-      // Denied and No Decision consults always pay $0
+      // No Decision always $0; Denied is $0 only for periods before 2026-03
       const status = (row.decision_status || '').trim()
-      if (status === 'Denied' || status === 'No Decision') {
+      if (status === 'No Decision' ||
+          (status === 'Denied' && !isDeniedPaid(periodKeyForDenied))) {
         cvFee = 0
         ctFee = 0
       }
@@ -532,7 +543,7 @@ app.post('/api/upload', async (c) => {
   ).bind(filename, period_label, period_month, period_year, pk, source_label || filename).run()
   const sessionId = sessionResult.meta.last_row_id as number
 
-  const result = await insertRows(c.env.DB, sessionId, rows, ratesMap, contractorMap, contractorTypeMap, ctRatesMap)
+  const result = await insertRows(c.env.DB, sessionId, rows, ratesMap, contractorMap, contractorTypeMap, ctRatesMap, pk)
 
   // If this is the only / last chunk, finalise totals now
   if (is_last_chunk !== false) {
@@ -565,7 +576,11 @@ app.post('/api/upload/chunk', async (c) => {
 
   const { ratesMap, contractorMap, contractorTypeMap, ctRatesMap } = await loadMaps(c.env.DB)
 
-  const result = await insertRows(c.env.DB, session_id, rows, ratesMap, contractorMap, contractorTypeMap, ctRatesMap)
+  // Look up period_key so denied fee logic is applied correctly
+  const chunkSess = await c.env.DB.prepare('SELECT period_key FROM upload_sessions WHERE id=?').bind(session_id).first() as any
+  const chunkPeriodKey = chunkSess?.period_key || null
+
+  const result = await insertRows(c.env.DB, session_id, rows, ratesMap, contractorMap, contractorTypeMap, ctRatesMap, chunkPeriodKey)
 
   if (is_last_chunk) {
     // Recompute totals from DB (accurate after all chunks)
@@ -786,10 +801,14 @@ app.delete('/api/consults/:id', async (c) => {
 // ──────────────────────────────────────────────
 // SUMMARY — accepts period_key (aggregates all files) OR session_id
 // ──────────────────────────────────────────────
-async function buildSummary(db: D1Database, where: string, params: any[]) {
-  // Exclude Denied and No Decision from all counts/totals (they have $0 fees anyway,
-  // but should not inflate case counts either)
-  const whereEx = where + ` AND c.decision_status NOT IN ('Denied','No Decision')`
+async function buildSummary(db: D1Database, where: string, params: any[], pk?: string | null) {
+  // Exclude Denied/No Decision from counts/totals ONLY for periods before 2026-03.
+  // From 2026-03 onward, denied cases are paid and must appear in totals.
+  // 'No Decision' is always excluded regardless of period.
+  const deniedPaid = isDeniedPaid(pk)
+  const whereEx = deniedPaid
+    ? where + ` AND c.decision_status != 'No Decision'`
+    : where + ` AND c.decision_status NOT IN ('Denied','No Decision')`
   const [byDoctor, byVisitType, byOrg, totals, flagged] = await Promise.all([
     db.prepare(`
       SELECT c.doctor_name, ct.id as contractor_id, ct.company, ct.ein_ssn,
@@ -849,12 +868,15 @@ async function buildSummary(db: D1Database, where: string, params: any[]) {
 
 app.get('/api/summary/period/:period_key', async (c) => {
   const pk = c.req.param('period_key')
-  return c.json(await buildSummary(c.env.DB, 'WHERE s.period_key=?', [pk]))
+  return c.json(await buildSummary(c.env.DB, 'WHERE s.period_key=?', [pk], pk))
 })
 
 app.get('/api/summary/:session_id', async (c) => {
   const sid = c.req.param('session_id')
-  return c.json(await buildSummary(c.env.DB, 'WHERE c.session_id=?', [sid]))
+  // Look up the period_key for this session so denied_paid logic applies correctly
+  const sess = await c.env.DB.prepare('SELECT period_key FROM upload_sessions WHERE id=?').bind(sid).first() as any
+  const pk = sess?.period_key || null
+  return c.json(await buildSummary(c.env.DB, 'WHERE c.session_id=?', [sid], pk))
 })
 
 // ──────────────────────────────────────────────
@@ -897,7 +919,8 @@ app.get('/api/paystub/period/:period_key/:contractor_id', async (c) => {
     FROM consults c
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE s.period_key=? AND c.contractor_id=?
-      AND c.decision_status NOT IN ('Denied','No Decision')
+      AND c.decision_status != 'No Decision'
+      ${isDeniedPaid(pk) ? '' : "AND c.decision_status != 'Denied'"}
   `).bind(pk, cid).first()
 
   // If this contractor is Christopher Garcia, attach commission data
@@ -940,7 +963,8 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
         - SUM(CASE WHEN is_orderly=1 THEN 1 ELSE 0 END)
         - SUM(CASE WHEN is_orderly=0 AND visit_type='NO_SHOW' THEN 1 ELSE 0 END) as other_count
     FROM consults WHERE session_id=? AND contractor_id=?
-      AND decision_status NOT IN ('Denied','No Decision')
+      AND decision_status != 'No Decision'
+      ${isDeniedPaid((session as any)?.period_key) ? '' : "AND decision_status != 'Denied'"}
   `).bind(sid, cid).first()
   return c.json({ contractor, session, consults: consults.results, summary })
 })
@@ -970,7 +994,8 @@ async function calcCommission(db: D1Database, pk: string) {
     WHERE s.period_key = ?
       AND LOWER(ct.name) LIKE '%ana lisa carr%'
       AND LOWER(c.organization_name) LIKE '%ringside%'
-      AND c.decision_status NOT IN ('Denied','No Decision')
+      AND c.decision_status != 'No Decision'
+      ${isDeniedPaid(pk) ? '' : "AND c.decision_status != 'Denied'"}
   `).bind(pk).first() as any
 
   const ringside_count     = ringsideRow?.ringside_count || 0
@@ -995,7 +1020,8 @@ async function calcCommission(db: D1Database, pk: string) {
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
     WHERE s.period_key = ?
       AND LOWER(ct.name) NOT LIKE '%garcia%'
-      AND c.decision_status NOT IN ('Denied','No Decision')
+      AND c.decision_status != 'No Decision'
+      ${isDeniedPaid(pk) ? '' : "AND c.decision_status != 'Denied'"}
     GROUP BY ct.id, ct.name, ct.contractor_type
     ORDER BY ct.name
   `).bind(pk).all()
@@ -1088,7 +1114,8 @@ app.get('/api/export/gusto/period/:period_key', async (c) => {
     LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE s.period_key=?
-      AND c.decision_status NOT IN ('Denied','No Decision')
+      AND c.decision_status != 'No Decision'
+      ${isDeniedPaid(pk) ? '' : "AND c.decision_status != 'Denied'"}
     GROUP BY c.contractor_id ORDER BY ct.name
   `).bind(pk).all()
   return c.json(rows.results)
@@ -1115,7 +1142,8 @@ app.get('/api/export/gusto/:session_id', async (c) => {
     FROM consults c LEFT JOIN contractors ct ON c.contractor_id = ct.id
     LEFT JOIN upload_sessions s ON c.session_id = s.id
     WHERE c.session_id=?
-      AND c.decision_status NOT IN ('Denied','No Decision')
+      AND c.decision_status != 'No Decision'
+      ${isDeniedPaid((await c.env.DB.prepare('SELECT period_key FROM upload_sessions WHERE id=?').bind(sid).first() as any)?.period_key) ? '' : "AND c.decision_status != 'Denied'"}
     GROUP BY c.contractor_id ORDER BY ct.name
   `).bind(sid).all()
   return c.json(rows.results)
@@ -1131,19 +1159,19 @@ app.get('/api/cv-summary/period/:period_key', async (c) => {
   ).bind(pk).all()
   const periodLabel = (sessions.results[0] as any)?.period_label || pk
 
+  const deniedFilter = isDeniedPaid(pk) ? `AND c.decision_status != 'No Decision'` : `AND c.decision_status NOT IN ('Denied','No Decision')`
+
   const byVisitType = await c.env.DB.prepare(`
     SELECT visit_type, COUNT(*) as count, SUM(carevalidate_fee) as total_amount
     FROM consults c LEFT JOIN upload_sessions s ON c.session_id = s.id
-    WHERE s.period_key=?
-      AND c.decision_status NOT IN ('Denied','No Decision')
+    WHERE s.period_key=? ${deniedFilter}
     GROUP BY visit_type
   `).bind(pk).all()
 
   const total = await c.env.DB.prepare(`
     SELECT COUNT(*) as total_cases, SUM(carevalidate_fee) as total_owed
     FROM consults c LEFT JOIN upload_sessions s ON c.session_id = s.id
-    WHERE s.period_key=?
-      AND c.decision_status NOT IN ('Denied','No Decision')
+    WHERE s.period_key=? ${deniedFilter}
   `).bind(pk).first()
 
   // Breakdown by contractor: async, sync, orderly counts + CV amounts
@@ -1167,8 +1195,7 @@ app.get('/api/cv-summary/period/:period_key', async (c) => {
     FROM consults c
     JOIN upload_sessions s  ON c.session_id = s.id
     JOIN contractors ct     ON c.contractor_id = ct.id
-    WHERE s.period_key=?
-      AND c.decision_status NOT IN ('Denied','No Decision')
+    WHERE s.period_key=? ${deniedFilter}
     GROUP BY ct.id, ct.name, ct.contractor_type
     ORDER BY total_cv DESC
   `).bind(pk).all()
@@ -1184,11 +1211,12 @@ app.get('/api/cv-summary/period/:period_key', async (c) => {
 app.get('/api/cv-summary/:session_id', async (c) => {
   const sid = c.req.param('session_id')
   const session = await c.env.DB.prepare('SELECT * FROM upload_sessions WHERE id=?').bind(sid).first()
+  const sessDeniedFilter = isDeniedPaid((session as any)?.period_key) ? `AND decision_status != 'No Decision'` : `AND decision_status NOT IN ('Denied','No Decision')`
   const byVisitType = await c.env.DB.prepare(
-    `SELECT visit_type, COUNT(*) as count, SUM(carevalidate_fee) as total_amount FROM consults WHERE session_id=? AND decision_status NOT IN ('Denied','No Decision') GROUP BY visit_type`
+    `SELECT visit_type, COUNT(*) as count, SUM(carevalidate_fee) as total_amount FROM consults WHERE session_id=? ${sessDeniedFilter} GROUP BY visit_type`
   ).bind(sid).all()
   const total = await c.env.DB.prepare(
-    `SELECT COUNT(*) as total_cases, SUM(carevalidate_fee) as total_owed FROM consults WHERE session_id=? AND decision_status NOT IN ('Denied','No Decision')`
+    `SELECT COUNT(*) as total_cases, SUM(carevalidate_fee) as total_owed FROM consults WHERE session_id=? ${sessDeniedFilter}`
   ).bind(sid).first()
   return c.json({ session, byVisitType: byVisitType.results, total })
 })

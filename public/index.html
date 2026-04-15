@@ -523,90 +523,6 @@ function dashColShowAll() {
 }
 
 // ════════════════════════════════════════════════════
-// DENIED PAY TOGGLE — per-period setting
-// ════════════════════════════════════════════════════
-let _deniedPayState = 0  // cached for current period
-
-async function loadDeniedPayStatus(pk) {
-  try {
-    const data = await api(`/api/period-settings/${pk}`)
-    _deniedPayState = data.denied_paid || 0
-  } catch(_) { _deniedPayState = 0 }
-  applyDeniedPayUI()
-}
-
-function applyDeniedPayUI() {
-  const btn = document.getElementById('deniedPayBtn')
-  const lbl = document.getElementById('deniedPayLabel')
-  if (!btn || !lbl) return
-  if (_deniedPayState) {
-    lbl.textContent = 'Denied: Paid'
-    btn.style.borderColor = '#f59e0b'
-    btn.style.color = '#d97706'
-    btn.querySelector('i').className = 'fas fa-check-circle mr-2 text-amber-500'
-  } else {
-    lbl.textContent = 'Denied: Unpaid'
-    btn.style.borderColor = ''
-    btn.style.color = ''
-    btn.querySelector('i').className = 'fas fa-ban mr-2 text-gray-400'
-  }
-}
-
-async function toggleDeniedPay() {
-  if (!state.currentPeriod) return
-  const pk = state.currentPeriod.period_key
-  const newVal = _deniedPayState ? 0 : 1
-  const label = state.currentPeriod.period_label || pk
-  const action = newVal ? 'mark Denied cases as PAID' : 'mark Denied cases as UNPAID'
-
-  // Confirm before recalculating — this rewrites all fees for the period
-  const modal = document.createElement('div')
-  modal.id = 'deniedPayModal'
-  modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4'
-  modal.style.background = 'rgba(0,0,0,0.5)'
-  modal.innerHTML = `
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-      <div class="flex items-center gap-3 mb-4">
-        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background:rgba(245,158,11,0.1)">
-          <i class="fas fa-exchange-alt text-amber-500"></i>
-        </div>
-        <h3 class="text-lg font-bold text-gray-800">Change Denied Pay Setting</h3>
-      </div>
-      <p class="text-gray-600 mb-2">This will <strong>${action}</strong> for period:</p>
-      <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 text-amber-800 font-semibold">${label}</div>
-      <p class="text-gray-500 text-sm mb-5">All non-overridden consults in this period will be <strong>recalculated immediately</strong> with the new setting.</p>
-      <div class="flex gap-3 justify-end">
-        <button onclick="document.getElementById('deniedPayModal').remove()" class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium text-sm">Cancel</button>
-        <button onclick="executeDeniedPayToggle('${pk}', ${newVal})" class="px-5 py-2 rounded-xl font-medium text-sm text-white" style="background:#f59e0b">
-          Confirm &amp; Recalculate
-        </button>
-      </div>
-    </div>`
-  document.body.appendChild(modal)
-}
-
-async function executeDeniedPayToggle(pk, newVal) {
-  document.getElementById('deniedPayModal')?.remove()
-  showLoading('Updating denied pay setting and recalculating…')
-  try {
-    // 1. Save the new setting
-    await api(`/api/period-settings/${pk}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ denied_paid: newVal }) })
-    _deniedPayState = newVal
-    applyDeniedPayUI()
-    // 2. Recalculate this period's fees with the new flag
-    await api('/api/recalculate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ period_key: pk }) })
-    // 3. Refresh summary and re-render dashboard
-    state.currentSummary = await api(`/api/summary/period/${pk}`)
-    renderDashboard()
-    hideLoading()
-    showToast(`Denied cases now ${newVal ? 'paid' : 'unpaid'} — period recalculated!`, 'success')
-  } catch(e) {
-    hideLoading()
-    showToast('Failed: ' + e.message, 'error')
-  }
-}
-
-// ════════════════════════════════════════════════════
 // DASHBOARD PAGE
 // ════════════════════════════════════════════════════
 function renderDashboard() {
@@ -720,9 +636,6 @@ function renderDashboard() {
                 ${DASH_COLS.map(c => '<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="dashcol_' + c.key + '" ' + (dashColVisibility[c.key] ? 'checked' : '') + ' onchange="toggleDashCol(\'' + c.key + '\')" class="w-3.5 h-3.5 accent-blue-500"><span class="text-sm text-gray-700">' + c.label + '</span></label>').join('')}
               </div>
             </div>
-            <button id="deniedPayBtn" onclick="toggleDeniedPay()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" title="Toggle whether Denied cases are paid this period">
-              <i class="fas fa-ban mr-2 text-gray-400"></i><span id="deniedPayLabel">Denied: Unpaid</span>
-            </button>
             <button onclick="navigate('payroll')" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium">
               <i class="fas fa-file-invoice-dollar mr-2"></i>View Payroll
             </button>
@@ -877,8 +790,6 @@ function renderDashboard() {
   // Apply saved column visibility after DOM is ready
   applyDashColVisibility()
 
-  // Load denied pay status for this period (async — updates button label when ready)
-  loadDeniedPayStatus(pk)
 }
 
 function renderVisitTypeChart(data) {
