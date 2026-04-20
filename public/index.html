@@ -88,7 +88,14 @@
       position: absolute; right: 0; top: calc(100% + 4px); z-index: 50;
       background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 12px 14px;
-      min-width: 180px;
+      min-width: 190px; max-height: 340px; overflow-y: auto;
+    }
+    .col-badge {
+      display: inline-flex; align-items: center;
+      margin-left: 6px; padding: 1px 6px;
+      background: #fef3c7; color: #d97706;
+      border-radius: 9999px; font-size: 11px; font-weight: 600;
+      border: 1px solid #fcd34d;
     }
 
     /* ── Sidebar ───────────────────────────────────────── */
@@ -502,24 +509,78 @@ function applyDashColVisibility() {
     const cb = document.getElementById('dashcol_' + c.key)
     if (cb) cb.checked = dashColVisibility[c.key]
   })
+  updateDashColBtn()
 }
 
 function toggleDashColPanel() {
   const panel = document.getElementById('dashColPanel')
   if (!panel) return
-  panel.classList.toggle('hidden')
+  const isHidden = panel.classList.contains('hidden')
+  if (isHidden) {
+    panel.classList.remove('hidden')
+    // Close when clicking outside
+    setTimeout(() => {
+      document.addEventListener('click', _closeDashColPanel)
+    }, 0)
+  } else {
+    panel.classList.add('hidden')
+    document.removeEventListener('click', _closeDashColPanel)
+  }
+}
+
+function _closeDashColPanel(e) {
+  const panel = document.getElementById('dashColPanel')
+  const btn = document.getElementById('dashColBtn')
+  if (panel && !panel.contains(e.target) && (!btn || !btn.contains(e.target))) {
+    panel.classList.add('hidden')
+    document.removeEventListener('click', _closeDashColPanel)
+  }
 }
 
 function toggleDashCol(key) {
   dashColVisibility[key] = !dashColVisibility[key]
   saveDashColVisibility()
   applyDashColVisibility()
+  updateDashColBtn()
 }
 
 function dashColShowAll() {
   DASH_COLS.forEach(c => { dashColVisibility[c.key] = true })
   saveDashColVisibility()
   applyDashColVisibility()
+  updateDashColBtn()
+}
+
+function dashColHideAll() {
+  // Keep doctor col always; hide all toggleable cols
+  DASH_COLS.forEach(c => { dashColVisibility[c.key] = false })
+  saveDashColVisibility()
+  applyDashColVisibility()
+  updateDashColBtn()
+}
+
+function updateDashColBtn() {
+  const btn = document.getElementById('dashColBtn')
+  if (!btn) return
+  const hiddenCount = DASH_COLS.filter(c => !dashColVisibility[c.key]).length
+  const badge = btn.querySelector('.col-badge')
+  if (hiddenCount > 0) {
+    if (badge) {
+      badge.textContent = hiddenCount + ' hidden'
+      badge.style.display = ''
+    } else {
+      const b = document.createElement('span')
+      b.className = 'col-badge'
+      b.textContent = hiddenCount + ' hidden'
+      btn.appendChild(b)
+    }
+    btn.style.borderColor = '#f59e0b'
+    btn.style.color = '#d97706'
+  } else {
+    if (badge) badge.style.display = 'none'
+    btn.style.borderColor = ''
+    btn.style.color = ''
+  }
 }
 
 // ════════════════════════════════════════════════════
@@ -625,15 +686,20 @@ function renderDashboard() {
           </h3>
           <div class="flex gap-2">
             <div class="relative">
-              <button onclick="toggleDashColPanel()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" title="Show/hide columns">
-                <i class="fas fa-columns mr-2"></i>Columns
+              <button id="dashColBtn" onclick="toggleDashColPanel()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" title="Show/hide columns" ${DASH_COLS.filter(c=>!dashColVisibility[c.key]).length > 0 ? 'style="border-color:#f59e0b;color:#d97706"' : ''}>
+                <i class="fas fa-columns mr-2"></i>Columns${DASH_COLS.filter(c=>!dashColVisibility[c.key]).length > 0 ? '<span class="col-badge">' + DASH_COLS.filter(c=>!dashColVisibility[c.key]).length + ' hidden</span>' : ''}
               </button>
               <div id="dashColPanel" class="hidden">
                 <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                  <span class="text-xs font-bold text-gray-600 uppercase tracking-wider">Show Columns</span>
-                  <button onclick="dashColShowAll()" class="text-xs text-blue-500 hover:text-blue-700 font-medium">Show all</button>
+                  <span class="text-xs font-bold text-gray-600 uppercase tracking-wider">Toggle Columns</span>
+                  <div class="flex gap-2">
+                    <button onclick="dashColShowAll()" class="text-xs text-blue-500 hover:text-blue-700 font-medium">All</button>
+                    <span class="text-gray-200">|</span>
+                    <button onclick="dashColHideAll()" class="text-xs text-gray-400 hover:text-gray-600 font-medium">None</button>
+                  </div>
                 </div>
                 ${DASH_COLS.map(c => '<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="dashcol_' + c.key + '" ' + (dashColVisibility[c.key] ? 'checked' : '') + ' onchange="toggleDashCol(\'' + c.key + '\')" class="w-3.5 h-3.5 accent-blue-500"><span class="text-sm text-gray-700">' + c.label + '</span></label>').join('')}
+                <div class="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400 text-center">Hidden columns are excluded from PDF export</div>
               </div>
             </div>
             <button onclick="navigate('payroll')" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium">
