@@ -361,6 +361,122 @@ app.delete('/api/contractors/:id', async (c) => {
 })
 
 // ──────────────────────────────────────────────
+// MERGE CONTRACTORS
+// Body: { keep_id: number, merge_ids: number[] }
+// - Re-points all consults from merge_ids → keep_id
+// - Re-runs fee calculation for affected consults (owner/type may differ)
+// - Deactivates the merged (duplicate) contractor records
+// ──────────────────────────────────────────────
+app.post('/api/contractors/merge', async (c) => {
+  const body = await c.req.json() as any
+  const keepId: number = Number(body.keep_id)
+  const mergeIds: number[] = (body.merge_ids || []).map(Number).filter((id: number) => id !== keepId)
+
+  if (!keepId || mergeIds.length === 0) {
+    return c.json({ error: 'keep_id and at least one merge_id required' }, 400)
+  }
+
+  // Load the canonical contractor info
+  const keeper = await c.env.DB.prepare('SELECT * FROM contractors WHERE id=?').bind(keepId).first() as any
+  if (!keeper) return c.json({ error: 'keep_id not found' }, 404)
+
+  // Load rates maps to recalculate fees after re-pointing
+  const { ratesMap, contractorTypeMap, ctRatesMap } = await loadMaps(c.env.DB)
+  const keeperType = keeper.contractor_type || 'regular'
+
+  // Pre-load session → period_key map to avoid N+1 queries inside the loop
+  const sessionsAll = await c.env.DB.prepare('SELECT id, period_key FROM upload_sessions').all()
+  const sessionPkMap: Record<number, string> = {}
+  for (const s of sessionsAll.results as any[]) {
+    sessionPkMap[s.id] = s.period_key || ''
+  }
+
+  let totalMoved = 0
+
+  for (const mergeId of mergeIds) {
+    // Re-point all non-overridden consults from mergeId → keepId and recalculate fees
+    const PAGE_SIZE = 500
+    let offset = 0
+
+    while (true) {
+      const rows = await c.env.DB.prepare(
+        `SELECT id, visit_type, is_orderly, decision_status, session_id FROM consults
+         WHERE contractor_id=? AND (is_override IS NULL OR is_override=0)
+         LIMIT ${PAGE_SIZE} OFFSET ${offset}`
+      ).bind(mergeId).all()
+
+      if (!rows.results.length) break
+
+      const stmts = []
+      for (const row of rows.results as any[]) {
+        const vt: string = (row.visit_type || '').toUpperCase()
+        const isOrderly: boolean = row.is_orderly === 1
+        const rowPk: string = sessionPkMap[row.session_id] || ''
+
+        // CV fee (same regardless of contractor type)
+        let cvFee = isOrderly ? (ratesMap['ORDERLY']?.cv ?? 17) : (ratesMap[vt]?.cv ?? 0)
+
+        // CT fee using the KEEPER's contractor type
+        let ctFee: number
+        if (isOrderly) {
+          ctFee = ctRatesMap[keeperType]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 10
+        } else {
+          ctFee = ctRatesMap[keeperType]?.[vt] ?? ratesMap[vt]?.ct ?? 0
+        }
+
+        // Zero out for No Decision always; zero Denied only for pre-2026-03
+        const status = (row.decision_status || '').trim()
+        if (status === 'No Decision' || (status === 'Denied' && !isDeniedPaid(rowPk))) {
+          cvFee = 0; ctFee = 0
+        }
+
+        stmts.push(
+          c.env.DB.prepare('UPDATE consults SET contractor_id=?, carevalidate_fee=?, contractor_fee=? WHERE id=?')
+            .bind(keepId, cvFee, ctFee, row.id)
+        )
+      }
+
+      if (stmts.length > 0) await c.env.DB.batch(stmts)
+      totalMoved += rows.results.length
+      offset += PAGE_SIZE
+      if (rows.results.length < PAGE_SIZE) break
+    }
+
+    // Also re-point any overridden consults (keep fees as-is, just update the pointer)
+    await c.env.DB.prepare('UPDATE consults SET contractor_id=? WHERE contractor_id=? AND is_override=1')
+      .bind(keepId, mergeId).run()
+
+    // Deactivate the merged duplicate
+    await c.env.DB.prepare('UPDATE contractors SET is_active=0 WHERE id=?').bind(mergeId).run()
+  }
+
+  // Recompute session totals for all affected sessions
+  const affectedSessions = await c.env.DB.prepare(
+    `SELECT DISTINCT session_id FROM consults WHERE contractor_id=?`
+  ).bind(keepId).all()
+
+  const sessionStmts = []
+  for (const s of affectedSessions.results as any[]) {
+    const totals = await c.env.DB.prepare(
+      'SELECT COUNT(*) as tc, SUM(carevalidate_fee) as cv, SUM(contractor_fee) as ct FROM consults WHERE session_id=?'
+    ).bind(s.session_id).first() as any
+    sessionStmts.push(
+      c.env.DB.prepare('UPDATE upload_sessions SET total_cases=?, total_carevalidate_amount=?, total_contractor_amount=? WHERE id=?')
+        .bind(totals?.tc || 0, totals?.cv || 0, totals?.ct || 0, s.session_id)
+    )
+  }
+  if (sessionStmts.length) await c.env.DB.batch(sessionStmts)
+
+  return c.json({ ok: true, keep_id: keepId, merged: mergeIds, consults_moved: totalMoved })
+})
+
+// GET /api/contractors/all — includes inactive, for merge UI
+app.get('/api/contractors/all', async (c) => {
+  const rows = await c.env.DB.prepare('SELECT * FROM contractors ORDER BY name, is_active DESC').all()
+  return c.json(rows.results)
+})
+
+// ──────────────────────────────────────────────
 // SESSIONS
 // Returns grouped periods, each with list of files
 // ──────────────────────────────────────────────

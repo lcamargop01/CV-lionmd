@@ -2539,15 +2539,63 @@ async function downloadPaystub() {
 // ════════════════════════════════════════════════════
 // CONTRACTORS PAGE
 // ════════════════════════════════════════════════════
+// Detect duplicate contractor groups (same name, multiple active records)
+function detectDuplicateGroups(contractors) {
+  const byName = {}
+  contractors.forEach(c => {
+    const key = (c.name || '').trim().toLowerCase()
+    if (!byName[key]) byName[key] = []
+    byName[key].push(c)
+  })
+  return Object.values(byName).filter(group => group.length > 1)
+}
+
 function renderContractors() {
+  const duplicateGroups = detectDuplicateGroups(state.contractors)
+  const duplicateIds = new Set(duplicateGroups.flatMap(g => g.map(c => c.id)))
+  const hasDuplicates = duplicateGroups.length > 0
+
   $('mainContent').innerHTML = `
     <div class="space-y-4">
-      <div class="flex justify-between items-center">
-        <p class="text-sm text-gray-500">${state.contractors.length} active contractors</p>
-        <button onclick="openContractorModal()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
-          <i class="fas fa-plus mr-2"></i>Add Contractor
-        </button>
+      <div class="flex justify-between items-center flex-wrap gap-3">
+        <div>
+          <p class="text-sm text-gray-500">${state.contractors.length} active contractors</p>
+          ${hasDuplicates ? `<p class="text-xs text-amber-600 font-medium mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>${duplicateGroups.length} duplicate group${duplicateGroups.length>1?'s':''} found — merge recommended</p>` : ''}
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          ${hasDuplicates ? `<button onclick="openMergeWizard()" class="px-4 py-2.5 rounded-xl font-medium text-sm border-2 border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors">
+            <i class="fas fa-compress-arrows-alt mr-2"></i>Merge Duplicates (${duplicateGroups.length})
+          </button>` : ''}
+          <button onclick="openContractorModal()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
+            <i class="fas fa-plus mr-2"></i>Add Contractor
+          </button>
+        </div>
       </div>
+
+      ${hasDuplicates ? `
+      <div class="card p-4 border-2 border-amber-200 bg-amber-50/50">
+        <div class="flex items-center gap-2 mb-3">
+          <i class="fas fa-clone text-amber-500"></i>
+          <h4 class="font-semibold text-amber-800">Duplicate Contractors Detected</h4>
+        </div>
+        <div class="space-y-2">
+          ${duplicateGroups.map(group => `
+            <div class="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-amber-200">
+              <div>
+                <span class="font-semibold text-gray-800">${escHtml(group[0].name)}</span>
+                <span class="ml-2 text-xs text-gray-400">${group.length} records · IDs: ${group.map(c=>'#'+c.id).join(', ')}</span>
+                <div class="flex gap-2 mt-1 flex-wrap">
+                  ${group.map(c => `<span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">#${c.id} — ${escHtml(c.company||'no company')} ${c.ein_ssn?'· '+escHtml(c.ein_ssn):''}</span>`).join('')}
+                </div>
+              </div>
+              <button onclick="openMergeModal(${JSON.stringify(group).replace(/"/g,'&quot;')})"
+                class="shrink-0 ml-3 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+                <i class="fas fa-compress-arrows-alt mr-1"></i>Merge
+              </button>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+
       <div class="card overflow-hidden">
         <table class="w-full text-sm">
           <thead class="bg-gray-50">
@@ -2562,22 +2610,29 @@ function renderContractors() {
           </thead>
           <tbody>
             ${state.contractors.map(c => `
-              <tr class="table-row border-b border-gray-50">
+              <tr class="table-row border-b border-gray-50 ${duplicateIds.has(c.id) ? 'bg-amber-50/40' : ''}">
                 <td class="px-5 py-3 font-semibold text-gray-800">
                   <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:var(--lion-gold)">${(c.name || '?')[0]}</div>
-                    ${c.name}
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(c.name || '?')[0]}</div>
+                    <div>
+                      ${escHtml(c.name)}
+                      ${duplicateIds.has(c.id) ? '<span class="ml-1 text-xs text-amber-500 font-normal"><i class="fas fa-clone"></i> dup</span>' : ''}
+                      <div class="text-xs text-gray-400 font-normal">ID #${c.id}</div>
+                    </div>
                   </div>
                 </td>
                 <td class="px-5 py-3">${contractorTypeBadge(c.contractor_type || 'regular')}</td>
-                <td class="px-5 py-3 text-gray-600">${c.company || '—'}</td>
-                <td class="px-5 py-3 font-mono text-sm text-gray-500">${c.ein_ssn || '—'}</td>
-                <td class="px-5 py-3 text-gray-500">${c.email || '—'}</td>
+                <td class="px-5 py-3 text-gray-600">${escHtml(c.company || '—')}</td>
+                <td class="px-5 py-3 font-mono text-sm text-gray-500">${escHtml(c.ein_ssn || '—')}</td>
+                <td class="px-5 py-3 text-gray-500">${escHtml(c.email || '—')}</td>
                 <td class="px-5 py-3 text-center">
-                  <div class="flex gap-2 justify-center">
+                  <div class="flex gap-2 justify-center flex-wrap">
                     <button onclick="openContractorModal(${JSON.stringify(c).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
                       <i class="fas fa-edit mr-1"></i>Edit
                     </button>
+                    ${duplicateIds.has(c.id) ? `<button onclick="openMergeModal(${JSON.stringify(state.contractors.filter(x=>x.name.trim().toLowerCase()===c.name.trim().toLowerCase())).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-300">
+                      <i class="fas fa-compress-arrows-alt mr-1"></i>Merge
+                    </button>` : ''}
                     <button onclick="deleteContractor(${c.id}, '${escHtml(c.name)}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
                       <i class="fas fa-trash"></i>
                     </button>
@@ -2589,7 +2644,7 @@ function renderContractors() {
       </div>
     </div>
 
-    <!-- Contractor Modal -->
+    <!-- Contractor Add/Edit Modal -->
     <div id="contractorModal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
         <h3 class="text-lg font-bold text-gray-800 mb-5" id="contractorModalTitle">Add Contractor</h3>
@@ -2648,7 +2703,124 @@ function renderContractors() {
           <button onclick="$('contractorModal').classList.add('hidden')" class="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50">Cancel</button>
         </div>
       </div>
+    </div>
+
+    <!-- Merge Modal -->
+    <div id="mergeModal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-compress-arrows-alt text-amber-600"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-gray-800">Merge Duplicate Contractors</h3>
+            <p class="text-xs text-gray-500">All consults will be re-pointed to the record you keep. Paystubs will reflect the merged data.</p>
+          </div>
+        </div>
+        <div id="mergeModalBody"></div>
+        <div class="flex gap-3 mt-5">
+          <button onclick="executeMerge()" class="flex-1 py-3 rounded-xl font-semibold text-white" style="background:#f59e0b">
+            <i class="fas fa-compress-arrows-alt mr-2"></i>Merge Now
+          </button>
+          <button onclick="$('mergeModal').classList.add('hidden')" class="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50">Cancel</button>
+        </div>
+      </div>
     </div>`
+}
+
+// Store current merge group for executeMerge
+let _mergeGroup = []
+
+function openMergeWizard() {
+  const groups = detectDuplicateGroups(state.contractors)
+  if (groups.length === 0) return
+  // Open the first group — user can close and open others individually
+  openMergeModal(groups[0])
+}
+
+function openMergeModal(group) {
+  _mergeGroup = Array.isArray(group) ? group : JSON.parse(typeof group === 'string' ? group : JSON.stringify(group))
+
+  // Pick the best default "keep": prefer record with EIN/SSN, then lowest ID
+  const sorted = [..._mergeGroup].sort((a, b) => {
+    const aHasEin = a.ein_ssn && a.ein_ssn.trim() ? 1 : 0
+    const bHasEin = b.ein_ssn && b.ein_ssn.trim() ? 1 : 0
+    if (bHasEin !== aHasEin) return bHasEin - aHasEin
+    return a.id - b.id
+  })
+  const defaultKeep = sorted[0].id
+
+  const html = `
+    <p class="text-sm text-gray-600 mb-3">Select which record to <strong>keep</strong>. All consult history from the others will be merged into it and their records deactivated.</p>
+    <div class="space-y-2 mb-4" id="mergeRadioGroup">
+      ${_mergeGroup.map((c, i) => `
+        <label class="flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors merge-option ${c.id === defaultKeep ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:border-gray-300'}"
+          onclick="selectMergeKeep(${c.id})">
+          <input type="radio" name="mergeKeep" value="${c.id}" ${c.id === defaultKeep ? 'checked' : ''} class="mt-1 accent-amber-500"/>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-semibold text-gray-800">${escHtml(c.name)}</span>
+              ${contractorTypeBadge(c.contractor_type || 'regular')}
+              <span class="text-xs text-gray-400">ID #${c.id}</span>
+              ${c.id === defaultKeep ? '<span class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">Recommended</span>' : ''}
+            </div>
+            <div class="text-xs text-gray-500 mt-1 space-y-0.5">
+              ${c.company ? `<div><i class="fas fa-building w-3 mr-1 text-gray-400"></i>${escHtml(c.company)}</div>` : ''}
+              ${c.ein_ssn ? `<div><i class="fas fa-id-card w-3 mr-1 text-gray-400"></i>${escHtml(c.ein_ssn)}</div>` : '<div class="text-gray-300 italic">No EIN/SSN</div>'}
+              ${c.email ? `<div><i class="fas fa-envelope w-3 mr-1 text-gray-400"></i>${escHtml(c.email)}</div>` : ''}
+            </div>
+          </div>
+        </label>`).join('')}
+    </div>
+    <div class="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
+      <i class="fas fa-info-circle mr-1"></i>
+      <strong>What happens:</strong> All consults linked to the other record(s) are re-assigned to the kept record and fees are recalculated. The merged records are archived (not deleted). Paystubs and dashboard totals update immediately.
+    </div>`
+
+  $('mergeModalBody').innerHTML = html
+  $('mergeModal').classList.remove('hidden')
+}
+
+function selectMergeKeep(id) {
+  document.querySelectorAll('.merge-option').forEach(el => {
+    const radio = el.querySelector('input[type=radio]')
+    const isThis = Number(radio.value) === Number(id)
+    radio.checked = isThis
+    el.classList.toggle('border-amber-400', isThis)
+    el.classList.toggle('bg-amber-50', isThis)
+    el.classList.toggle('border-gray-200', !isThis)
+  })
+}
+
+async function executeMerge() {
+  const radio = document.querySelector('input[name="mergeKeep"]:checked')
+  if (!radio) { showToast('Select a record to keep', 'warning'); return }
+  const keepId = Number(radio.value)
+  const mergeIds = _mergeGroup.map(c => c.id).filter(id => id !== keepId)
+  const keepRecord = _mergeGroup.find(c => c.id === keepId)
+  const name = keepRecord?.name || 'this contractor'
+
+  $('mergeModal').classList.add('hidden')
+  showLoading(`Merging ${name}… re-pointing all consults and recalculating fees…`)
+  try {
+    const result = await api('/api/contractors/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keep_id: keepId, merge_ids: mergeIds })
+    })
+    // Reload contractors list
+    state.contractors = await api('/api/contractors')
+    hideLoading()
+    showToast(`Merged! ${result.consults_moved.toLocaleString()} consults re-pointed to "${name}". Paystubs updated.`, 'success')
+    renderContractors()
+    // Refresh current summary if dashboard is active
+    if (state.currentPeriod) {
+      state.currentSummary = await api(`/api/summary/period/${state.currentPeriod.period_key}`)
+    }
+  } catch(e) {
+    hideLoading()
+    showToast('Merge failed: ' + e.message, 'error')
+  }
 }
 
 function toggleGustoFields() {
