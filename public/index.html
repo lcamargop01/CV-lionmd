@@ -418,6 +418,44 @@
   </div>
 </div>
 
+<!-- View Picker (shown to admin after login) -->
+<div id="viewPicker" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);">
+  <div class="w-full max-w-md mx-4">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 rounded-2xl mx-auto mb-4 overflow-hidden shadow-xl" style="background:linear-gradient(135deg,#C9A84C,#f59e0b);">
+        <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
+      </div>
+      <p id="vpWelcome" class="text-blue-300 text-sm">Welcome back</p>
+      <h1 class="text-2xl font-bold text-white mt-1">Where would you like to go?</h1>
+    </div>
+    <div class="space-y-3">
+      <button onclick="vpGo('payroll')"
+        class="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-white/10 hover:border-yellow-400 hover:bg-white/5 transition-all group">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#1a1a2e,#C9A84C);">
+          <i class="fas fa-money-bill-wave text-yellow-300 text-2xl"></i>
+        </div>
+        <div class="text-left flex-1">
+          <div class="font-bold text-white text-base">Payroll & Admin</div>
+          <div class="text-blue-300 text-sm mt-0.5">Dashboard, reports, contractors, rates</div>
+        </div>
+        <i class="fas fa-arrow-right text-white/30 group-hover:text-yellow-400 transition-colors text-lg"></i>
+      </button>
+      <button onclick="vpGo('onboarding')"
+        class="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-white/10 hover:border-emerald-400 hover:bg-white/5 transition-all group">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-700">
+          <i class="fas fa-user-plus text-white text-2xl"></i>
+        </div>
+        <div class="text-left flex-1">
+          <div class="font-bold text-white text-base">Onboarding</div>
+          <div class="text-blue-300 text-sm mt-0.5">Contractor pipeline, Kanban board, hiring</div>
+        </div>
+        <i class="fas fa-arrow-right text-white/30 group-hover:text-emerald-400 transition-colors text-lg"></i>
+      </button>
+    </div>
+    <p class="text-center text-blue-400/40 text-xs mt-8">Lion MD Portal · Confidential</p>
+  </div>
+</div>
+
 <!-- Mobile sidebar overlay -->
 <div id="mobileOverlay" onclick="closeMobileSidebar()"></div>
 
@@ -452,6 +490,10 @@
         </div>
         <span id="sidebarUserName" class="text-xs text-gray-300 sidebar-text truncate flex-1">User</span>
       </div>
+      <button id="switchViewBtn" onclick="showViewPicker()" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white">
+        <i class="fas fa-th-large w-5 text-center flex-shrink-0 text-sm"></i>
+        <span class="text-sm sidebar-text">Switch View</span>
+      </button>
       <button onclick="openChangePwModal()" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white">
         <i class="fas fa-key w-5 text-center flex-shrink-0 text-sm"></i>
         <span class="text-sm sidebar-text">Change Password</span>
@@ -639,10 +681,28 @@ function applySession(token, user) {
   localStorage.setItem('lmd_token', token)
   localStorage.setItem('lmd_user',  JSON.stringify(user))
   $('loginScreen').classList.add('hidden')
-  $('app').classList.remove('hidden')
-  if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
   applyRoleUI(user.role, user.name)
   buildNav()
+
+  // Admins choose their view; other roles go straight in
+  if (user.role === 'admin') {
+    const vp = $('viewPicker')
+    const wl = $('vpWelcome')
+    if (wl) wl.textContent = 'Welcome back, ' + user.name.split(' ')[0] + '!'
+    vp.classList.remove('hidden')
+  } else {
+    $('app').classList.remove('hidden')
+    if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+    loadInitialData()
+  }
+}
+
+// Called when user picks a view from the picker
+function vpGo(view) {
+  $('viewPicker').classList.add('hidden')
+  $('app').classList.remove('hidden')
+  if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+  state.adminView = view   // 'payroll' | 'onboarding'
   loadInitialData()
 }
 
@@ -650,20 +710,33 @@ function applyRoleUI(role, name) {
   const roleTag  = $('roleTag')
   const subtitle = $('sidebarSubtitle')
   const userNameEl = $('sidebarUserName')
+  const svBtn = $('switchViewBtn')
   if (userNameEl && name) userNameEl.textContent = name
   if (role === 'admin') {
-    roleTag.textContent = '\u{1F451} Admin'
+    roleTag.textContent = '👑 Admin'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 hidden md:block'
     if (subtitle) subtitle.textContent = 'Payroll'
+    if (svBtn) svBtn.classList.remove('hidden')
   } else if (role === 'carevalidate') {
-    roleTag.textContent = '\u{1F3E5} CareValidate'
+    roleTag.textContent = '🏥 CareValidate'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-800 hidden md:block'
     if (subtitle) subtitle.textContent = 'CareValidate'
+    if (svBtn) svBtn.classList.add('hidden')
   } else {
-    roleTag.textContent = '\u{1F7E2} Onboarding'
+    roleTag.textContent = '🟢 Onboarding'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 hidden md:block'
     if (subtitle) subtitle.textContent = 'Onboarding'
+    if (svBtn) svBtn.classList.add('hidden')
   }
+}
+
+// Show the view picker overlay (admin switches between Payroll / Onboarding)
+function showViewPicker() {
+  const vp = $('viewPicker')
+  const wl = $('vpWelcome')
+  if (wl && state.user) wl.textContent = 'Hi ' + state.user.name.split(' ')[0] + '! Where would you like to go?'
+  $('app').classList.add('hidden')
+  vp.classList.remove('hidden')
 }
 
 function logout() {
@@ -694,11 +767,19 @@ async function tryRestoreSession() {
     state.user  = me
     state.role  = me.role
     $('loginScreen').classList.add('hidden')
-    $('app').classList.remove('hidden')
-    if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
     applyRoleUI(me.role, me.name)
     buildNav()
-    loadInitialData()
+    // Admins choose view; others go straight in
+    if (me.role === 'admin') {
+      const vp = $('viewPicker')
+      const wl = $('vpWelcome')
+      if (wl) wl.textContent = 'Welcome back, ' + me.name.split(' ')[0] + '!'
+      vp.classList.remove('hidden')
+    } else {
+      $('app').classList.remove('hidden')
+      if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+      loadInitialData()
+    }
     return true
   } catch(e) {
     localStorage.removeItem('lmd_token')
@@ -813,15 +894,16 @@ function contractorTypeBadge(t) {
 // INITIAL DATA
 // ════════════════════════════════════════════════════
 async function loadInitialData() {
-  // Onboarding-only role: skip all payroll APIs, hide period selector
-  if (state.role === 'onboarding') {
+  // Onboarding-only role (or admin who chose onboarding): skip payroll APIs
+  const goOnboarding = state.role === 'onboarding' || (state.role === 'admin' && state.adminView === 'onboarding')
+  if (goOnboarding) {
     $('sessionSelector').closest('div.flex.items-center.gap-2').style.display = 'none'
     hideLoading()
     navigate('onboarding')
     return
   }
 
-  // Restore period selector visibility (in case user switched from onboarding)
+  // Restore period selector visibility
   const topBarRight = $('sessionSelector').closest('div.flex.items-center.gap-2')
   if (topBarRight) topBarRight.style.display = ''
 
@@ -837,7 +919,7 @@ async function loadInitialData() {
       await selectPeriod(state.periods[0].period_key)
     }
 
-    const landingPage = state.role === 'admin' ? 'dashboard' : 'cv_dashboard'
+    const landingPage = state.role === 'carevalidate' ? 'cv_dashboard' : 'dashboard'
     navigate(landingPage)
   } catch(e) {
     showToast('Error loading data: ' + e.message, 'error')
@@ -5997,8 +6079,8 @@ function umDrawPage() {
                       <button onclick="umOpenEdit(${u.id})" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 tooltip" data-tip="Edit">
                         <i class="fas fa-pencil text-xs"></i>
                       </button>
-                      <button onclick="umResendInvite(${u.id},'${u.name}')" class="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600 tooltip" data-tip="Resend invite link">
-                        <i class="fas fa-envelope text-xs"></i>
+                      <button onclick="umResendInvite(${u.id},'${u.name}')" class="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600 tooltip" data-tip="Generate &amp; copy invite link">
+                        <i class="fas fa-link text-xs"></i>
                       </button>
                       <button onclick="umToggleActive(${u.id},${u.is_active},'${u.name}')" class="p-1.5 rounded-lg tooltip ${u.is_active ? 'hover:bg-red-50 text-red-400 hover:text-red-600' : 'hover:bg-green-50 text-green-400 hover:text-green-600'}" data-tip="${u.is_active ? 'Deactivate' : 'Activate'}">
                         <i class="fas ${u.is_active ? 'fa-user-slash' : 'fa-user-check'} text-xs"></i>
@@ -6013,15 +6095,26 @@ function umDrawPage() {
       </div>
 
       <!-- Invite link display -->
-      <div id="umInviteBox" class="hidden mt-4 card p-4 border-2 border-dashed border-yellow-300 bg-yellow-50">
-        <p class="text-sm font-semibold text-yellow-800 mb-2"><i class="fas fa-link mr-1"></i>Share this invite link with the user:</p>
+      <div id="umInviteBox" class="hidden mt-4 card p-5 border-2 border-dashed border-yellow-400 bg-yellow-50">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-link text-white text-sm"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-yellow-800">Invite link ready — copy &amp; share it</p>
+            <p class="text-xs text-yellow-600">Link expires in 48 hours. The user sets their own password on first visit.</p>
+          </div>
+        </div>
         <div class="flex items-center gap-2">
-          <input id="umInviteLink" type="text" readonly class="flex-1 bg-white text-xs text-gray-700 font-mono" onclick="this.select()"/>
-          <button onclick="umCopyInvite()" class="btn-primary px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">
-            <i class="fas fa-copy mr-1"></i>Copy
+          <input id="umInviteLink" type="text" readonly
+            onclick="this.select(); umCopyInvite()"
+            class="flex-1 bg-white text-xs text-gray-700 font-mono cursor-pointer hover:bg-yellow-50 transition-colors"
+            title="Click to copy"/>
+          <button onclick="umCopyInvite()" id="umCopyBtn"
+            class="btn-primary px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap flex-shrink-0">
+            <i class="fas fa-copy"></i> Copy Link
           </button>
         </div>
-        <p class="text-xs text-yellow-700 mt-2"><i class="fas fa-clock mr-1"></i>Link expires in 48 hours. User sets their own password on first visit.</p>
       </div>
     </div>`
 }
@@ -6142,8 +6235,15 @@ async function umResendInvite(id, name) {
 
 function umCopyInvite() {
   const link = $('umInviteLink').value
-  navigator.clipboard.writeText(link).then(() => showToast('Invite link copied!', 'success')).catch(() => {
-    $('umInviteLink').select(); document.execCommand('copy'); showToast('Link copied!', 'success')
+  if (!link) return
+  const btn = $('umCopyBtn')
+  const doFlash = () => {
+    if (btn) { btn.innerHTML = '<i class="fas fa-check"></i> Copied!'; btn.style.background = '#16a34a' }
+    showToast('Invite link copied to clipboard!', 'success')
+    setTimeout(() => { if (btn) { btn.innerHTML = '<i class="fas fa-copy"></i> Copy Link'; btn.style.background = '' } }, 2500)
+  }
+  navigator.clipboard.writeText(link).then(doFlash).catch(() => {
+    $('umInviteLink').select(); document.execCommand('copy'); doFlash()
   })
 }
 
