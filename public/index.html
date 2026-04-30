@@ -743,6 +743,9 @@ function vpGo(view) {
   $('app').classList.remove('hidden')
   if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
   state.adminView = view
+  // Rebuild nav and subtitle immediately so sidebar reflects the chosen view
+  applyRoleUI(state.role, state.user?.name)
+  buildNav()
   loadInitialData()
 }
 
@@ -916,6 +919,39 @@ function buildNav() {
 }
 
 function navigate(page) {
+  // Special routing for onboarding-view sidebar items
+  const inObView = state.role === 'onboarding' || (state.role === 'admin' && state.adminView === 'onboarding')
+  if (inObView && page === 'calendar') {
+    // Open the Calendar tab inside the onboarding page
+    state.currentPage = 'onboarding'
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+    const navEl = $('nav_calendar'); if (navEl) navEl.classList.add('active')
+    $('pageTitle').textContent = 'Calendar & Deadlines'
+    obSwitchMainTab('calendar')
+    if (isMobile()) closeMobileSidebar()
+    return
+  }
+  if (inObView && page === 'contractors') {
+    // Open the Onboarded Contractors tab inside the onboarding page
+    state.currentPage = 'onboarding'
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+    const navEl = $('nav_contractors'); if (navEl) navEl.classList.add('active')
+    $('pageTitle').textContent = 'Onboarded Contractors'
+    obSwitchMainTab('onboarded')
+    if (isMobile()) closeMobileSidebar()
+    return
+  }
+  if (inObView && page === 'onboarding') {
+    // Clicking Onboarding nav item → go to Kanban pipeline tab
+    state.currentPage = 'onboarding'
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+    const navEl = $('nav_onboarding'); if (navEl) navEl.classList.add('active')
+    $('pageTitle').textContent = 'Onboarding'
+    obSwitchMainTab('kanban')
+    if (isMobile()) closeMobileSidebar()
+    return
+  }
+
   state.currentPage = page
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
   const navEl = $(`nav_${page}`)
@@ -4215,11 +4251,11 @@ let obState = {
 
 async function renderOnboarding() {
   $('mainContent').innerHTML = `<div id="obRoot" class="p-4 md:p-6"></div>`
-  // Load everything in parallel
   await Promise.all([
     obLoadStats(),
     obLoadCandidates(),
   ])
+  obSyncNav(obState.mainTab)
   obRenderView()
 }
 
@@ -4240,16 +4276,25 @@ async function obLoadCalendar() {
   try { obState.calendarData = await api('/api/onboarding/calendar') } catch(_) { obState.calendarData = null }
 }
 
+// Sync sidebar nav highlight to match the active onboarding sub-tab
+function obSyncNav(tab) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+  const map = { kanban: 'onboarding', onboarded: 'contractors', calendar: 'calendar' }
+  const navId = map[tab] || 'onboarding'
+  const el = $(`nav_${navId}`)
+  if (el) el.classList.add('active')
+}
+
 // Switch main top-level tab
 async function obSwitchMainTab(tab) {
   obState.mainTab = tab
+  obSyncNav(tab)
   if (tab === 'calendar' && !obState.calendarData) {
     showLoading('Loading calendar…')
     await obLoadCalendar()
     hideLoading()
   }
   if (tab === 'onboarded') {
-    // Ensure we have all candidates loaded (no filter)
     const saved = obState.filterStatus
     obState.filterStatus = 'hired'
     await obLoadCandidates()
