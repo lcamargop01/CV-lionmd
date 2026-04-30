@@ -318,48 +318,103 @@
   </div>
 </div>
 
-<!-- Role Selector Modal (Login) -->
-<div id="roleModal" class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center">
-  <div class="card p-8 w-full max-w-md mx-4">
-    <div class="text-center mb-6">
-      <div class="w-24 h-24 rounded-2xl mx-auto mb-4 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
+<!-- Change Password Modal -->
+<div id="changePwModal" class="hidden fixed inset-0 modal-backdrop z-50 flex items-center justify-center">
+  <div class="card p-6 w-full max-w-sm mx-4">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-key text-yellow-500 mr-2"></i>Change Password</h3>
+      <button onclick="closeChangePwModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="cpError" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm"></div>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Current Password</label>
+        <input id="cpOldPw" type="password" placeholder="Current password" class="w-full" onkeydown="if(event.key==='Enter')doChangePw()"/>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">New Password</label>
+        <input id="cpNewPw1" type="password" placeholder="At least 8 characters" class="w-full" onkeydown="if(event.key==='Enter')doChangePw()"/>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Confirm New Password</label>
+        <input id="cpNewPw2" type="password" placeholder="Repeat new password" class="w-full" onkeydown="if(event.key==='Enter')doChangePw()"/>
+      </div>
+      <div class="flex gap-3 pt-1">
+        <button onclick="closeChangePwModal()" class="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancel</button>
+        <button onclick="doChangePw()" class="flex-1 btn-primary px-4 py-2 rounded-lg text-sm font-semibold">Update Password</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Login Screen -->
+<div id="loginScreen" class="fixed inset-0 z-50 flex items-center justify-center" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);">
+  <div class="w-full max-w-sm mx-4">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="w-20 h-20 rounded-2xl mx-auto mb-4 overflow-hidden shadow-2xl" style="background:linear-gradient(135deg,#C9A84C,#f59e0b);">
         <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
       </div>
-      <h1 class="text-2xl font-bold text-gray-800">Lion MD Portal</h1>
-      <p class="text-gray-500 text-sm mt-1">Select your access level to continue</p>
+      <h1 class="text-2xl font-bold text-white tracking-tight">Lion MD Portal</h1>
+      <p class="text-blue-300 text-sm mt-1">Sign in to your account</p>
     </div>
-    <div class="space-y-3">
-      <button onclick="setRole('admin')" class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-yellow-500 hover:bg-yellow-50 transition-all group">
-        <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:#1a1a2e;">
-          <i class="fas fa-crown text-yellow-400 text-xl"></i>
+
+    <!-- Login Card -->
+    <div id="loginCard" class="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-2xl">
+      <div id="loginError" class="hidden mb-4 p-3 bg-red-500/20 border border-red-500/40 rounded-lg text-red-200 text-sm"></div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-blue-200 text-xs font-semibold uppercase tracking-wider mb-1.5">Email</label>
+          <input id="loginEmail" type="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doLogin()"
+            class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-blue-300/60 focus:outline-none focus:border-yellow-400 focus:bg-white/15 transition-all text-sm"/>
         </div>
-        <div class="text-left">
-          <div class="font-semibold text-gray-800">Lion MD Admin</div>
-          <div class="text-xs text-gray-500">Full access — payroll, contractors, exports, rates</div>
+        <div>
+          <label class="block text-blue-200 text-xs font-semibold uppercase tracking-wider mb-1.5">Password</label>
+          <div class="relative">
+            <input id="loginPassword" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"
+              class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-blue-300/60 focus:outline-none focus:border-yellow-400 focus:bg-white/15 transition-all text-sm pr-10"/>
+            <button onclick="toggleLoginPw()" class="absolute right-3 top-1/2 -translate-y-1/2 text-blue-300 hover:text-white transition-colors">
+              <i id="loginPwEye" class="fas fa-eye text-sm"></i>
+            </button>
+          </div>
         </div>
-        <i class="fas fa-arrow-right ml-auto text-gray-300 group-hover:text-yellow-500 transition-colors"></i>
-      </button>
-      <button onclick="setRole('carevalidate')" class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group">
-        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-600">
-          <i class="fas fa-hospital text-white text-xl"></i>
-        </div>
-        <div class="text-left">
-          <div class="font-semibold text-gray-800">CareValidate</div>
-          <div class="text-xs text-gray-500">View only — see total owed to Lion MD</div>
-        </div>
-        <i class="fas fa-arrow-right ml-auto text-gray-300 group-hover:text-blue-500 transition-colors"></i>
-      </button>
-      <button onclick="setRole('onboarding')" class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
-        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-600">
-          <i class="fas fa-user-plus text-white text-xl"></i>
-        </div>
-        <div class="text-left">
-          <div class="font-semibold text-gray-800">Onboarding</div>
-          <div class="text-xs text-gray-500">Manage contractor pipeline &amp; hiring</div>
-        </div>
-        <i class="fas fa-arrow-right ml-auto text-gray-300 group-hover:text-emerald-500 transition-colors"></i>
-      </button>
+        <button onclick="doLogin()" id="loginBtn"
+          class="w-full py-3 rounded-xl font-semibold text-sm transition-all mt-2"
+          style="background:linear-gradient(135deg,#C9A84C,#f59e0b);color:white;">
+          <span id="loginBtnText">Sign In</span>
+          <i id="loginBtnSpin" class="fas fa-circle-notch fa-spin hidden ml-2"></i>
+        </button>
+      </div>
     </div>
+
+    <!-- Setup Password Card (shown via invite link) -->
+    <div id="setupCard" class="hidden bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-2xl">
+      <div class="text-center mb-4">
+        <div class="w-12 h-12 rounded-full bg-yellow-400/20 flex items-center justify-center mx-auto mb-3">
+          <i class="fas fa-key text-yellow-400 text-xl"></i>
+        </div>
+        <h2 class="text-white font-bold text-lg">Set Your Password</h2>
+        <p id="setupWelcomeMsg" class="text-blue-300 text-sm mt-1">Welcome! Please create your password.</p>
+      </div>
+      <div id="setupError" class="hidden mb-4 p-3 bg-red-500/20 border border-red-500/40 rounded-lg text-red-200 text-sm"></div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-blue-200 text-xs font-semibold uppercase tracking-wider mb-1.5">New Password</label>
+          <input id="setupPw1" type="password" placeholder="At least 8 characters" onkeydown="if(event.key==='Enter')doSetupPassword()"
+            class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-blue-300/60 focus:outline-none focus:border-yellow-400 transition-all text-sm"/>
+        </div>
+        <div>
+          <label class="block text-blue-200 text-xs font-semibold uppercase tracking-wider mb-1.5">Confirm Password</label>
+          <input id="setupPw2" type="password" placeholder="Repeat password" onkeydown="if(event.key==='Enter')doSetupPassword()"
+            class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-blue-300/60 focus:outline-none focus:border-yellow-400 transition-all text-sm"/>
+        </div>
+        <button onclick="doSetupPassword()" class="w-full py-3 rounded-xl font-semibold text-sm mt-2" style="background:linear-gradient(135deg,#C9A84C,#f59e0b);color:white;">
+          Set Password &amp; Sign In
+        </button>
+      </div>
+    </div>
+
+    <p class="text-center text-blue-400/50 text-xs mt-6">Lion MD Portal · Confidential</p>
   </div>
 </div>
 
@@ -389,10 +444,21 @@
       <!-- Nav items injected by JS based on role -->
     </nav>
 
-    <div class="p-3 border-t border-white/10">
-      <button onclick="logout()" class="nav-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-gray-400 hover:text-white">
-        <i class="fas fa-sign-out-alt w-5 text-center flex-shrink-0"></i>
-        <span class="text-sm sidebar-text">Switch Role</span>
+    <div class="p-3 border-t border-white/10 space-y-1">
+      <!-- Logged-in user info -->
+      <div class="flex items-center gap-2 px-3 py-2 mb-1">
+        <div class="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white" style="background:var(--lion-gold);">
+          <i class="fas fa-user text-[10px]"></i>
+        </div>
+        <span id="sidebarUserName" class="text-xs text-gray-300 sidebar-text truncate flex-1">User</span>
+      </div>
+      <button onclick="openChangePwModal()" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white">
+        <i class="fas fa-key w-5 text-center flex-shrink-0 text-sm"></i>
+        <span class="text-sm sidebar-text">Change Password</span>
+      </button>
+      <button onclick="logout()" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white">
+        <i class="fas fa-sign-out-alt w-5 text-center flex-shrink-0 text-sm"></i>
+        <span class="text-sm sidebar-text">Sign Out</span>
       </button>
     </div>
   </div>
@@ -429,9 +495,11 @@
 // STATE
 // ════════════════════════════════════════════════════
 let state = {
-  role: null, // 'admin' | 'carevalidate'
-  periods: [],        // grouped periods [{period_key, period_label, files:[], total_cases, ...}]
-  currentPeriod: null, // the selected period object
+  role: null,          // 'admin' | 'carevalidate' | 'onboarding'
+  user: null,          // { id, name, email, role }
+  token: null,         // JWT session token
+  periods: [],
+  currentPeriod: null,
   currentSummary: null,
   contractors: [],
   rates: [],
@@ -465,7 +533,10 @@ function hideLoading() { $('loadingOverlay').classList.add('hidden') }
 function setProgress(pct) { $('progressBar').style.width = pct + '%' }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options })
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  if (state.token) headers['Authorization'] = 'Bearer ' + state.token
+  const res = await fetch(path, { ...options, headers })
+  if (res.status === 401) { logout(); return }
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `API error ${res.status}`) }
   return res.json()
 }
@@ -484,41 +555,179 @@ function visitTypeBadge(vt, fee, isOrderly) {
 }
 
 // ════════════════════════════════════════════════════
-// ROLE + AUTH
+// AUTH — login / logout / session
 // ════════════════════════════════════════════════════
-function setRole(role) {
-  state.role = role
-  $('roleModal').classList.add('hidden')
+
+function toggleLoginPw() {
+  const inp = $('loginPassword')
+  const eye = $('loginPwEye')
+  if (inp.type === 'password') { inp.type = 'text'; eye.className = 'fas fa-eye-slash text-sm' }
+  else { inp.type = 'password'; eye.className = 'fas fa-eye text-sm' }
+}
+
+async function doLogin() {
+  const email = ($('loginEmail').value || '').trim()
+  const pw    = ($('loginPassword').value || '').trim()
+  const errEl = $('loginError')
+  errEl.classList.add('hidden')
+  if (!email || !pw) { errEl.textContent = 'Please enter your email and password.'; errEl.classList.remove('hidden'); return }
+
+  $('loginBtn').disabled = true
+  $('loginBtnText').textContent = 'Signing in…'
+  $('loginBtnSpin').classList.remove('hidden')
+
+  try {
+    const data = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pw })
+    }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Login failed'); return d })
+
+    applySession(data.token, data.user)
+  } catch(e) {
+    errEl.textContent = e.message || 'Invalid email or password.'
+    errEl.classList.remove('hidden')
+  } finally {
+    $('loginBtn').disabled = false
+    $('loginBtnText').textContent = 'Sign In'
+    $('loginBtnSpin').classList.add('hidden')
+  }
+}
+
+// Called when visiting /invite?token=xxx
+async function checkInviteToken() {
+  const params = new URLSearchParams(window.location.search)
+  const token = params.get('token')
+  if (!token) return false
+  try {
+    const data = await fetch('/api/auth/invite/' + token).then(async r => {
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Invalid invite')
+      return d
+    })
+    $('loginCard').classList.add('hidden')
+    $('setupCard').classList.remove('hidden')
+    $('setupWelcomeMsg').textContent = 'Welcome, ' + data.name + '! Create a password to access the portal.'
+    $('setupCard').dataset.token = token
+    window.history.replaceState({}, '', window.location.pathname)
+    return true
+  } catch(e) { return false }
+}
+
+async function doSetupPassword() {
+  const pw1   = ($('setupPw1').value || '').trim()
+  const pw2   = ($('setupPw2').value || '').trim()
+  const token = $('setupCard').dataset.token
+  const errEl = $('setupError')
+  errEl.classList.add('hidden')
+  if (!pw1 || pw1.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.classList.remove('hidden'); return }
+  if (pw1 !== pw2) { errEl.textContent = 'Passwords do not match.'; errEl.classList.remove('hidden'); return }
+  try {
+    const data = await fetch('/api/auth/setup-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password: pw1 })
+    }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Setup failed'); return d })
+    applySession(data.token, data.user)
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden') }
+}
+
+function applySession(token, user) {
+  state.token = token
+  state.user  = user
+  state.role  = user.role
+  localStorage.setItem('lmd_token', token)
+  localStorage.setItem('lmd_user',  JSON.stringify(user))
+  $('loginScreen').classList.add('hidden')
   $('app').classList.remove('hidden')
-  // Ensure sidebar starts hidden on mobile
   if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+  applyRoleUI(user.role, user.name)
   buildNav()
   loadInitialData()
+}
 
-  const roleTag = $('roleTag')
+function applyRoleUI(role, name) {
+  const roleTag  = $('roleTag')
   const subtitle = $('sidebarSubtitle')
+  const userNameEl = $('sidebarUserName')
+  if (userNameEl && name) userNameEl.textContent = name
   if (role === 'admin') {
-    roleTag.textContent = '👑 Admin'
+    roleTag.textContent = '\u{1F451} Admin'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 hidden md:block'
     if (subtitle) subtitle.textContent = 'Payroll'
   } else if (role === 'carevalidate') {
-    roleTag.textContent = '🏥 CareValidate'
+    roleTag.textContent = '\u{1F3E5} CareValidate'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-800 hidden md:block'
     if (subtitle) subtitle.textContent = 'CareValidate'
   } else {
-    roleTag.textContent = '🟢 Onboarding'
+    roleTag.textContent = '\u{1F7E2} Onboarding'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 hidden md:block'
     if (subtitle) subtitle.textContent = 'Onboarding'
   }
 }
 
 function logout() {
-  state = { role: null, periods: [], currentPeriod: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
-  $('roleModal').classList.remove('hidden')
+  localStorage.removeItem('lmd_token')
+  localStorage.removeItem('lmd_user')
+  state = { role: null, user: null, token: null, periods: [], currentPeriod: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
+  $('loginScreen').classList.remove('hidden')
+  $('loginCard').classList.remove('hidden')
+  $('setupCard').classList.add('hidden')
   $('app').classList.add('hidden')
+  $('loginEmail').value = ''
+  $('loginPassword').value = ''
+  $('loginError').classList.add('hidden')
   $('sessionSelector').innerHTML = '<option value="">Select Period...</option>'
   const subtitle = $('sidebarSubtitle')
   if (subtitle) subtitle.textContent = 'Payroll'
+}
+
+// Restore session on page load
+async function tryRestoreSession() {
+  const token = localStorage.getItem('lmd_token')
+  if (!token) return false
+  try {
+    const me = await fetch('/api/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(async r => { if (!r.ok) throw new Error(); return r.json() })
+    state.token = token
+    state.user  = me
+    state.role  = me.role
+    $('loginScreen').classList.add('hidden')
+    $('app').classList.remove('hidden')
+    if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+    applyRoleUI(me.role, me.name)
+    buildNav()
+    loadInitialData()
+    return true
+  } catch(e) {
+    localStorage.removeItem('lmd_token')
+    localStorage.removeItem('lmd_user')
+    return false
+  }
+}
+
+// Change Password modal
+function openChangePwModal() {
+  $('changePwModal').classList.remove('hidden')
+  $('cpOldPw').value = ''; $('cpNewPw1').value = ''; $('cpNewPw2').value = ''
+  $('cpError').classList.add('hidden')
+}
+function closeChangePwModal() { $('changePwModal').classList.add('hidden') }
+async function doChangePw() {
+  const oldPw = $('cpOldPw').value
+  const pw1   = $('cpNewPw1').value
+  const pw2   = $('cpNewPw2').value
+  const errEl = $('cpError')
+  errEl.classList.add('hidden')
+  if (!oldPw || !pw1) { errEl.textContent = 'All fields required.'; errEl.classList.remove('hidden'); return }
+  if (pw1.length < 8) { errEl.textContent = 'New password must be at least 8 characters.'; errEl.classList.remove('hidden'); return }
+  if (pw1 !== pw2) { errEl.textContent = 'Passwords do not match.'; errEl.classList.remove('hidden'); return }
+  try {
+    await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ old_password: oldPw, new_password: pw1 }) })
+    showToast('Password changed successfully!', 'success')
+    closeChangePwModal()
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden') }
 }
 
 // ════════════════════════════════════════════════════
@@ -555,6 +764,7 @@ function buildNav() {
     { id: 'onboarding',  icon: 'fa-user-plus',        label: 'Onboarding' },
     { id: 'rates',       icon: 'fa-sliders-h',        label: 'Payment Rates' },
     { id: 'carevalidate',icon: 'fa-eye',              label: 'CareValidate View' },
+    { id: 'users',       icon: 'fa-users-cog',        label: 'User Management' },
   ]
   const cvNav = [
     { id: 'cv_dashboard', icon: 'fa-chart-bar', label: 'Summary' },
@@ -580,10 +790,10 @@ function navigate(page) {
   const navEl = $(`nav_${page}`)
   if (navEl) navEl.classList.add('active')
 
-  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', onboarding:'Onboarding', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View' }
+  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', onboarding:'Onboarding', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View', users:'User Management' }
   $('pageTitle').textContent = titles[page] || page
 
-  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail }
+  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail, users: renderUserManagement }
   if (pages[page]) pages[page]()
 
   // Auto-close sidebar on mobile after navigation
@@ -5691,6 +5901,264 @@ function noDataMsg() {
     <p class="text-gray-400 text-sm mt-1">Please select a period or upload a report</p>
   </div>`
 }
+
+// ════════════════════════════════════════════════════
+// USER MANAGEMENT (Admin only)
+// ════════════════════════════════════════════════════
+let umState = { users: [], editId: null }
+
+async function renderUserManagement() {
+  $('mainContent').innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
+  try {
+    umState.users = await api('/api/admin/users')
+    umDrawPage()
+  } catch(e) { showToast('Error loading users: ' + e.message, 'error') }
+}
+
+function umDrawPage() {
+  const users = umState.users
+  $('mainContent').innerHTML = `
+    <div class="max-w-4xl">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">User Management</h2>
+          <p class="text-sm text-gray-500 mt-0.5">Create users and assign portal access roles</p>
+        </div>
+        <button onclick="umOpenAdd()" class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+          <i class="fas fa-user-plus"></i> Add User
+        </button>
+      </div>
+
+      <!-- Add/Edit form (hidden by default) -->
+      <div id="umForm" class="hidden card p-5 mb-6">
+        <h3 id="umFormTitle" class="font-bold text-gray-800 mb-4">Add New User</h3>
+        <div id="umFormError" class="hidden mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
+            <input id="umName" type="text" placeholder="e.g. Jane Smith" class="w-full"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Email *</label>
+            <input id="umEmail" type="email" placeholder="jane@example.com" class="w-full"/>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Role *</label>
+            <select id="umRole" class="w-full">
+              <option value="admin">👑 Admin — Full access</option>
+              <option value="carevalidate">🏥 CareValidate — Summary &amp; Detail view only</option>
+              <option value="onboarding">🟢 Onboarding — Onboarding pipeline only</option>
+            </select>
+          </div>
+          <div id="umPwField">
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Password <span id="umPwNote" class="text-gray-400 font-normal">(leave blank to send invite link)</span></label>
+            <input id="umPassword" type="password" placeholder="Optional — or user sets via invite" class="w-full"/>
+          </div>
+        </div>
+        <div class="flex gap-3 mt-4">
+          <button onclick="umCloseForm()" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancel</button>
+          <button id="umSaveBtn" onclick="umSave()" class="btn-primary px-5 py-2 rounded-lg text-sm font-semibold">Save User</button>
+        </div>
+      </div>
+
+      <!-- Users table -->
+      <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-100 text-left">
+                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
+                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users.length === 0 ? `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No users yet. Add one above.</td></tr>` :
+                users.map(u => `
+                <tr class="border-b border-gray-50 table-row">
+                  <td class="px-4 py-3 font-medium text-gray-800">
+                    ${u.name}
+                    ${u.id === state.user?.id ? '<span class="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-semibold">You</span>' : ''}
+                  </td>
+                  <td class="px-4 py-3 text-gray-600">${u.email}</td>
+                  <td class="px-4 py-3">${umRoleBadge(u.role)}</td>
+                  <td class="px-4 py-3">
+                    ${u.is_active
+                      ? '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Active</span>'
+                      : '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">Inactive</span>'}
+                    ${u.must_set_password ? '<span class="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Pending Setup</span>' : ''}
+                  </td>
+                  <td class="px-4 py-3 text-gray-500 text-xs">${u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never'}</td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-1">
+                      <button onclick="umOpenEdit(${u.id})" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 tooltip" data-tip="Edit">
+                        <i class="fas fa-pencil text-xs"></i>
+                      </button>
+                      <button onclick="umResendInvite(${u.id},'${u.name}')" class="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600 tooltip" data-tip="Resend invite link">
+                        <i class="fas fa-envelope text-xs"></i>
+                      </button>
+                      <button onclick="umToggleActive(${u.id},${u.is_active},'${u.name}')" class="p-1.5 rounded-lg tooltip ${u.is_active ? 'hover:bg-red-50 text-red-400 hover:text-red-600' : 'hover:bg-green-50 text-green-400 hover:text-green-600'}" data-tip="${u.is_active ? 'Deactivate' : 'Activate'}">
+                        <i class="fas ${u.is_active ? 'fa-user-slash' : 'fa-user-check'} text-xs"></i>
+                      </button>
+                      ${u.id !== state.user?.id ? `<button onclick="umDelete(${u.id},'${u.name}')" class="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 tooltip" data-tip="Delete"><i class="fas fa-trash text-xs"></i></button>` : ''}
+                    </div>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Invite link display -->
+      <div id="umInviteBox" class="hidden mt-4 card p-4 border-2 border-dashed border-yellow-300 bg-yellow-50">
+        <p class="text-sm font-semibold text-yellow-800 mb-2"><i class="fas fa-link mr-1"></i>Share this invite link with the user:</p>
+        <div class="flex items-center gap-2">
+          <input id="umInviteLink" type="text" readonly class="flex-1 bg-white text-xs text-gray-700 font-mono" onclick="this.select()"/>
+          <button onclick="umCopyInvite()" class="btn-primary px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">
+            <i class="fas fa-copy mr-1"></i>Copy
+          </button>
+        </div>
+        <p class="text-xs text-yellow-700 mt-2"><i class="fas fa-clock mr-1"></i>Link expires in 48 hours. User sets their own password on first visit.</p>
+      </div>
+    </div>`
+}
+
+function umRoleBadge(role) {
+  if (role === 'admin') return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">👑 Admin</span>'
+  if (role === 'carevalidate') return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">🏥 CareValidate</span>'
+  return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">🟢 Onboarding</span>'
+}
+
+function umOpenAdd() {
+  umState.editId = null
+  $('umFormTitle').textContent = 'Add New User'
+  $('umSaveBtn').textContent = 'Create User'
+  $('umPwNote').textContent = '(leave blank to send invite link)'
+  $('umName').value = ''; $('umEmail').value = ''; $('umRole').value = 'admin'; $('umPassword').value = ''
+  $('umEmail').disabled = false
+  $('umFormError').classList.add('hidden')
+  $('umInviteBox').classList.add('hidden')
+  $('umForm').classList.remove('hidden')
+  $('umName').focus()
+}
+
+function umOpenEdit(id) {
+  const u = umState.users.find(x => x.id === id)
+  if (!u) return
+  umState.editId = id
+  $('umFormTitle').textContent = 'Edit User'
+  $('umSaveBtn').textContent = 'Save Changes'
+  $('umPwNote').textContent = '(leave blank to keep current password)'
+  $('umName').value = u.name; $('umEmail').value = u.email; $('umRole').value = u.role; $('umPassword').value = ''
+  $('umEmail').disabled = false
+  $('umFormError').classList.add('hidden')
+  $('umInviteBox').classList.add('hidden')
+  $('umForm').classList.remove('hidden')
+  $('umName').focus()
+}
+
+function umCloseForm() {
+  $('umForm').classList.add('hidden')
+  umState.editId = null
+}
+
+async function umSave() {
+  const name  = ($('umName').value || '').trim()
+  const email = ($('umEmail').value || '').trim()
+  const role  = $('umRole').value
+  const pw    = ($('umPassword').value || '').trim()
+  const errEl = $('umFormError')
+  errEl.classList.add('hidden')
+
+  if (!name || !email) { errEl.textContent = 'Name and email are required.'; errEl.classList.remove('hidden'); return }
+  if (pw && pw.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.classList.remove('hidden'); return }
+
+  try {
+    if (umState.editId) {
+      // Edit existing
+      const body = { name, role }
+      if (pw) body.password = pw
+      await api(`/api/admin/users/${umState.editId}`, { method: 'PUT', body: JSON.stringify(body) })
+      showToast('User updated!', 'success')
+      umCloseForm()
+    } else {
+      // Create new
+      const body = { name, email, role }
+      if (pw) body.password = pw
+      const result = await api('/api/admin/users', { method: 'POST', body: JSON.stringify(body) })
+      showToast('User created!', 'success')
+      umCloseForm()
+      // Show invite link if generated
+      if (result.invite_token) {
+        const link = window.location.origin + '/?token=' + result.invite_token
+        $('umInviteLink').value = link
+        $('umInviteBox').classList.remove('hidden')
+        $('umInviteBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    }
+    umState.users = await api('/api/admin/users')
+    umDrawPage()
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden') }
+}
+
+async function umToggleActive(id, currentActive, name) {
+  if (!confirm(`${currentActive ? 'Deactivate' : 'Activate'} user "${name}"?`)) return
+  try {
+    await api(`/api/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ is_active: currentActive ? 0 : 1 }) })
+    showToast(`User ${currentActive ? 'deactivated' : 'activated'}.`, 'success')
+    umState.users = await api('/api/admin/users')
+    umDrawPage()
+  } catch(e) { showToast(e.message, 'error') }
+}
+
+async function umDelete(id, name) {
+  if (!confirm(`Permanently delete user "${name}"? This cannot be undone.`)) return
+  try {
+    await api(`/api/admin/users/${id}`, { method: 'DELETE' })
+    showToast('User deleted.', 'success')
+    umState.users = await api('/api/admin/users')
+    umDrawPage()
+  } catch(e) { showToast(e.message, 'error') }
+}
+
+async function umResendInvite(id, name) {
+  if (!confirm(`Generate a new invite link for "${name}"? Any previous link will be invalidated.`)) return
+  try {
+    const result = await api(`/api/admin/users/${id}/reset-invite`, { method: 'POST' })
+    if (result.invite_token) {
+      const link = window.location.origin + '/?token=' + result.invite_token
+      $('umInviteLink').value = link
+      $('umInviteBox').classList.remove('hidden')
+      $('umInviteBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    showToast('New invite link generated!', 'success')
+    umState.users = await api('/api/admin/users')
+    umDrawPage()
+  } catch(e) { showToast(e.message, 'error') }
+}
+
+function umCopyInvite() {
+  const link = $('umInviteLink').value
+  navigator.clipboard.writeText(link).then(() => showToast('Invite link copied!', 'success')).catch(() => {
+    $('umInviteLink').select(); document.execCommand('copy'); showToast('Link copied!', 'success')
+  })
+}
+
+// ════════════════════════════════════════════════════
+// APP INITIALIZATION
+// ════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  // Check for invite token in URL first
+  const hasInvite = await checkInviteToken()
+  if (hasInvite) return  // Show setup card, don't try to restore session
+
+  // Try to restore existing session
+  const restored = await tryRestoreSession()
+  // If no session, login screen is already visible (shown by default in HTML)
+})
 </script>
 </body>
 </html>

@@ -1893,6 +1893,315 @@ app.get('/api/onboarding/stats', async (c) => {
   })
 })
 
+// ════════════════════════════════════════════════════════════════
+// AUTH MODULE
+// Tables: portal_users
+// ════════════════════════════════════════════════════════════════
+
+async function ensureAuthSchema(db: D1Database) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS portal_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      password_hash TEXT,
+      role TEXT NOT NULL DEFAULT 'onboarding',
+      is_active INTEGER DEFAULT 1,
+      must_set_password INTEGER DEFAULT 1,
+      invite_token TEXT,
+      invite_token_expires DATETIME,
+      last_login DATETIME,
+      created_by INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(() => {})
+}
+
+// ── Crypto helpers (Web Crypto API — available in CF Workers) ────
+
+async function hashPassword(password: string): Promise<string> {
+  const enc = new TextEncoder()
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 },
+    keyMaterial, 256
+  )
+  const hashArr = new Uint8Array(bits)
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2,'0')).join('')
+  const hashHex = Array.from(hashArr).map(b => b.toString(16).padStart(2,'0')).join('')
+  return `pbkdf2:${saltHex}:${hashHex}`
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  try {
+    const [, saltHex, hashHex] = stored.split(':')
+    const enc = new TextEncoder()
+    const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map(h => parseInt(h, 16)))
+    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 },
+      keyMaterial, 256
+    )
+    const hashArr = new Uint8Array(bits)
+    const newHex = Array.from(hashArr).map(b => b.toString(16).padStart(2,'0')).join('')
+    return newHex === hashHex
+  } catch { return false }
+}
+
+// Simple signed session token: base64(payload).base64(hmac-sha256)
+const TOKEN_SECRET = 'lionmd-portal-secret-2026'
+
+async function signToken(payload: object): Promise<string> {
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(TOKEN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  const data = btoa(JSON.stringify(payload))
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data))
+  const sigHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('')
+  return `${data}.${sigHex}`
+}
+
+async function verifyToken(token: string): Promise<any | null> {
+  try {
+    const [data, sigHex] = token.split('.')
+    if (!data || !sigHex) return null
+    const enc = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+      'raw', enc.encode(TOKEN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    )
+    const sigBytes = new Uint8Array(sigHex.match(/.{2}/g)!.map(h => parseInt(h, 16)))
+    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(data))
+    if (!valid) return null
+    const payload = JSON.parse(atob(data))
+    if (payload.exp && Date.now() > payload.exp) return null
+    return payload
+  } catch { return null }
+}
+
+function generateInviteToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('')
+}
+
+// ── Auth middleware ──────────────────────────────────────────────
+async function requireAuth(c: any, next: any) {
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
+  const payload = await verifyToken(token)
+  if (!payload) return c.json({ error: 'Invalid or expired token' }, 401)
+  c.set('user', payload)
+  return next()
+}
+
+async function requireAdmin(c: any, next: any) {
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
+  const payload = await verifyToken(token)
+  if (!payload || payload.role !== 'admin') return c.json({ error: 'Admin access required' }, 403)
+  c.set('user', payload)
+  return next()
+}
+
+// ── POST /api/auth/bootstrap ─────────────────────────────────────
+// Creates first admin account if no users exist at all
+app.post('/api/auth/bootstrap', async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  const count = await c.env.DB.prepare('SELECT COUNT(*) as c FROM portal_users').first() as any
+  if ((count?.c ?? 0) > 0) return c.json({ error: 'Already bootstrapped' }, 400)
+  const body = await c.req.json() as any
+  const { name, email, password } = body
+  if (!name || !email || !password) return c.json({ error: 'name, email, and password required' }, 400)
+  if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400)
+  const hash = await hashPassword(password)
+  const r = await c.env.DB.prepare(
+    `INSERT INTO portal_users (name, email, password_hash, role, is_active, must_set_password) VALUES (?,?,?,'admin',1,0)`
+  ).bind(name, email.toLowerCase().trim(), hash).run()
+  const token = await signToken({ id: r.meta.last_row_id, email: email.toLowerCase().trim(), name, role: 'admin', exp: Date.now() + 86400000 * 30 })
+  return c.json({ ok: true, token, user: { id: r.meta.last_row_id, name, email, role: 'admin' } })
+})
+
+// ── POST /api/auth/login ─────────────────────────────────────────
+app.post('/api/auth/login', async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  const body = await c.req.json() as any
+  const { email, password } = body
+  if (!email || !password) return c.json({ error: 'Email and password required' }, 400)
+
+  const user = await c.env.DB.prepare(
+    'SELECT * FROM portal_users WHERE LOWER(email)=? AND is_active=1'
+  ).bind(email.toLowerCase().trim()).first() as any
+
+  if (!user) return c.json({ error: 'Invalid email or password' }, 401)
+
+  // If must_set_password, they should use setup flow
+  if (user.must_set_password || !user.password_hash) {
+    return c.json({ must_set_password: true, invite_token: user.invite_token, user_id: user.id })
+  }
+
+  const ok = await verifyPassword(password, user.password_hash)
+  if (!ok) return c.json({ error: 'Invalid email or password' }, 401)
+
+  await c.env.DB.prepare('UPDATE portal_users SET last_login=CURRENT_TIMESTAMP WHERE id=?').bind(user.id).run()
+
+  const token = await signToken({ id: user.id, email: user.email, name: user.name, role: user.role, exp: Date.now() + 86400000 * 30 })
+  return c.json({ ok: true, token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+})
+
+// ── POST /api/auth/setup-password ───────────────────────────────
+// Used when a new user clicks their invite link to set their password
+app.post('/api/auth/setup-password', async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  const body = await c.req.json() as any
+  const { invite_token, password, confirm_password } = body
+  if (!invite_token || !password) return c.json({ error: 'invite_token and password required' }, 400)
+  if (password !== confirm_password) return c.json({ error: 'Passwords do not match' }, 400)
+  if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400)
+
+  const user = await c.env.DB.prepare(
+    `SELECT * FROM portal_users WHERE invite_token=? AND is_active=1`
+  ).bind(invite_token).first() as any
+
+  if (!user) return c.json({ error: 'Invalid or expired invite link' }, 400)
+
+  const hash = await hashPassword(password)
+  await c.env.DB.prepare(
+    `UPDATE portal_users SET password_hash=?, must_set_password=0, invite_token=NULL,
+     invite_token_expires=NULL, last_login=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(hash, user.id).run()
+
+  const token = await signToken({ id: user.id, email: user.email, name: user.name, role: user.role, exp: Date.now() + 86400000 * 30 })
+  return c.json({ ok: true, token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+})
+
+// ── GET /api/auth/me ─────────────────────────────────────────────
+app.get('/api/auth/me', requireAuth, async (c) => {
+  const u = c.get('user')
+  const user = await c.env.DB.prepare('SELECT id, name, email, role, is_active FROM portal_users WHERE id=?').bind(u.id).first()
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  return c.json(user)
+})
+
+// ── POST /api/auth/change-password ──────────────────────────────
+app.post('/api/auth/change-password', requireAuth, async (c) => {
+  const u = c.get('user')
+  const body = await c.req.json() as any
+  const { current_password, new_password, confirm_password } = body
+  if (!current_password || !new_password) return c.json({ error: 'Fields required' }, 400)
+  if (new_password !== confirm_password) return c.json({ error: 'Passwords do not match' }, 400)
+  if (new_password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400)
+
+  const user = await c.env.DB.prepare('SELECT * FROM portal_users WHERE id=?').bind(u.id).first() as any
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  const ok = await verifyPassword(current_password, user.password_hash)
+  if (!ok) return c.json({ error: 'Current password is incorrect' }, 401)
+
+  const hash = await hashPassword(new_password)
+  await c.env.DB.prepare('UPDATE portal_users SET password_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(hash, u.id).run()
+  return c.json({ ok: true })
+})
+
+// ── GET /api/auth/invite/:token ──────────────────────────────────
+// Lets front-end look up who the invite belongs to before showing setup form
+app.get('/api/auth/invite/:token', async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  const token = c.req.param('token')
+  const user = await c.env.DB.prepare(
+    'SELECT id, name, email, role FROM portal_users WHERE invite_token=? AND is_active=1'
+  ).bind(token).first() as any
+  if (!user) return c.json({ error: 'Invalid or expired invite link' }, 404)
+  return c.json({ id: user.id, name: user.name, email: user.email, role: user.role })
+})
+
+// ── GET /api/admin/users ─────────────────────────────────────────
+app.get('/api/admin/users', requireAdmin, async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  const rows = await c.env.DB.prepare(
+    'SELECT id, name, email, role, is_active, must_set_password, last_login, created_at FROM portal_users ORDER BY created_at DESC'
+  ).all()
+  return c.json(rows.results)
+})
+
+// ── POST /api/admin/users ────────────────────────────────────────
+// Admin creates a new user → generates invite token, no password yet
+app.post('/api/admin/users', requireAdmin, async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  const body = await c.req.json() as any
+  const { name, email, role } = body
+  if (!name || !email || !role) return c.json({ error: 'name, email, and role required' }, 400)
+  const validRoles = ['admin', 'carevalidate', 'onboarding']
+  if (!validRoles.includes(role)) return c.json({ error: 'Invalid role' }, 400)
+
+  // Check duplicate
+  const existing = await c.env.DB.prepare('SELECT id FROM portal_users WHERE LOWER(email)=?').bind(email.toLowerCase().trim()).first()
+  if (existing) return c.json({ error: 'A user with that email already exists' }, 409)
+
+  const inviteToken = generateInviteToken()
+  const creator = c.get('user')
+  const r = await c.env.DB.prepare(
+    `INSERT INTO portal_users (name, email, role, is_active, must_set_password, invite_token, created_by)
+     VALUES (?,?,?,1,1,?,?)`
+  ).bind(name, email.toLowerCase().trim(), role, inviteToken, creator?.id ?? null).run()
+
+  return c.json({ ok: true, id: r.meta.last_row_id, invite_token: inviteToken })
+})
+
+// ── PUT /api/admin/users/:id ─────────────────────────────────────
+app.put('/api/admin/users/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json() as any
+  const validRoles = ['admin', 'carevalidate', 'onboarding']
+  if (body.role && !validRoles.includes(body.role)) return c.json({ error: 'Invalid role' }, 400)
+
+  const sets: string[] = []
+  const vals: any[] = []
+  if (body.name !== undefined)      { sets.push('name=?');      vals.push(body.name) }
+  if (body.email !== undefined)     { sets.push('email=?');     vals.push(body.email.toLowerCase().trim()) }
+  if (body.role !== undefined)      { sets.push('role=?');      vals.push(body.role) }
+  if (body.is_active !== undefined) { sets.push('is_active=?'); vals.push(body.is_active ? 1 : 0) }
+  if (body.password !== undefined && body.password.length >= 8) {
+    const hash = await hashPassword(body.password)
+    sets.push('password_hash=?'); vals.push(hash)
+    sets.push('must_set_password=0')
+  }
+  if (sets.length === 0) return c.json({ ok: true })
+  sets.push('updated_at=CURRENT_TIMESTAMP')
+  vals.push(id)
+  await c.env.DB.prepare(`UPDATE portal_users SET ${sets.join(',')} WHERE id=?`).bind(...vals).run()
+  return c.json({ ok: true })
+})
+
+// ── DELETE /api/admin/users/:id ──────────────────────────────────
+app.delete('/api/admin/users/:id', requireAdmin, async (c) => {
+  const requestor = c.get('user')
+  const id = parseInt(c.req.param('id'))
+  if (requestor?.id === id) return c.json({ error: 'Cannot delete your own account' }, 400)
+  await c.env.DB.prepare('DELETE FROM portal_users WHERE id=?').bind(id).run()
+  return c.json({ ok: true })
+})
+
+// ── POST /api/admin/users/:id/reset-invite ───────────────────────
+// Re-generate an invite token so admin can resend the setup link
+app.post('/api/admin/users/:id/reset-invite', requireAdmin, async (c) => {
+  const inviteToken = generateInviteToken()
+  await c.env.DB.prepare(
+    `UPDATE portal_users SET invite_token=?, must_set_password=1, password_hash=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(inviteToken, c.req.param('id')).run()
+  return c.json({ ok: true, invite_token: inviteToken })
+})
+
+// ── GET /api/auth/check-bootstrap ───────────────────────────────
+// Returns whether any users exist yet (for first-run detection)
+app.get('/api/auth/check-bootstrap', async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  const count = await c.env.DB.prepare('SELECT COUNT(*) as c FROM portal_users').first() as any
+  return c.json({ needs_bootstrap: (count?.c ?? 0) === 0 })
+})
+
 // ── Convert hired candidate → active contractor ──────────────────
 
 app.post('/api/onboarding/candidates/:id/convert', async (c) => {
