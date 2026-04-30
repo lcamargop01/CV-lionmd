@@ -476,6 +476,56 @@ app.get('/api/contractors/all', async (c) => {
   return c.json(rows.results)
 })
 
+// GET /api/contractors/:id/history — full payroll history for a contractor across all periods
+app.get('/api/contractors/:id/history', async (c) => {
+  const id = c.req.param('id')
+  const contractor = await c.env.DB.prepare('SELECT * FROM contractors WHERE id=?').bind(id).first() as any
+  if (!contractor) return c.json({ error: 'Not found' }, 404)
+
+  // Get payroll summary per period
+  const periods = await c.env.DB.prepare(`
+    SELECT
+      s.period_key,
+      s.period_label,
+      s.period_month,
+      s.period_year,
+      COUNT(c.id)               as total_cases,
+      SUM(c.contractor_fee)     as total_pay,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) as async_count,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) as sync_count,
+      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) as orderly_count
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    WHERE c.contractor_id = ?
+      AND c.decision_status != 'No Decision'
+    GROUP BY s.period_key, s.period_label, s.period_month, s.period_year
+    ORDER BY s.period_year DESC, s.period_month DESC
+  `).bind(id).all()
+
+  // Lifetime totals
+  const totals = await c.env.DB.prepare(`
+    SELECT
+      COUNT(c.id)           as total_cases,
+      SUM(c.contractor_fee) as total_pay
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    WHERE c.contractor_id = ?
+      AND c.decision_status != 'No Decision'
+  `).bind(id).first() as any
+
+  // Linked onboarding candidate (if any)
+  const obCandidate = await c.env.DB.prepare(
+    `SELECT id, full_name, status, specialty, converted_at, created_at FROM onboarding_candidates WHERE converted_contractor_id=? LIMIT 1`
+  ).bind(id).first() as any
+
+  return c.json({
+    contractor,
+    periods: periods.results,
+    totals,
+    ob_candidate: obCandidate || null,
+  })
+})
+
 // ──────────────────────────────────────────────
 // SESSIONS
 // Returns grouped periods, each with list of files
