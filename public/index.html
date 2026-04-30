@@ -706,7 +706,7 @@ async function doSetupPassword() {
     const data = await fetch('/api/auth/setup-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, password: pw1 })
+      body: JSON.stringify({ invite_token: token, password: pw1, confirm_password: pw1 })
     }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Setup failed'); return d })
     applySession(data.token, data.user)
   } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden') }
