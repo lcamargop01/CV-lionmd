@@ -4231,7 +4231,8 @@ let obState = {
   mainTab: 'kanban',        // 'kanban' | 'onboarded' | 'calendar'
   view: 'pipeline',         // 'pipeline' | 'detail' | 'templates' | 'availability' | 'add'
   candidates: [],
-  onboardedSearch: '',      // search within Onboarded tab
+  allContractors: [],       // all active payroll contractors from /api/contractors
+  contractorsSearch: '',    // search within Contractors tab
   selectedId: null,
   selectedCandidate: null,
   filterStatus: 'all',
@@ -4246,10 +4247,10 @@ let obState = {
 
 async function renderOnboarding() {
   $('mainContent').innerHTML = `<div id="obRoot" class="p-4 md:p-6"></div>`
-  await Promise.all([
-    obLoadStats(),
-    obLoadCandidates(),
-  ])
+  const loaders = [obLoadStats(), obLoadCandidates()]
+  // Always pre-load contractors list so Contractors tab is instant
+  loaders.push(obLoadAllContractors())
+  await Promise.all(loaders)
   obSyncNav(obState.mainTab)
   obRenderView()
 }
@@ -4269,6 +4270,10 @@ async function obLoadCandidates() {
 
 async function obLoadCalendar() {
   try { obState.calendarData = await api('/api/onboarding/calendar') } catch(_) { obState.calendarData = null }
+}
+
+async function obLoadAllContractors() {
+  try { obState.allContractors = await api('/api/contractors') } catch(_) { obState.allContractors = [] }
 }
 
 // Sync sidebar nav highlight to match the active onboarding sub-tab
@@ -4298,9 +4303,13 @@ async function obSwitchMainTab(tab) {
     hideLoading()
   }
   if (tab === 'onboarded') {
+    // Load hired candidates + full active contractors list in parallel
     const saved = obState.filterStatus
     obState.filterStatus = 'hired'
-    await obLoadCandidates()
+    await Promise.all([
+      obLoadCandidates(),
+      obLoadAllContractors(),
+    ])
     obState.filterStatus = saved
   }
   if (tab === 'kanban') {
@@ -4324,7 +4333,7 @@ function obRenderView() {
   // Main 3-tab shell
   const tabs = [
     { key: 'kanban',    icon: 'fa-columns',    label: 'Pipeline' },
-    { key: 'onboarded', icon: 'fa-user-check', label: 'Onboarded Contractors' },
+    { key: 'onboarded', icon: 'fa-user-md',    label: 'Contractors' },
     { key: 'calendar',  icon: 'fa-calendar-alt', label: 'Calendar & Deadlines' },
   ]
   root.innerHTML = `
@@ -4441,87 +4450,192 @@ function obPipelineHTML() {
   `
 }
 
-// ── Onboarded Contractors Tab ─────────────────────────────────────
+// ── Contractors Tab (unified: pending onboarding + active payroll contractors) ────────
 function obOnboardedHTML() {
-  const search = (obState.onboardedSearch || '').toLowerCase().trim()
-  // Show hired candidates (status=hired means in final onboarding; converted means fully in payroll)
-  let list = obState.candidates.filter(c => c.status === 'hired')
-  if (search) list = list.filter(c =>
+  const search = (obState.contractorsSearch || '').toLowerCase().trim()
+  const checkItems = ['payroll_sent','contract_sent','contract_signed','training_scheduled','training_completed','docs_received']
+  const checkLabels = {
+    payroll_sent:       'Payroll Sent',
+    contract_sent:      'Contract Sent',
+    contract_signed:    'Contract Signed',
+    training_scheduled: 'Training Scheduled',
+    training_completed: 'Training Completed',
+    docs_received:      'Docs Received',
+  }
+
+  // Section 1: Hired candidates still completing onboarding checklist (not yet converted)
+  let pending = obState.candidates.filter(c => c.status === 'hired')
+  if (search) pending = pending.filter(c =>
     (c.full_name||'').toLowerCase().includes(search) ||
     (c.company_name||'').toLowerCase().includes(search) ||
     (c.specialty||'').toLowerCase().includes(search) ||
     (c.email||'').toLowerCase().includes(search)
   )
-  const checkItems = ['payroll_sent','contract_sent','contract_signed','training_scheduled','training_completed','docs_received']
+
+  // Section 2: All active payroll contractors
+  let active = obState.allContractors || []
+  if (search) active = active.filter(c =>
+    (c.name||'').toLowerCase().includes(search) ||
+    (c.company||'').toLowerCase().includes(search) ||
+    (c.email||'').toLowerCase().includes(search) ||
+    (c.ein_ssn||'').toLowerCase().includes(search)
+  )
+
+  // Build a set of converted contractor IDs so we can cross-link
+  const convertedIds = new Set(
+    obState.candidates.filter(c => c.converted_contractor_id).map(c => c.converted_contractor_id)
+  )
+  // Map contractor_id → onboarding candidate for linking
+  const candidateByContractorId = {}
+  obState.candidates.forEach(c => {
+    if (c.converted_contractor_id) candidateByContractorId[c.converted_contractor_id] = c
+  })
+
   return `
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+  <!-- Search bar -->
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
     <div>
       <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-        <i class="fas fa-user-check" style="color:var(--lion-gold)"></i> Onboarded Contractors
+        <i class="fas fa-user-md" style="color:var(--lion-gold)"></i> Contractors
       </h2>
-      <p class="text-xs text-gray-500 mt-0.5">${list.length} contractor${list.length !== 1 ? 's' : ''} in final onboarding</p>
+      <p class="text-xs text-gray-500 mt-0.5">
+        ${pending.length} pending onboarding &nbsp;·&nbsp; ${active.length} active in payroll
+      </p>
     </div>
-    <div class="relative" style="min-width:220px">
+    <div class="relative" style="min-width:240px">
       <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
-      <input type="text" placeholder="Search contractors…" value="${escHtml(obState.onboardedSearch)}"
+      <input type="text" placeholder="Search all contractors…" value="${escHtml(obState.contractorsSearch)}"
         class="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-white"
-        oninput="obOnboardedSearch(this.value)">
+        oninput="obContractorsSearch(this.value)">
     </div>
   </div>
 
-  ${list.length === 0 ? `
-    <div class="text-center py-20 text-gray-300">
-      <i class="fas fa-user-check text-5xl mb-3 block"></i>
-      <p class="text-base font-medium text-gray-400">No onboarded contractors yet</p>
-      <p class="text-sm text-gray-400 mt-1">Contractors marked as <strong>Hired</strong> in the Pipeline will appear here.</p>
+  <!-- ── Section 1: Pending Onboarding ── -->
+  <div class="mb-8">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
+      <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Pending Onboarding</h3>
+      <span class="text-xs bg-yellow-100 text-yellow-700 font-semibold px-2 py-0.5 rounded-full">${pending.length}</span>
+      <div class="flex-1 h-px bg-gray-100"></div>
+      <span class="text-xs text-gray-400">Hired — completing checklist</span>
     </div>
-  ` : `
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      ${list.map(c => {
-        const done = checkItems.filter(k => c[k]).length
-        const pct  = Math.round((done / checkItems.length) * 100)
-        const allDone = done === checkItems.length
-        return `
-        <div class="card p-4 cursor-pointer hover:shadow-md transition-shadow" onclick="obOpenDetail(${c.id})">
-          <div class="flex items-start justify-between gap-2 mb-3">
-            <div class="flex-1 min-w-0">
-              <p class="font-semibold text-gray-800 text-sm truncate">${escHtml(c.full_name)}</p>
-              ${c.company_name ? `<p class="text-xs text-gray-500 truncate">${escHtml(c.company_name)}</p>` : ''}
-              ${c.specialty ? `<p class="text-xs text-indigo-500">${escHtml(c.specialty)}</p>` : ''}
+    ${pending.length === 0 ? `
+      <div class="flex items-center gap-3 px-5 py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-gray-400 text-sm">
+        <i class="fas fa-check-circle text-green-400 text-lg"></i>
+        <span>All hired contractors have been fully onboarded.</span>
+        <button onclick="obSwitchMainTab('kanban')" class="ml-auto text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100">
+          <i class="fas fa-columns mr-1"></i>View Pipeline
+        </button>
+      </div>
+    ` : `
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        ${pending.map(c => {
+          const done = checkItems.filter(k => c[k]).length
+          const pct  = Math.round((done / checkItems.length) * 100)
+          const allDone = done === checkItems.length
+          return `
+          <div class="card p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 ${allDone ? 'border-l-blue-400' : 'border-l-yellow-400'}" onclick="obOpenDetail(${c.id})">
+            <div class="flex items-start justify-between gap-2 mb-3">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(c.full_name||'?')[0].toUpperCase()}</div>
+                <div class="min-w-0">
+                  <p class="font-semibold text-gray-800 text-sm truncate">${escHtml(c.full_name)}</p>
+                  ${c.company_name ? `<p class="text-xs text-gray-500 truncate">${escHtml(c.company_name)}</p>` : ''}
+                  ${c.specialty    ? `<p class="text-xs text-indigo-500 truncate">${escHtml(c.specialty)}</p>` : ''}
+                </div>
+              </div>
+              ${c.converted_contractor_id
+                ? `<span class="status-badge bg-green-100 text-green-700 text-xs shrink-0"><i class="fas fa-check-circle mr-1"></i>In Payroll</span>`
+                : allDone
+                  ? `<span class="status-badge bg-blue-100 text-blue-700 text-xs shrink-0"><i class="fas fa-star mr-1"></i>Ready</span>`
+                  : `<span class="status-badge bg-yellow-100 text-yellow-700 text-xs shrink-0"><i class="fas fa-hourglass-half mr-1"></i>${done}/${checkItems.length}</span>`
+              }
             </div>
-            ${c.converted_contractor_id
-              ? `<span class="status-badge bg-green-100 text-green-700 text-xs shrink-0"><i class="fas fa-check-circle mr-1"></i>In Payroll</span>`
-              : allDone
-                ? `<span class="status-badge bg-blue-100 text-blue-700 text-xs shrink-0"><i class="fas fa-star mr-1"></i>Ready</span>`
-                : `<span class="status-badge bg-yellow-100 text-yellow-700 text-xs shrink-0"><i class="fas fa-hourglass-half mr-1"></i>Checklist</span>`
-            }
-          </div>
-          <!-- Checklist progress bar -->
-          <div class="mb-2">
-            <div class="flex justify-between text-xs text-gray-500 mb-1">
-              <span>Onboarding checklist</span>
-              <span>${done}/${checkItems.length}</span>
+            <!-- Progress bar -->
+            <div class="mb-2">
+              <div class="w-full bg-gray-100 rounded-full h-1.5">
+                <div class="h-1.5 rounded-full transition-all ${allDone ? 'bg-blue-400' : 'bg-yellow-400'}" style="width:${pct}%"></div>
+              </div>
             </div>
-            <div class="w-full bg-gray-100 rounded-full h-1.5">
-              <div class="h-1.5 rounded-full transition-all ${allDone ? 'bg-green-500' : 'bg-yellow-400'}" style="width:${pct}%"></div>
+            <!-- Checklist dots with labels on hover -->
+            <div class="flex gap-1.5 flex-wrap">
+              ${checkItems.map(k => `
+                <span title="${checkLabels[k]}" class="w-2.5 h-2.5 rounded-full ${c[k] ? 'bg-green-400' : 'bg-gray-200'}"></span>
+              `).join('')}
             </div>
-          </div>
-          <!-- Mini checklist dots -->
-          <div class="flex gap-1.5 mt-2 flex-wrap">
-            ${checkItems.map(k => `
-              <span title="${k.replace(/_/g,' ')}" class="w-2.5 h-2.5 rounded-full ${c[k] ? 'bg-green-400' : 'bg-gray-200'}"></span>
-            `).join('')}
-          </div>
-          ${c.email ? `<p class="text-xs text-gray-400 mt-2 truncate"><i class="fas fa-envelope mr-1"></i>${escHtml(c.email)}</p>` : ''}
-        </div>`
-      }).join('')}
+            ${c.email ? `<p class="text-xs text-gray-400 mt-2 truncate"><i class="fas fa-envelope mr-1"></i>${escHtml(c.email)}</p>` : ''}
+          </div>`
+        }).join('')}
+      </div>
+    `}
+  </div>
+
+  <!-- ── Section 2: Active Payroll Contractors ── -->
+  <div>
+    <div class="flex items-center gap-2 mb-3">
+      <span class="w-2 h-2 rounded-full bg-green-400"></span>
+      <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Active Contractors</h3>
+      <span class="text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">${active.length}</span>
+      <div class="flex-1 h-px bg-gray-100"></div>
+      <span class="text-xs text-gray-400">In payroll system</span>
     </div>
-  `}
+    ${active.length === 0 ? `
+      <div class="text-center py-12 text-gray-300">
+        <i class="fas fa-user-md text-4xl mb-2 block"></i>
+        <p class="text-sm text-gray-400">No active contractors yet.</p>
+      </div>
+    ` : `
+      <div class="card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Name</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Type</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Company</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">EIN / SSN</th>
+              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Email</th>
+              <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs">Onboarding</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${active.map(ct => {
+              const linked = candidateByContractorId[ct.id]
+              const fromOb = convertedIds.has(ct.id)
+              return `
+              <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                <td class="px-5 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(ct.name||'?')[0].toUpperCase()}</div>
+                    <div>
+                      <p class="font-semibold text-gray-800">${escHtml(ct.name)}</p>
+                      <p class="text-xs text-gray-400">ID #${ct.id}</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-5 py-3">${contractorTypeBadge(ct.contractor_type || 'regular')}</td>
+                <td class="px-5 py-3 text-gray-600">${escHtml(ct.company || '—')}</td>
+                <td class="px-5 py-3 font-mono text-xs text-gray-500">${escHtml(ct.ein_ssn || '—')}</td>
+                <td class="px-5 py-3 text-gray-500 text-xs">${escHtml(ct.email || '—')}</td>
+                <td class="px-4 py-3 text-center">
+                  ${fromOb && linked
+                    ? `<button onclick="obOpenDetail(${linked.id})" class="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100">
+                        <i class="fas fa-check-circle mr-1"></i>View Record
+                      </button>`
+                    : `<span class="text-xs text-gray-300">—</span>`
+                  }
+                </td>
+              </tr>`
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `}
+  </div>
   `
 }
 
-function obOnboardedSearch(val) {
-  obState.onboardedSearch = val
+function obContractorsSearch(val) {
+  obState.contractorsSearch = val
   obRenderView()
 }
 
