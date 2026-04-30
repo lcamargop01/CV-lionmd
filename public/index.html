@@ -762,10 +762,11 @@ function applyRoleUI(role, name) {
   const userNameEl = $('sidebarUserName')
   const svBtn = $('switchViewBtn')
   if (userNameEl && name) userNameEl.textContent = name
+  const adminInOb = role === 'admin' && state.adminView === 'onboarding'
   if (role === 'admin') {
     roleTag.textContent = '👑 Admin'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 hidden md:block'
-    if (subtitle) subtitle.textContent = 'Payroll'
+    if (subtitle) subtitle.textContent = adminInOb ? 'Onboarding' : 'Payroll'
     if (svBtn) svBtn.classList.remove('hidden')
   } else if (role === 'carevalidate') {
     roleTag.textContent = '🏥 CareValidate'
@@ -905,10 +906,14 @@ function buildNav() {
     { id: 'cv_detail',    icon: 'fa-list',      label: 'Detail View' },
   ]
   const obNav = [
-    { id: 'onboarding', icon: 'fa-user-plus', label: 'Onboarding' },
+    { id: 'onboarding',  icon: 'fa-user-plus',   label: 'Onboarding' },
+    { id: 'contractors', icon: 'fa-user-check',  label: 'Contractors' },
+    { id: 'calendar',    icon: 'fa-calendar-alt', label: 'Calendar' },
   ]
 
-  const items = state.role === 'admin' ? adminNav : state.role === 'onboarding' ? obNav : cvNav
+  // Admin in onboarding view gets the same 3-item nav as the onboarding role
+  const inObView = state.role === 'onboarding' || (state.role === 'admin' && state.adminView === 'onboarding')
+  const items = inObView ? obNav : (state.role === 'admin' ? adminNav : cvNav)
   $('sidebarNav').innerHTML = items.map(item => `
     <button onclick="navigate('${item.id}')" id="nav_${item.id}"
       class="nav-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-gray-400 hover:text-white transition-all">
@@ -921,33 +926,23 @@ function buildNav() {
 function navigate(page) {
   // Special routing for onboarding-view sidebar items
   const inObView = state.role === 'onboarding' || (state.role === 'admin' && state.adminView === 'onboarding')
-  if (inObView && page === 'calendar') {
-    // Open the Calendar tab inside the onboarding page
+  if (inObView && (page === 'calendar' || page === 'contractors' || page === 'onboarding')) {
+    // Map sidebar page id → onboarding main tab
+    const tabMap = { onboarding: 'kanban', contractors: 'onboarded', calendar: 'calendar' }
+    const titleMap = { onboarding: 'Onboarding', contractors: 'Onboarded Contractors', calendar: 'Calendar & Deadlines' }
     state.currentPage = 'onboarding'
+    $('pageTitle').textContent = titleMap[page] || 'Onboarding'
+    // Highlight the correct nav item
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
-    const navEl = $('nav_calendar'); if (navEl) navEl.classList.add('active')
-    $('pageTitle').textContent = 'Calendar & Deadlines'
-    obSwitchMainTab('calendar')
-    if (isMobile()) closeMobileSidebar()
-    return
-  }
-  if (inObView && page === 'contractors') {
-    // Open the Onboarded Contractors tab inside the onboarding page
-    state.currentPage = 'onboarding'
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
-    const navEl = $('nav_contractors'); if (navEl) navEl.classList.add('active')
-    $('pageTitle').textContent = 'Onboarded Contractors'
-    obSwitchMainTab('onboarded')
-    if (isMobile()) closeMobileSidebar()
-    return
-  }
-  if (inObView && page === 'onboarding') {
-    // Clicking Onboarding nav item → go to Kanban pipeline tab
-    state.currentPage = 'onboarding'
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
-    const navEl = $('nav_onboarding'); if (navEl) navEl.classList.add('active')
-    $('pageTitle').textContent = 'Onboarding'
-    obSwitchMainTab('kanban')
+    const navEl = $(`nav_${page}`); if (navEl) navEl.classList.add('active')
+    // If obRoot already exists, just switch tab; otherwise do a full render
+    const targetTab = tabMap[page] || 'kanban'
+    if ($('obRoot')) {
+      obSwitchMainTab(targetTab)
+    } else {
+      obState.mainTab = targetTab
+      renderOnboarding()
+    }
     if (isMobile()) closeMobileSidebar()
     return
   }
@@ -4289,6 +4284,14 @@ function obSyncNav(tab) {
 async function obSwitchMainTab(tab) {
   obState.mainTab = tab
   obSyncNav(tab)
+
+  // If the onboarding page hasn't been rendered yet (obRoot missing),
+  // do a full render which will load data and call obRenderView() at the end.
+  if (!$('obRoot')) {
+    await renderOnboarding()
+    return
+  }
+
   if (tab === 'calendar' && !obState.calendarData) {
     showLoading('Loading calendar…')
     await obLoadCalendar()
