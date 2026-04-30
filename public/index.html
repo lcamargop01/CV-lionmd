@@ -625,6 +625,15 @@ async function doLogin() {
       body: JSON.stringify({ email, password: pw })
     }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Login failed'); return d })
 
+    // User has a pending invite — show the set-password card with their token
+    if (data.must_set_password) {
+      $('loginCard').classList.add('hidden')
+      $('setupCard').classList.remove('hidden')
+      $('setupWelcomeMsg').textContent = 'Please set a password to continue.'
+      $('setupCard').dataset.token = data.invite_token || ''
+      return
+    }
+
     applySession(data.token, data.user)
   } catch(e) {
     errEl.textContent = e.message || 'Invalid email or password.'
