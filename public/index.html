@@ -367,6 +367,7 @@ function buildNav() {
     { id: 'consults', icon: 'fa-table', label: 'Consult Records' },
     { id: 'payroll', icon: 'fa-money-bill-wave', label: 'Contractor Payroll' },
     { id: 'contractors', icon: 'fa-user-md', label: 'Contractors' },
+    { id: 'onboarding', icon: 'fa-user-plus', label: 'Onboarding' },
     { id: 'rates', icon: 'fa-sliders-h', label: 'Payment Rates' },
     { id: 'carevalidate', icon: 'fa-eye', label: 'CareValidate View' },
   ]
@@ -391,10 +392,10 @@ function navigate(page) {
   const navEl = $(`nav_${page}`)
   if (navEl) navEl.classList.add('active')
 
-  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View' }
+  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', onboarding:'Onboarding', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View' }
   $('pageTitle').textContent = titles[page] || page
 
-  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail }
+  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail }
   if (pages[page]) pages[page]()
 
   // Auto-close sidebar on mobile after navigation
@@ -3614,6 +3615,1650 @@ async function exportGusto() {
     showToast('Gusto CSV exported!', 'success')
   } catch(e) { showToast('Export failed: ' + e.message, 'error') }
   finally { hideLoading() }
+}
+
+// ════════════════════════════════════════════════════
+// ONBOARDING MODULE
+// ════════════════════════════════════════════════════
+
+const OB_STATUSES = [
+  { key: 'new',                 label: 'New',                icon: 'fa-star',              color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-400' },
+  { key: 'resume_received',     label: 'Resume Received',    icon: 'fa-file-alt',          color: 'bg-indigo-100 text-indigo-700', dot: 'bg-indigo-400' },
+  { key: 'contacted',           label: 'Contacted',          icon: 'fa-envelope',          color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-400' },
+  { key: 'interview_scheduled', label: 'Interview Scheduled',icon: 'fa-calendar-check',    color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-400' },
+  { key: 'interviewed',         label: 'Interviewed',        icon: 'fa-comments',          color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-400' },
+  { key: 'hired',               label: 'Hired',              icon: 'fa-check-circle',      color: 'bg-green-100 text-green-700',  dot: 'bg-green-500' },
+  { key: 'rejected',            label: 'Rejected',           icon: 'fa-times-circle',      color: 'bg-red-100 text-red-600',     dot: 'bg-red-400' },
+]
+
+const OB_DOC_TYPES = [
+  { key: 'resume',        label: 'Resume / CV' },
+  { key: 'contract',      label: 'Signed Contract' },
+  { key: 'w9',            label: 'W-9 Form' },
+  { key: 'license',       label: 'Medical License' },
+  { key: 'dea',           label: 'DEA Certificate' },
+  { key: 'malpractice',   label: 'Malpractice Insurance' },
+  { key: 'npi',           label: 'NPI Letter' },
+  { key: 'id',            label: 'Government ID' },
+  { key: 'other',         label: 'Other' },
+]
+
+function obStatusInfo(key) {
+  return OB_STATUSES.find(s => s.key === key) || OB_STATUSES[0]
+}
+
+function obStatusBadge(key) {
+  const s = obStatusInfo(key)
+  return `<span class="status-badge ${s.color} whitespace-nowrap"><i class="fas ${s.icon} mr-1"></i>${s.label}</span>`
+}
+
+// ── State ────────────────────────────────────────────────────────
+let obState = {
+  view: 'pipeline',         // 'pipeline' | 'detail' | 'templates' | 'availability' | 'add'
+  candidates: [],
+  selectedId: null,
+  selectedCandidate: null,
+  filterStatus: 'all',
+  search: '',
+  templates: [],
+  availability: [],
+  stats: null,
+  detailTab: 'overview',    // 'overview' | 'resume' | 'documents' | 'meetings' | 'contract'
+}
+
+async function renderOnboarding() {
+  $('mainContent').innerHTML = `<div id="obRoot" class="p-4 md:p-6"></div>`
+  await obLoadStats()
+  await obLoadCandidates()
+  obRenderView()
+}
+
+async function obLoadStats() {
+  try { obState.stats = await api('/api/onboarding/stats') } catch(_) {}
+}
+
+async function obLoadCandidates() {
+  try {
+    const params = new URLSearchParams()
+    if (obState.filterStatus !== 'all') params.set('status', obState.filterStatus)
+    if (obState.search) params.set('search', obState.search)
+    obState.candidates = await api('/api/onboarding/candidates?' + params)
+  } catch(_) { obState.candidates = [] }
+}
+
+function obRenderView() {
+  const root = $('obRoot')
+  if (!root) return
+  if (obState.view === 'pipeline')     root.innerHTML = obPipelineHTML()
+  else if (obState.view === 'detail')  root.innerHTML = obDetailHTML()
+  else if (obState.view === 'templates') root.innerHTML = obTemplatesHTML()
+  else if (obState.view === 'availability') root.innerHTML = obAvailabilityHTML()
+  else if (obState.view === 'add')     root.innerHTML = obAddFormHTML()
+  obBindEvents()
+}
+
+// ── Pipeline / List View ─────────────────────────────────────────
+function obPipelineHTML() {
+  const s = obState.stats || {}
+  const byStatus = {}
+  ;(s.by_status || []).forEach(r => { byStatus[r.status] = r.count })
+
+  const pipelineCols = OB_STATUSES.filter(s => s.key !== 'rejected')
+  const rejected = obState.candidates.filter(c => c.status === 'rejected')
+  const active   = obState.candidates.filter(c => c.status !== 'rejected')
+
+  return `
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+    <div>
+      <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+        <i class="fas fa-user-plus text-lion-gold"></i> Contractor Onboarding
+      </h2>
+      <p class="text-sm text-gray-500 mt-0.5">Track candidates from first contact through payroll</p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="obGoAvailability()" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium">
+        <i class="fas fa-calendar-alt mr-1"></i> Availability
+      </button>
+      <button onclick="obGoTemplates()" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium">
+        <i class="fas fa-file-contract mr-1"></i> Contracts
+      </button>
+      <button onclick="obGoAdd()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
+        <i class="fas fa-plus mr-2"></i> Add Candidate
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    ${[
+      { label: 'Total', value: s.total || 0, icon: 'fa-users', color: 'text-gray-700', bg: 'bg-gray-50' },
+      { label: 'In Pipeline', value: (s.total||0)-(s.hired||0)-(s.rejected||0), icon: 'fa-funnel-dollar', color: 'text-blue-600', bg: 'bg-blue-50' },
+      { label: 'Hired', value: s.hired || 0, icon: 'fa-check-circle', color: 'text-green-600', bg: 'bg-green-50' },
+      { label: 'Rejected', value: s.rejected || 0, icon: 'fa-times-circle', color: 'text-red-500', bg: 'bg-red-50' },
+    ].map(k => `
+      <div class="card p-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl ${k.bg} flex items-center justify-center flex-shrink-0">
+          <i class="fas ${k.icon} ${k.color}"></i>
+        </div>
+        <div>
+          <div class="text-xl font-bold text-gray-800">${k.value}</div>
+          <div class="text-xs text-gray-500">${k.label}</div>
+        </div>
+      </div>
+    `).join('')}
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-3 mb-4 flex flex-col md:flex-row gap-2">
+    <div class="flex-1 relative">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+      <input type="text" id="obSearch" placeholder="Search by name, email, company…" value="${escHtml(obState.search)}"
+        class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg" oninput="obOnSearch(this.value)">
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="obSetFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${obState.filterStatus==='all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">
+        All (${s.total||0})
+      </button>
+      ${OB_STATUSES.map(st => `
+        <button onclick="obSetFilter('${st.key}')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${obState.filterStatus===st.key ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">
+          ${st.label} (${byStatus[st.key]||0})
+        </button>
+      `).join('')}
+    </div>
+  </div>
+
+  <!-- Pipeline Board -->
+  ${obState.filterStatus === 'all' && !obState.search ? `
+  <div class="mb-4 overflow-x-auto pb-2">
+    <div class="flex gap-3" style="min-width:${pipelineCols.length * 220}px">
+      ${pipelineCols.map(col => {
+        const colCandidates = obState.candidates.filter(c => c.status === col.key)
+        return `
+        <div class="flex-shrink-0 w-52">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-2 h-2 rounded-full ${col.dot}"></div>
+            <span class="text-xs font-bold text-gray-600 uppercase tracking-wider">${col.label}</span>
+            <span class="ml-auto text-xs bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5">${colCandidates.length}</span>
+          </div>
+          <div class="flex flex-col gap-2">
+            ${colCandidates.length === 0 ? `<div class="text-xs text-gray-300 text-center py-4 border border-dashed border-gray-200 rounded-xl">Empty</div>` : ''}
+            ${colCandidates.map(c => obKanbanCard(c)).join('')}
+          </div>
+        </div>`
+      }).join('')}
+    </div>
+  </div>
+  ` : ''}
+
+  <!-- List Table -->
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+      <span class="text-sm font-semibold text-gray-700">${obState.filterStatus === 'all' && !obState.search ? 'All Candidates' : 'Filtered Results'}</span>
+      <span class="text-xs text-gray-400">${obState.candidates.length} records</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-100 bg-gray-50/50">
+            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Name / Company</th>
+            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Contact</th>
+            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Status</th>
+            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Checklist</th>
+            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Updated</th>
+            <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${obState.candidates.length === 0 ? `<tr><td colspan="6" class="text-center py-12 text-gray-400"><i class="fas fa-user-plus text-3xl mb-3 block text-gray-200"></i>No candidates found</td></tr>` : ''}
+          ${obState.candidates.map(c => `
+            <tr class="table-row border-b border-gray-50 cursor-pointer hover:bg-amber-50/20" onclick="obOpenDetail(${c.id})">
+              <td class="px-4 py-3">
+                <div class="font-semibold text-gray-800">${escHtml(c.full_name)}</div>
+                ${c.company_name ? `<div class="text-xs text-gray-400">${escHtml(c.company_name)}</div>` : ''}
+                ${c.specialty ? `<div class="text-xs text-purple-500">${escHtml(c.specialty)}</div>` : ''}
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-500">
+                ${c.email ? `<div><i class="fas fa-envelope mr-1 text-gray-300"></i>${escHtml(c.email)}</div>` : ''}
+                ${c.phone ? `<div><i class="fas fa-phone mr-1 text-gray-300"></i>${escHtml(c.phone)}</div>` : ''}
+              </td>
+              <td class="px-4 py-3">${obStatusBadge(c.status)}</td>
+              <td class="px-4 py-3">
+                ${c.status === 'hired' ? `
+                  <div class="flex gap-1 flex-wrap">
+                    ${obCheckDot(c.payroll_sent, 'Payroll Sent')}
+                    ${obCheckDot(c.contract_signed, 'Contract Signed')}
+                    ${obCheckDot(c.training_completed, 'Training')}
+                    ${obCheckDot(c.docs_received, 'Docs')}
+                  </div>
+                  ${c.converted_contractor_id ? '<div class="text-xs text-green-600 mt-1"><i class="fas fa-check-circle mr-1"></i>In Payroll</div>' : ''}
+                ` : `<span class="text-gray-300 text-xs">—</span>`}
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-400">${obTimeAgo(c.updated_at)}</td>
+              <td class="px-4 py-3 text-center">
+                <button onclick="event.stopPropagation();obOpenDetail(${c.id})" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
+                  <i class="fas fa-arrow-right mr-1"></i>Open
+                </button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Rejected section collapsible -->
+  ${rejected.length > 0 && obState.filterStatus === 'all' && !obState.search ? `
+  <details class="mt-4">
+    <summary class="cursor-pointer text-sm text-red-400 font-medium px-2 py-1 hover:text-red-600">
+      <i class="fas fa-times-circle mr-1"></i> ${rejected.length} Rejected candidate${rejected.length>1?'s':''}
+    </summary>
+    <div class="mt-2 card overflow-hidden">
+      ${rejected.map(c => `
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onclick="obOpenDetail(${c.id})">
+          <div>
+            <span class="font-medium text-gray-600 text-sm">${escHtml(c.full_name)}</span>
+            ${c.company_name ? `<span class="text-xs text-gray-400 ml-2">${escHtml(c.company_name)}</span>` : ''}
+          </div>
+          <span class="text-xs text-gray-400">${obTimeAgo(c.updated_at)}</span>
+        </div>
+      `).join('')}
+    </div>
+  </details>
+  ` : ''}
+  `
+}
+
+function obKanbanCard(c) {
+  return `
+  <div class="card p-3 cursor-pointer hover:shadow-md transition-shadow border border-gray-100" onclick="obOpenDetail(${c.id})">
+    <div class="font-medium text-gray-800 text-sm leading-tight">${escHtml(c.full_name)}</div>
+    ${c.company_name ? `<div class="text-xs text-gray-400 mt-0.5 truncate">${escHtml(c.company_name)}</div>` : ''}
+    ${c.specialty ? `<div class="text-xs text-purple-400 mt-0.5">${escHtml(c.specialty)}</div>` : ''}
+    <div class="flex items-center gap-1.5 mt-2">
+      ${c.doc_count > 0 ? `<span class="text-xs bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded"><i class="fas fa-paperclip mr-0.5"></i>${c.doc_count}</span>` : ''}
+      ${c.meeting_count > 0 ? `<span class="text-xs bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded"><i class="fas fa-calendar mr-0.5"></i>${c.meeting_count}</span>` : ''}
+      <span class="ml-auto text-gray-300 text-xs">${obTimeAgo(c.updated_at)}</span>
+    </div>
+  </div>`
+}
+
+function obCheckDot(val, label) {
+  return val
+    ? `<span title="${label}" class="w-4 h-4 rounded-full bg-green-400 inline-flex items-center justify-center" style="font-size:8px;color:white">✓</span>`
+    : `<span title="${label} (pending)" class="w-4 h-4 rounded-full bg-gray-200 inline-flex items-center justify-center" style="font-size:8px;color:#999">·</span>`
+}
+
+function obTimeAgo(ts) {
+  if (!ts) return '—'
+  const d = new Date(ts.replace(' ', 'T') + (ts.includes('Z') ? '' : 'Z'))
+  const diff = (Date.now() - d.getTime()) / 1000
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago'
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago'
+  if (diff < 604800) return Math.floor(diff/86400) + 'd ago'
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric' })
+}
+
+// ── Detail View ──────────────────────────────────────────────────
+function obDetailHTML() {
+  const c = obState.selectedCandidate
+  if (!c) return '<div class="p-8 text-center text-gray-400">Candidate not found</div>'
+  const si = obStatusInfo(c.status)
+  const isHired = c.status === 'hired'
+  const tabs = [
+    { key: 'overview',  label: 'Overview',  icon: 'fa-user' },
+    { key: 'resume',    label: 'Resume',     icon: 'fa-file-alt' },
+    { key: 'meetings',  label: 'Meetings',   icon: 'fa-calendar' },
+    { key: 'documents', label: 'Documents',  icon: 'fa-paperclip' },
+    { key: 'contract',  label: 'Contract',   icon: 'fa-file-signature' },
+  ]
+  return `
+  <!-- Back + Header -->
+  <div class="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-5">
+    <div class="flex items-start gap-3">
+      <button onclick="obGoBack()" class="mt-1 text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <div>
+        <h2 class="text-xl font-bold text-gray-800">${escHtml(c.full_name)}</h2>
+        ${c.company_name ? `<div class="text-sm text-gray-500">${escHtml(c.company_name)}</div>` : ''}
+        <div class="flex items-center gap-2 mt-1.5">
+          ${obStatusBadge(c.status)}
+          ${c.converted_contractor_id ? '<span class="status-badge bg-green-100 text-green-700"><i class="fas fa-check-circle mr-1"></i>Active Contractor</span>' : ''}
+        </div>
+      </div>
+    </div>
+    <div class="flex gap-2 flex-wrap md:flex-nowrap">
+      <select onchange="obUpdateStatus(${c.id}, this.value)" class="text-sm px-3 py-2 border border-gray-200 rounded-xl bg-white min-w-[160px]">
+        ${OB_STATUSES.map(s => `<option value="${s.key}" ${c.status===s.key?'selected':''}>${s.label}</option>`).join('')}
+      </select>
+      ${isHired && !c.converted_contractor_id ? `
+        <button onclick="obConvert(${c.id})" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap">
+          <i class="fas fa-arrow-circle-right mr-2"></i>Move to Payroll
+        </button>
+      ` : ''}
+      <button onclick="obConfirmDelete(${c.id}, '${escHtml(c.full_name)}')" class="px-3 py-2 rounded-xl text-sm text-red-400 hover:bg-red-50 border border-red-200 transition-colors">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="flex border-b border-gray-200 mb-5 overflow-x-auto gap-0">
+    ${tabs.map(t => `
+      <button onclick="obSetDetailTab('${t.key}')"
+        class="px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px
+               ${obState.detailTab===t.key ? 'tab-active' : 'border-transparent text-gray-500 hover:text-gray-700'}">
+        <i class="fas ${t.icon} mr-1.5"></i>${t.label}
+        ${t.key==='documents' && c.documents?.length ? `<span class="ml-1 text-xs bg-blue-100 text-blue-600 rounded-full px-1.5">${c.documents.length}</span>` : ''}
+        ${t.key==='meetings' && c.meetings?.length ? `<span class="ml-1 text-xs bg-purple-100 text-purple-600 rounded-full px-1.5">${c.meetings.length}</span>` : ''}
+      </button>
+    `).join('')}
+  </div>
+
+  <!-- Tab Content -->
+  <div id="obDetailContent">
+    ${obDetailTabHTML(c)}
+  </div>
+  `
+}
+
+function obDetailTabHTML(c) {
+  if (obState.detailTab === 'overview')   return obOverviewTab(c)
+  if (obState.detailTab === 'resume')     return obResumeTab(c)
+  if (obState.detailTab === 'meetings')   return obMeetingsTab(c)
+  if (obState.detailTab === 'documents')  return obDocumentsTab(c)
+  if (obState.detailTab === 'contract')   return obContractTab(c)
+  return ''
+}
+
+function obOverviewTab(c) {
+  const isHired = c.status === 'hired'
+  const hired_checklist = [
+    { key: 'payroll_sent',         label: 'Payroll Onboarding Sent',  icon: 'fa-money-check' },
+    { key: 'contract_sent',        label: 'Contract Sent',            icon: 'fa-paper-plane' },
+    { key: 'contract_signed',      label: 'Contract Signed',          icon: 'fa-signature' },
+    { key: 'training_scheduled',   label: 'Training Scheduled',       icon: 'fa-calendar-plus' },
+    { key: 'training_completed',   label: 'Training Completed',       icon: 'fa-graduation-cap' },
+    { key: 'docs_received',        label: 'All Docs Received',        icon: 'fa-folder-check' },
+  ]
+  return `
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <!-- Info Card -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2"><i class="fas fa-id-card text-blue-400"></i> Contact Info</h3>
+      <div class="space-y-3 text-sm">
+        ${obInfoRow('fa-envelope', 'Email', c.email || '—')}
+        ${obInfoRow('fa-phone', 'Phone', c.phone || '—')}
+        ${obInfoRow('fa-building', 'Company', c.company_name || '—')}
+        ${obInfoRow('fa-id-badge', 'EIN / SSN', c.ein_ssn ? '•••••' + c.ein_ssn.slice(-4) : '—')}
+        ${obInfoRow('fa-stethoscope', 'Specialty', c.specialty || '—')}
+        ${obInfoRow('fa-user-tag', 'Type', c.contractor_type === 'owner' ? 'Owner' : 'Regular Contractor')}
+        ${obInfoRow('fa-tag', 'Source', c.source || '—')}
+      </div>
+      <button onclick="obOpenEditModal()" class="mt-4 w-full btn-outline py-2 rounded-xl text-sm font-medium">
+        <i class="fas fa-pencil-alt mr-2"></i>Edit Info
+      </button>
+    </div>
+
+    <!-- Notes + Hired Checklist -->
+    <div class="flex flex-col gap-4">
+      <!-- Checklist -->
+      ${isHired ? `
+      <div class="card p-5">
+        <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fas fa-clipboard-check text-green-500"></i> Hiring Checklist
+          <span class="ml-auto text-xs text-gray-400">${hired_checklist.filter(h=>c[h.key]).length}/${hired_checklist.length} done</span>
+        </h3>
+        <div class="space-y-2">
+          ${hired_checklist.map(h => `
+            <label class="flex items-center gap-3 cursor-pointer group p-2 rounded-lg hover:bg-gray-50 transition-colors">
+              <input type="checkbox" ${c[h.key]?'checked':''} onchange="obToggleChecklist(${c.id},'${h.key}',this.checked)"
+                class="w-4 h-4 accent-green-500 flex-shrink-0">
+              <i class="fas ${h.icon} text-gray-400 group-hover:text-gray-600 w-4 text-center"></i>
+              <span class="text-sm ${c[h.key]?'line-through text-gray-400':'text-gray-700'}">${h.label}</span>
+              ${c[h.key+'_at'] ? `<span class="ml-auto text-xs text-gray-400">${obTimeAgo(c[h.key+'_at'])}</span>` : ''}
+            </label>
+          `).join('')}
+        </div>
+        ${!c.converted_contractor_id && hired_checklist.every(h=>c[h.key]) ? `
+          <div class="mt-4 p-3 bg-green-50 rounded-xl border border-green-200 text-sm text-green-700">
+            <i class="fas fa-check-circle mr-2"></i>All steps complete! Ready to move to payroll.
+          </div>
+        ` : ''}
+        ${c.converted_contractor_id ? `
+          <div class="mt-4 p-3 bg-green-50 rounded-xl border border-green-200 text-sm text-green-700">
+            <i class="fas fa-check-circle mr-2"></i>Active contractor (ID #${c.converted_contractor_id}). 
+            <button onclick="navigate('contractors')" class="underline font-medium">View in Contractors</button>
+          </div>
+        ` : ''}
+      </div>
+      ` : ''}
+
+      <!-- Notes -->
+      <div class="card p-5 flex-1">
+        <h3 class="font-semibold text-gray-700 mb-3 flex items-center gap-2"><i class="fas fa-sticky-note text-yellow-400"></i> Notes</h3>
+        <textarea id="obNotesArea" rows="5" placeholder="Add notes about this candidate…"
+          class="w-full text-sm border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:border-yellow-400 transition-colors"
+          onblur="obSaveNotes(${c.id}, this.value)">${escHtml(c.notes || '')}</textarea>
+        <p class="text-xs text-gray-400 mt-1">Auto-saved on blur</p>
+      </div>
+    </div>
+  </div>
+  `
+}
+
+function obInfoRow(icon, label, val) {
+  return `<div class="flex items-start gap-3">
+    <i class="fas ${icon} text-gray-300 w-4 mt-0.5 flex-shrink-0"></i>
+    <div><span class="text-gray-500">${label}:</span> <span class="font-medium text-gray-800">${escHtml(String(val))}</span></div>
+  </div>`
+}
+
+function obResumeTab(c) {
+  const keyPoints = (() => { try { return JSON.parse(c.resume_key_points || '[]') } catch(_) { return [] } })()
+  return `
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <!-- Upload + Analyze -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-3 flex items-center gap-2"><i class="fas fa-file-alt text-indigo-500"></i> Resume Upload & Analysis</h3>
+      <div class="upload-zone p-6 text-center rounded-xl cursor-pointer mb-3" id="resumeDropZone" onclick="$('resumeFileInput').click()">
+        <i class="fas fa-cloud-upload-alt text-3xl text-gray-300 mb-2"></i>
+        <p class="text-sm text-gray-500">Drop resume PDF/TXT here or <span class="text-blue-500 font-medium">browse</span></p>
+        <p class="text-xs text-gray-400 mt-1">PDF, DOCX, TXT supported</p>
+      </div>
+      <input type="file" id="resumeFileInput" accept=".pdf,.txt,.docx" class="hidden" onchange="obHandleResumeUpload(event, ${c.id})">
+      ${c.resume_text ? `
+        <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 mb-3">
+          <p class="text-xs font-semibold text-gray-600 mb-1"><i class="fas fa-check-circle text-green-500 mr-1"></i>Resume on file</p>
+          <p class="text-xs text-gray-500 line-clamp-3">${escHtml((c.resume_text || '').substring(0, 200))}…</p>
+        </div>
+      ` : ''}
+      <p class="text-xs text-gray-400 mb-3">Or paste resume text directly:</p>
+      <textarea id="obResumeText" rows="6" placeholder="Paste resume text here for AI analysis…"
+        class="w-full text-xs border border-gray-200 rounded-xl p-3 resize-none font-mono focus:outline-none focus:border-indigo-300">${escHtml(c.resume_text || '')}</textarea>
+      <button onclick="obAnalyzeResume(${c.id})" class="mt-3 w-full btn-primary py-2.5 rounded-xl text-sm font-medium">
+        <i class="fas fa-brain mr-2"></i>Analyze Resume
+      </button>
+    </div>
+
+    <!-- Key Points + Summary -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-3 flex items-center gap-2"><i class="fas fa-lightbulb text-yellow-400"></i> Key Talking Points</h3>
+      ${keyPoints.length > 0 ? `
+        <div class="space-y-2 mb-4">
+          ${keyPoints.map(p => `
+            <div class="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-900">
+              ${escHtml(p)}
+            </div>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="text-center py-8 text-gray-300">
+          <i class="fas fa-lightbulb text-4xl mb-2 block"></i>
+          <p class="text-sm">Upload or paste a resume then click Analyze to get AI-generated talking points for your interview</p>
+        </div>
+      `}
+      ${c.resume_summary ? `
+        <div class="mt-4">
+          <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Summary</h4>
+          <p class="text-sm text-gray-700 leading-relaxed">${escHtml(c.resume_summary)}</p>
+        </div>
+      ` : ''}
+    </div>
+  </div>
+  `
+}
+
+function obMeetingsTab(c) {
+  const meetings = c.meetings || []
+  return `
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <!-- Schedule Form -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2"><i class="fas fa-calendar-plus text-purple-500"></i> Schedule Meeting</h3>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Type</label>
+          <select id="mtgType" class="w-full text-sm">
+            <option value="interview">Interview</option>
+            <option value="training">Training</option>
+            <option value="onboarding">Onboarding Call</option>
+            <option value="followup">Follow-up</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Title</label>
+          <input type="text" id="mtgTitle" placeholder="e.g. Initial Interview" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Date & Time</label>
+          <input type="datetime-local" id="mtgDate" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Duration</label>
+          <select id="mtgDuration" class="w-full text-sm">
+            <option value="15">15 min</option>
+            <option value="30" selected>30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min</option>
+            <option value="90">90 min</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Meeting Link</label>
+          <input type="text" id="mtgLink" placeholder="https://zoom.us/j/…" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Notes</label>
+          <textarea id="mtgNotes" rows="2" placeholder="Pre-meeting notes…" class="w-full text-sm border border-gray-200 rounded-lg p-2 resize-none"></textarea>
+        </div>
+        <button onclick="obScheduleMeeting(${c.id})" class="w-full btn-primary py-2.5 rounded-xl text-sm font-medium">
+          <i class="fas fa-calendar-check mr-2"></i>Schedule Meeting
+        </button>
+      </div>
+
+      <!-- Available Slots -->
+      <div id="availSlots" class="mt-4">
+        <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Available Slots</h4>
+        <div id="availSlotsContent"><div class="text-xs text-gray-400">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- Meetings List -->
+    <div class="md:col-span-2 card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fas fa-calendar text-purple-500"></i> Scheduled Meetings
+        <span class="ml-auto text-xs text-gray-400">${meetings.length} total</span>
+      </h3>
+      ${meetings.length === 0 ? `
+        <div class="text-center py-10 text-gray-300">
+          <i class="fas fa-calendar-times text-4xl mb-2 block"></i>
+          <p class="text-sm">No meetings scheduled yet</p>
+        </div>
+      ` : `
+        <div class="space-y-3">
+          ${meetings.map(m => `
+            <div class="p-4 border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="font-semibold text-gray-800 text-sm">${escHtml(m.title || 'Meeting')}</div>
+                  <div class="text-xs text-gray-500 mt-0.5">
+                    <i class="fas fa-calendar mr-1"></i>${m.scheduled_at ? new Date(m.scheduled_at.replace(' ','T')+'Z').toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : 'No date set'}
+                    · <i class="fas fa-clock ml-1 mr-1"></i>${m.duration_min} min
+                  </div>
+                  ${m.meeting_link ? `
+                    <a href="${escHtml(m.meeting_link)}" target="_blank" class="text-xs text-blue-500 hover:underline mt-1 block">
+                      <i class="fas fa-video mr-1"></i>${escHtml(m.meeting_link.substring(0,50))}${m.meeting_link.length>50?'…':''}
+                    </a>
+                  ` : ''}
+                  ${m.notes ? `<p class="text-xs text-gray-500 mt-1">${escHtml(m.notes)}</p>` : ''}
+                </div>
+                <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                  <span class="text-xs px-2 py-0.5 rounded-full ${m.status==='completed'?'bg-green-100 text-green-600':'bg-purple-100 text-purple-600'}">${m.status}</span>
+                  <div class="flex gap-1 mt-1">
+                    ${m.meeting_link ? `
+                      <button onclick="obCopyLink('${escHtml(m.meeting_link)}')" class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200" title="Copy link">
+                        <i class="fas fa-copy"></i>
+                      </button>
+                    ` : ''}
+                    <button onclick="obSendMeetingEmail(${c.id}, ${m.id})" class="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100" title="Send invite">
+                      <i class="fas fa-envelope"></i>
+                    </button>
+                    <button onclick="obDeleteMeeting(${m.id}, ${c.id})" class="text-xs px-2 py-1 bg-red-50 text-red-400 rounded hover:bg-red-100" title="Delete">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+  </div>
+  `
+}
+
+function obDocumentsTab(c) {
+  const docs = c.documents || []
+  return `
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <!-- Upload -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2"><i class="fas fa-cloud-upload-alt text-blue-500"></i> Upload Document</h3>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Document Type</label>
+          <select id="docType" class="w-full text-sm">
+            ${OB_DOC_TYPES.map(d => `<option value="${d.key}">${d.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="upload-zone p-5 text-center rounded-xl cursor-pointer" id="docDropZone" onclick="$('docFileInput').click()">
+          <i class="fas fa-file-upload text-2xl text-gray-300 mb-1"></i>
+          <p class="text-sm text-gray-500">Click to select file</p>
+          <p class="text-xs text-gray-400 mt-1">PDF, DOCX, PNG, JPG — max 5MB</p>
+        </div>
+        <input type="file" id="docFileInput" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" class="hidden" onchange="obHandleDocUpload(event, ${c.id})">
+      </div>
+
+      <div class="mt-5">
+        <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Document Checklist</h4>
+        ${[
+          { key:'resume', label:'Resume' }, { key:'w9', label:'W-9' }, { key:'contract', label:'Signed Contract' },
+          { key:'license', label:'Medical License' }, { key:'malpractice', label:'Malpractice Ins.' }
+        ].map(dt => {
+          const has = docs.some(d => d.doc_type === dt.key)
+          return `<div class="flex items-center gap-2 py-1.5 text-sm">
+            <i class="fas ${has?'fa-check-circle text-green-500':'fa-circle text-gray-200'}"></i>
+            <span class="${has?'text-gray-700':'text-gray-400'}">${dt.label}</span>
+          </div>`
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Files List -->
+    <div class="md:col-span-2 card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fas fa-folder text-yellow-400"></i> Uploaded Documents
+        <span class="ml-auto text-xs text-gray-400">${docs.length} files</span>
+      </h3>
+      ${docs.length === 0 ? `
+        <div class="text-center py-10 text-gray-300">
+          <i class="fas fa-folder-open text-4xl mb-2 block"></i>
+          <p class="text-sm">No documents uploaded yet</p>
+        </div>
+      ` : `
+        <div class="space-y-2">
+          ${docs.map(d => `
+            <div class="flex items-center gap-3 p-3 border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
+              <div class="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <i class="fas ${obDocIcon(d.mime_type)} text-blue-500"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm text-gray-800 truncate">${escHtml(d.file_name)}</div>
+                <div class="text-xs text-gray-400">
+                  ${OB_DOC_TYPES.find(t=>t.key===d.doc_type)?.label || d.doc_type}
+                  · ${obFmtSize(d.file_size)} · ${obTimeAgo(d.uploaded_at)}
+                </div>
+              </div>
+              <div class="flex gap-1 flex-shrink-0">
+                <button onclick="obDownloadDoc(${d.id}, '${escHtml(d.file_name)}')" class="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100" title="Download">
+                  <i class="fas fa-download mr-1"></i>Download
+                </button>
+                <button onclick="obDeleteDoc(${d.id}, ${c.id})" class="text-xs px-2 py-1.5 bg-red-50 text-red-400 rounded-lg hover:bg-red-100" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+  </div>
+  `
+}
+
+function obDocIcon(mime) {
+  if (!mime) return 'fa-file'
+  if (mime.includes('pdf')) return 'fa-file-pdf'
+  if (mime.includes('word') || mime.includes('docx')) return 'fa-file-word'
+  if (mime.includes('image')) return 'fa-file-image'
+  if (mime.includes('text')) return 'fa-file-alt'
+  return 'fa-file'
+}
+function obFmtSize(bytes) {
+  if (!bytes) return '—'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB'
+  return (bytes/1048576).toFixed(1) + ' MB'
+}
+
+function obContractTab(c) {
+  return `
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <!-- Template Selector -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2"><i class="fas fa-file-contract text-emerald-500"></i> Generate Contract</h3>
+      <p class="text-sm text-gray-500 mb-4">Select a contract template and generate a pre-filled PDF with this candidate's information.</p>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Template</label>
+          <select id="contractTmplSel" class="w-full text-sm" onchange="obLoadContractPreview()">
+            <option value="">Loading…</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Effective Date</label>
+          <input type="date" id="contractDate" value="${new Date().toISOString().substring(0,10)}" class="w-full text-sm">
+        </div>
+        <div class="flex gap-2">
+          <button onclick="obGenerateContract(${c.id})" class="flex-1 btn-primary py-2.5 rounded-xl text-sm font-medium">
+            <i class="fas fa-download mr-2"></i>Download PDF
+          </button>
+          <button onclick="obGoTemplates()" class="px-3 py-2.5 btn-outline rounded-xl text-sm font-medium" title="Manage templates">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+        <button onclick="obMarkContractSent(${c.id})" class="w-full py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors">
+          <i class="fas fa-paper-plane mr-2"></i>Mark Contract as Sent
+        </button>
+        ${c.contract_signed ? '<div class="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700"><i class="fas fa-check-circle mr-2"></i>Contract signed on ' + obTimeAgo(c.contract_signed_at) + '</div>' : ''}
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-3 flex items-center gap-2"><i class="fas fa-eye text-gray-400"></i> Preview</h3>
+      <div id="contractPreview" class="bg-gray-50 rounded-xl p-4 text-xs font-mono text-gray-600 overflow-y-auto leading-relaxed whitespace-pre-wrap" style="max-height:420px">
+        Select a template to preview the filled contract
+      </div>
+    </div>
+  </div>
+  `
+}
+
+// ── Add Candidate Form ───────────────────────────────────────────
+function obAddFormHTML() {
+  return `
+  <div class="max-w-2xl mx-auto">
+    <div class="flex items-center gap-3 mb-5">
+      <button onclick="obGoBack()" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <h2 class="text-xl font-bold text-gray-800">Add New Candidate</h2>
+    </div>
+    <div class="card p-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="md:col-span-2">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Full Name <span class="text-red-400">*</span></label>
+          <input type="text" id="obAddName" placeholder="Dr. Jane Smith" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Company / Practice Name</label>
+          <input type="text" id="obAddCompany" placeholder="Smith Medical PLLC" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Specialty</label>
+          <input type="text" id="obAddSpecialty" placeholder="Internal Medicine, Psychiatry…" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Email</label>
+          <input type="text" id="obAddEmail" placeholder="jane@example.com" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Phone</label>
+          <input type="text" id="obAddPhone" placeholder="(555) 123-4567" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">EIN / SSN</label>
+          <input type="text" id="obAddEin" placeholder="XX-XXXXXXX" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Contractor Type</label>
+          <select id="obAddType" class="w-full text-sm">
+            <option value="regular">Regular Contractor</option>
+            <option value="owner">Owner</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Initial Status</label>
+          <select id="obAddStatus" class="w-full text-sm">
+            ${OB_STATUSES.map(s => `<option value="${s.key}">${s.label}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Source</label>
+          <input type="text" id="obAddSource" placeholder="LinkedIn, Referral, Indeed…" class="w-full text-sm">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Notes</label>
+          <textarea id="obAddNotes" rows="3" placeholder="Initial notes about this candidate…"
+            class="w-full text-sm border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:border-amber-400"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-3 mt-5">
+        <button onclick="obSaveNewCandidate()" class="btn-primary px-6 py-2.5 rounded-xl text-sm font-medium">
+          <i class="fas fa-save mr-2"></i>Save Candidate
+        </button>
+        <button onclick="obGoBack()" class="px-5 py-2.5 btn-outline rounded-xl text-sm font-medium">Cancel</button>
+      </div>
+    </div>
+  </div>
+  `
+}
+
+// ── Templates Manager ────────────────────────────────────────────
+function obTemplatesHTML() {
+  const tmpls = obState.templates
+  return `
+  <div class="flex items-center gap-3 mb-5">
+    <button onclick="obGoBack()" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100">
+      <i class="fas fa-arrow-left"></i>
+    </button>
+    <div>
+      <h2 class="text-xl font-bold text-gray-800">Contract Templates</h2>
+      <p class="text-sm text-gray-500">Create and manage contract templates. Use {{contractor_name}}, {{company_name}}, {{ein_ssn}}, {{email}}, {{date}}, {{specialty}} as placeholders.</p>
+    </div>
+    <button onclick="obNewTemplate()" class="ml-auto btn-primary px-4 py-2 rounded-xl text-sm font-medium">
+      <i class="fas fa-plus mr-2"></i>New Template
+    </button>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <!-- Template List -->
+    <div class="card p-4">
+      <h3 class="font-semibold text-sm text-gray-700 mb-3">Templates (${tmpls.length})</h3>
+      <div class="space-y-2" id="tmplList">
+        ${tmpls.length === 0 ? '<div class="text-xs text-gray-400 text-center py-4">No templates yet</div>' : ''}
+        ${tmpls.map(t => `
+          <div class="p-3 border rounded-xl cursor-pointer hover:border-amber-300 transition-colors ${t.is_default?'border-amber-300 bg-amber-50':' border-gray-100'}" onclick="obSelectTemplate(${t.id})">
+            <div class="font-medium text-sm text-gray-800">${escHtml(t.name)}</div>
+            ${t.is_default ? '<span class="text-xs text-amber-600 font-medium"><i class="fas fa-star mr-1"></i>Default</span>' : ''}
+            <div class="text-xs text-gray-400 mt-0.5">Updated ${obTimeAgo(t.updated_at)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Template Editor -->
+    <div class="md:col-span-2 card p-5">
+      <div id="tmplEditor">
+        <div class="text-center py-12 text-gray-300">
+          <i class="fas fa-file-contract text-4xl mb-2 block"></i>
+          <p class="text-sm">Select a template to edit, or create a new one</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  `
+}
+
+// ── Availability Manager ─────────────────────────────────────────
+function obAvailabilityHTML() {
+  const slots = obState.availability
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  return `
+  <div class="flex items-center gap-3 mb-5">
+    <button onclick="obGoBack()" class="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100">
+      <i class="fas fa-arrow-left"></i>
+    </button>
+    <div>
+      <h2 class="text-xl font-bold text-gray-800">Interview Availability</h2>
+      <p class="text-sm text-gray-500">Set your available time slots. Candidates will see these when scheduling.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <!-- Add Slot -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2"><i class="fas fa-plus-circle text-blue-500"></i> Add Availability Slot</h3>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Repeat</label>
+          <select id="availType" class="w-full text-sm" onchange="obToggleAvailType()">
+            <option value="weekly">Weekly (repeating)</option>
+            <option value="specific">Specific Date</option>
+          </select>
+        </div>
+        <div id="availDayRow">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Day of Week</label>
+          <select id="availDay" class="w-full text-sm">
+            ${days.map((d,i) => `<option value="${i}">${d}</option>`).join('')}
+          </select>
+        </div>
+        <div id="availDateRow" class="hidden">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Date</label>
+          <input type="date" id="availDate" class="w-full text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Start Time</label>
+            <input type="time" id="availStart" value="09:00" class="w-full text-sm">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">End Time</label>
+            <input type="time" id="availEnd" value="17:00" class="w-full text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Label (optional)</label>
+          <input type="text" id="availLabel" placeholder="e.g. Morning Interviews" class="w-full text-sm">
+        </div>
+        <button onclick="obAddSlot()" class="w-full btn-primary py-2.5 rounded-xl text-sm font-medium">
+          <i class="fas fa-plus mr-2"></i>Add Slot
+        </button>
+      </div>
+    </div>
+
+    <!-- Slots List -->
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+        <i class="fas fa-calendar-alt text-purple-500"></i> Current Availability
+        <span class="ml-auto text-xs text-gray-400">${slots.length} slots</span>
+      </h3>
+      ${slots.length === 0 ? `
+        <div class="text-center py-8 text-gray-300">
+          <i class="fas fa-calendar-times text-3xl mb-2 block"></i>
+          <p class="text-sm">No availability set</p>
+        </div>
+      ` : `
+        <div class="space-y-2">
+          ${slots.map(s => `
+            <div class="flex items-center gap-3 p-3 border border-gray-100 rounded-xl">
+              <div class="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-calendar text-purple-500 text-sm"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm text-gray-800">
+                  ${s.date ? new Date(s.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}) : days[s.day_of_week] + 's'}
+                </div>
+                <div class="text-xs text-gray-500">${s.start_time} – ${s.end_time}${s.label?' · '+s.label:''}</div>
+              </div>
+              <button onclick="obDeleteSlot(${s.id})" class="text-gray-300 hover:text-red-500 p-1.5 rounded transition-colors">
+                <i class="fas fa-times text-sm"></i>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+  </div>
+  `
+}
+
+// ── Edit Modal ───────────────────────────────────────────────────
+function obOpenEditModal() {
+  const c = obState.selectedCandidate
+  if (!c) return
+  const html = `
+  <div id="obEditModal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" onclick="if(event.target===this)obCloseEditModal()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-gray-800 text-lg">Edit Candidate</h3>
+        <button onclick="obCloseEditModal()" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times text-lg"></i></button>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Full Name</label>
+          <input type="text" id="obEditName" value="${escHtml(c.full_name||'')}" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Company</label>
+          <input type="text" id="obEditCompany" value="${escHtml(c.company_name||'')}" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Specialty</label>
+          <input type="text" id="obEditSpecialty" value="${escHtml(c.specialty||'')}" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Email</label>
+          <input type="text" id="obEditEmail" value="${escHtml(c.email||'')}" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Phone</label>
+          <input type="text" id="obEditPhone" value="${escHtml(c.phone||'')}" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">EIN / SSN</label>
+          <input type="text" id="obEditEin" value="${escHtml(c.ein_ssn||'')}" class="w-full text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Type</label>
+          <select id="obEditType" class="w-full text-sm">
+            <option value="regular" ${c.contractor_type==='regular'?'selected':''}>Regular</option>
+            <option value="owner" ${c.contractor_type==='owner'?'selected':''}>Owner</option>
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Source</label>
+          <input type="text" id="obEditSource" value="${escHtml(c.source||'')}" class="w-full text-sm">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-5">
+        <button onclick="obSaveEdit(${c.id})" class="btn-primary px-5 py-2.5 rounded-xl text-sm font-medium">Save Changes</button>
+        <button onclick="obCloseEditModal()" class="px-4 py-2.5 btn-outline rounded-xl text-sm">Cancel</button>
+      </div>
+    </div>
+  </div>`
+  document.body.insertAdjacentHTML('beforeend', html)
+}
+function obCloseEditModal() { const m = document.getElementById('obEditModal'); if (m) m.remove() }
+
+// ── Actions & Event Handlers ─────────────────────────────────────
+function obBindEvents() {
+  // Load availability if on meetings tab
+  if (obState.view === 'detail' && obState.detailTab === 'meetings') {
+    obLoadAvailSlots()
+  }
+  // Load contract templates if on contract tab
+  if (obState.view === 'detail' && obState.detailTab === 'contract') {
+    obLoadContractTemplates().then(obLoadContractPreview)
+  }
+  // Load templates list if on templates page
+  if (obState.view === 'templates') {
+    obFetchTemplates()
+  }
+  // Load availability slots if on availability page
+  if (obState.view === 'availability') {
+    obFetchAvailability()
+  }
+  // Drag-drop for resume
+  const rdz = document.getElementById('resumeDropZone')
+  if (rdz) {
+    rdz.addEventListener('dragover', e => { e.preventDefault(); rdz.classList.add('drag-over') })
+    rdz.addEventListener('dragleave', () => rdz.classList.remove('drag-over'))
+    rdz.addEventListener('drop', e => { e.preventDefault(); rdz.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if(f) obProcessResumeFile(f, obState.selectedCandidate?.id) })
+  }
+}
+
+function obGoBack() {
+  obState.view = 'pipeline'
+  obState.selectedId = null
+  obState.selectedCandidate = null
+  obLoadStats().then(() => obLoadCandidates()).then(() => obRenderView())
+}
+
+function obGoAdd() { obState.view = 'add'; obRenderView() }
+function obGoTemplates() {
+  obState.view = 'templates'
+  obFetchTemplates().then(() => obRenderView())
+}
+function obGoAvailability() {
+  obState.view = 'availability'
+  obFetchAvailability().then(() => obRenderView())
+}
+
+async function obOpenDetail(id) {
+  showLoading('Loading…')
+  try {
+    obState.selectedId = id
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${id}`)
+    obState.view = 'detail'
+    obState.detailTab = 'overview'
+    obRenderView()
+  } catch(e) { showToast('Failed to load candidate', 'error') }
+  finally { hideLoading() }
+}
+
+function obSetDetailTab(tab) {
+  obState.detailTab = tab
+  const content = document.getElementById('obDetailContent')
+  if (content && obState.selectedCandidate) {
+    content.innerHTML = obDetailTabHTML(obState.selectedCandidate)
+    // Update tab underlines
+    document.querySelectorAll('[onclick^="obSetDetailTab"]').forEach(btn => {
+      const t = btn.getAttribute('onclick').match(/'(\w+)'/)?.[1]
+      if (t === tab) btn.classList.add('tab-active')
+      else { btn.classList.remove('tab-active'); btn.classList.add('border-transparent','text-gray-500') }
+    })
+  }
+  obBindEvents()
+}
+
+async function obSetFilter(status) {
+  obState.filterStatus = status
+  await obLoadCandidates()
+  obRenderView()
+}
+
+let obSearchTimer = null
+function obOnSearch(val) {
+  obState.search = val
+  clearTimeout(obSearchTimer)
+  obSearchTimer = setTimeout(async () => {
+    await obLoadCandidates()
+    obRenderView()
+  }, 350)
+}
+
+async function obUpdateStatus(id, status) {
+  try {
+    await api(`/api/onboarding/candidates/${id}`, { method: 'PUT', body: JSON.stringify({ status }) })
+    if (obState.selectedCandidate) {
+      obState.selectedCandidate.status = status
+      obRenderView()
+    }
+    showToast('Status updated to ' + obStatusInfo(status).label, 'success')
+    if (status === 'hired') {
+      setTimeout(() => showToast('Candidate marked as hired — go to the Checklist to complete onboarding!', 'info'), 800)
+    }
+  } catch(e) { showToast('Failed to update status', 'error') }
+}
+
+async function obToggleChecklist(id, key, val) {
+  try {
+    const body = { [key]: val ? 1 : 0 }
+    if (val) body[key + '_at'] = new Date().toISOString()
+    await api(`/api/onboarding/candidates/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+    if (obState.selectedCandidate) {
+      obState.selectedCandidate[key] = val ? 1 : 0
+      obState.selectedCandidate[key + '_at'] = val ? new Date().toISOString() : null
+    }
+    showToast(val ? 'Checked ✓' : 'Unchecked', 'success')
+  } catch(e) { showToast('Failed to update', 'error') }
+}
+
+let obNoteTimer = null
+function obSaveNotes(id, val) {
+  clearTimeout(obNoteTimer)
+  obNoteTimer = setTimeout(async () => {
+    try {
+      await api(`/api/onboarding/candidates/${id}`, { method: 'PUT', body: JSON.stringify({ notes: val }) })
+      if (obState.selectedCandidate) obState.selectedCandidate.notes = val
+      showToast('Notes saved', 'success')
+    } catch(e) {}
+  }, 500)
+}
+
+async function obSaveNewCandidate() {
+  const name = ($('obAddName')?.value || '').trim()
+  if (!name) { showToast('Name is required', 'warning'); return }
+  try {
+    const body = {
+      full_name: name,
+      company_name: $('obAddCompany')?.value || '',
+      specialty: $('obAddSpecialty')?.value || '',
+      email: $('obAddEmail')?.value || '',
+      phone: $('obAddPhone')?.value || '',
+      ein_ssn: $('obAddEin')?.value || '',
+      contractor_type: $('obAddType')?.value || 'regular',
+      status: $('obAddStatus')?.value || 'new',
+      source: $('obAddSource')?.value || '',
+      notes: $('obAddNotes')?.value || '',
+    }
+    const r = await api('/api/onboarding/candidates', { method: 'POST', body: JSON.stringify(body) })
+    showToast('Candidate added!', 'success')
+    await obOpenDetail(r.id)
+  } catch(e) { showToast('Failed to save: ' + e.message, 'error') }
+}
+
+async function obSaveEdit(id) {
+  try {
+    const body = {
+      full_name: $('obEditName')?.value || '',
+      company_name: $('obEditCompany')?.value || '',
+      specialty: $('obEditSpecialty')?.value || '',
+      email: $('obEditEmail')?.value || '',
+      phone: $('obEditPhone')?.value || '',
+      ein_ssn: $('obEditEin')?.value || '',
+      contractor_type: $('obEditType')?.value || 'regular',
+      source: $('obEditSource')?.value || '',
+    }
+    await api(`/api/onboarding/candidates/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+    obCloseEditModal()
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${id}`)
+    obRenderView()
+    showToast('Saved!', 'success')
+  } catch(e) { showToast('Failed to save', 'error') }
+}
+
+async function obConfirmDelete(id, name) {
+  if (!confirm(`Delete "${name}"? This will also remove all their documents and meetings.`)) return
+  try {
+    await api(`/api/onboarding/candidates/${id}`, { method: 'DELETE' })
+    showToast('Candidate deleted', 'success')
+    obGoBack()
+  } catch(e) { showToast('Failed to delete', 'error') }
+}
+
+async function obConvert(id) {
+  if (!confirm('Move this candidate to the Contractors module? This will create an active contractor record.')) return
+  try {
+    showLoading('Creating contractor record…')
+    const r = await api(`/api/onboarding/candidates/${id}/convert`, { method: 'POST' })
+    hideLoading()
+    if (r.already_converted) {
+      showToast('Already converted — contractor #' + r.contractor_id, 'info')
+    } else {
+      showToast('Contractor created! They are now in the Payroll module.', 'success')
+      // Reload candidate data and update state.contractors
+      obState.selectedCandidate = await api(`/api/onboarding/candidates/${id}`)
+      state.contractors = await api('/api/contractors')
+      obRenderView()
+    }
+  } catch(e) { hideLoading(); showToast('Failed: ' + e.message, 'error') }
+}
+
+// ── Resume Handling ──────────────────────────────────────────────
+async function obHandleResumeUpload(event, candidateId) {
+  const file = event.target.files[0]
+  if (!file) return
+  obProcessResumeFile(file, candidateId)
+}
+
+async function obProcessResumeFile(file, candidateId) {
+  showLoading('Reading resume…')
+  try {
+    let text = ''
+    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      text = await file.text()
+    } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      // Extract text from PDF using basic approach
+      const arrBuf = await file.arrayBuffer()
+      const bytes = new Uint8Array(arrBuf)
+      // Decode printable ASCII from PDF for basic text extraction
+      let raw = ''
+      for (let i = 0; i < bytes.length; i++) {
+        const b = bytes[i]
+        if (b >= 32 && b < 127) raw += String.fromCharCode(b)
+        else if (b === 10 || b === 13) raw += '\n'
+      }
+      // Extract text between BT/ET markers (basic PDF text extraction)
+      const matches = [...raw.matchAll(/BT\s+([\s\S]*?)\s+ET/g)]
+      if (matches.length > 0) {
+        text = matches.map(m => {
+          return m[1].replace(/\(([^)]*)\)\s*Tj/g, '$1 ')
+                     .replace(/\(([^)]*)\)\s*TJ/g, '$1 ')
+                     .replace(/\/[A-Za-z]+\d*\s+\d+\s+Tf/g, '\n')
+                     .replace(/T\*/g, '\n').replace(/Td/g, ' ')
+        }).join('\n')
+      }
+      if (!text.trim()) text = raw.replace(/[^\x20-\x7E\n]/g, '').replace(/\n{3,}/g, '\n\n')
+    } else {
+      // For DOCX, try to extract plain text
+      text = await file.text().catch(() => '')
+    }
+
+    // Store in textarea
+    const ta = document.getElementById('obResumeText')
+    if (ta) ta.value = text.substring(0, 8000)
+
+    // Also upload as document
+    const b64 = await obFileToBase64(file)
+    await api(`/api/onboarding/candidates/${candidateId}/documents`, {
+      method: 'POST',
+      body: JSON.stringify({ doc_type: 'resume', file_name: file.name, file_data: b64, file_size: file.size, mime_type: file.type })
+    })
+
+    hideLoading()
+    showToast('Resume loaded — click Analyze to extract key points', 'success')
+  } catch(e) { hideLoading(); showToast('Error reading file: ' + e.message, 'error') }
+}
+
+async function obAnalyzeResume(id) {
+  const text = (document.getElementById('obResumeText')?.value || '').trim()
+  if (!text) { showToast('Please paste or upload resume text first', 'warning'); return }
+  showLoading('Analyzing resume…')
+  try {
+    const result = await api(`/api/onboarding/candidates/${id}/analyze-resume`, {
+      method: 'POST', body: JSON.stringify({ resume_text: text })
+    })
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${id}`)
+    hideLoading()
+    showToast('Analysis complete! Key points extracted.', 'success')
+    // Re-render resume tab
+    const content = document.getElementById('obDetailContent')
+    if (content) content.innerHTML = obDetailTabHTML(obState.selectedCandidate)
+  } catch(e) { hideLoading(); showToast('Analysis failed: ' + e.message, 'error') }
+}
+
+// ── Document Handling ────────────────────────────────────────────
+async function obHandleDocUpload(event, candidateId) {
+  const file = event.target.files[0]
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) { showToast('File too large (max 5MB)', 'warning'); return }
+  const docType = $('docType')?.value || 'other'
+  showLoading('Uploading document…')
+  try {
+    const b64 = await obFileToBase64(file)
+    await api(`/api/onboarding/candidates/${candidateId}/documents`, {
+      method: 'POST',
+      body: JSON.stringify({ doc_type: docType, file_name: file.name, file_data: b64, file_size: file.size, mime_type: file.type })
+    })
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${candidateId}`)
+    hideLoading()
+    showToast('Document uploaded!', 'success')
+    const content = document.getElementById('obDetailContent')
+    if (content) content.innerHTML = obDetailTabHTML(obState.selectedCandidate)
+  } catch(e) { hideLoading(); showToast('Upload failed: ' + e.message, 'error') }
+}
+
+async function obDownloadDoc(docId, fileName) {
+  try {
+    showLoading('Preparing download…')
+    const doc = await api(`/api/onboarding/documents/${docId}`)
+    hideLoading()
+    if (!doc.file_data) { showToast('No file data found', 'error'); return }
+    // Convert base64 to blob
+    const binary = atob(doc.file_data.replace(/^data:[^;]+;base64,/, ''))
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    const blob = new Blob([bytes], { type: doc.mime_type || 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = fileName
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    showToast('Downloaded!', 'success')
+  } catch(e) { hideLoading(); showToast('Download failed: ' + e.message, 'error') }
+}
+
+async function obDeleteDoc(docId, candidateId) {
+  if (!confirm('Delete this document?')) return
+  try {
+    await api(`/api/onboarding/documents/${docId}`, { method: 'DELETE' })
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${candidateId}`)
+    const content = document.getElementById('obDetailContent')
+    if (content) content.innerHTML = obDetailTabHTML(obState.selectedCandidate)
+    showToast('Document deleted', 'success')
+  } catch(e) { showToast('Failed to delete', 'error') }
+}
+
+function obFileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// ── Meetings ─────────────────────────────────────────────────────
+async function obLoadAvailSlots() {
+  try {
+    const slots = await api('/api/onboarding/availability')
+    const el = document.getElementById('availSlotsContent')
+    if (!el) return
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+    if (slots.length === 0) { el.innerHTML = '<div class="text-xs text-gray-400">No availability set. <button onclick="obGoAvailability()" class="text-blue-500 underline">Set availability</button></div>'; return }
+    el.innerHTML = slots.map(s => `
+      <div class="flex items-center gap-2 py-1 text-xs text-gray-600">
+        <i class="fas fa-clock text-gray-300 w-3"></i>
+        <span class="font-medium">${s.date ? new Date(s.date+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : days[s.day_of_week]+'s'}</span>
+        <span class="text-gray-400">${s.start_time}–${s.end_time}</span>
+        <button onclick="obFillSlot('${s.date || ''}', '${s.start_time}', ${s.day_of_week??-1})" class="ml-auto text-blue-500 hover:underline">Use</button>
+      </div>
+    `).join('')
+  } catch(_) {}
+}
+
+function obFillSlot(date, time, dow) {
+  const dtInput = document.getElementById('mtgDate')
+  if (!dtInput) return
+  if (date) {
+    dtInput.value = date + 'T' + time
+  } else {
+    // Find next occurrence of that day of week
+    const now = new Date()
+    const diff = (dow - now.getDay() + 7) % 7 || 7
+    const next = new Date(now.getTime() + diff * 86400000)
+    dtInput.value = next.toISOString().substring(0,10) + 'T' + time
+  }
+}
+
+async function obScheduleMeeting(candidateId) {
+  const body = {
+    title:       $('mtgTitle')?.value || 'Interview',
+    scheduled_at: $('mtgDate')?.value ? new Date($('mtgDate').value).toISOString().replace('T',' ').substring(0,19) : null,
+    duration_min: parseInt($('mtgDuration')?.value || '30'),
+    meeting_link: $('mtgLink')?.value || '',
+    meeting_type: $('mtgType')?.value || 'interview',
+    notes:        $('mtgNotes')?.value || '',
+  }
+  if (!body.scheduled_at) { showToast('Please select a date and time', 'warning'); return }
+  try {
+    await api(`/api/onboarding/candidates/${candidateId}/meetings`, { method: 'POST', body: JSON.stringify(body) })
+    // Auto-update candidate status to interview_scheduled if still in earlier stage
+    const c = obState.selectedCandidate
+    const earlyStatuses = ['new','resume_received','contacted']
+    if (c && earlyStatuses.includes(c.status) && body.meeting_type === 'interview') {
+      await api(`/api/onboarding/candidates/${candidateId}`, { method: 'PUT', body: JSON.stringify({ status: 'interview_scheduled' }) })
+    }
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${candidateId}`)
+    obRenderView()
+    showToast('Meeting scheduled!', 'success')
+  } catch(e) { showToast('Failed to schedule: ' + e.message, 'error') }
+}
+
+async function obDeleteMeeting(meetingId, candidateId) {
+  if (!confirm('Remove this meeting?')) return
+  try {
+    await api(`/api/onboarding/meetings/${meetingId}`, { method: 'DELETE' })
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${candidateId}`)
+    const content = document.getElementById('obDetailContent')
+    if (content) content.innerHTML = obDetailTabHTML(obState.selectedCandidate)
+    showToast('Meeting removed', 'success')
+  } catch(e) { showToast('Failed to remove', 'error') }
+}
+
+function obCopyLink(link) {
+  navigator.clipboard.writeText(link).then(() => showToast('Link copied!', 'success')).catch(() => showToast('Copy failed', 'error'))
+}
+
+function obSendMeetingEmail(candidateId, meetingId) {
+  const c = obState.selectedCandidate
+  const mtg = c?.meetings?.find(m => m.id === meetingId)
+  if (!c || !mtg) return
+  const dt = mtg.scheduled_at ? new Date(mtg.scheduled_at.replace(' ','T')+'Z').toLocaleString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : 'TBD'
+  const subject = encodeURIComponent(`${mtg.title || 'Interview'} with Lion MD's, PLLC`)
+  const body = encodeURIComponent(`Hi ${c.full_name},\n\nWe'd like to schedule a ${mtg.title || 'meeting'} with you.\n\nDate/Time: ${dt}\nDuration: ${mtg.duration_min} minutes\n${mtg.meeting_link ? 'Meeting Link: ' + mtg.meeting_link + '\n' : ''}\nPlease let us know if this time works for you.\n\nBest regards,\nLion MD's, PLLC`)
+  window.open(`mailto:${c.email || ''}?subject=${subject}&body=${body}`)
+  showToast('Email client opened', 'info')
+}
+
+async function obMarkContractSent(id) {
+  try {
+    await api(`/api/onboarding/candidates/${id}`, { method: 'PUT', body: JSON.stringify({ contract_sent: 1, contract_sent_at: new Date().toISOString() }) })
+    obState.selectedCandidate = await api(`/api/onboarding/candidates/${id}`)
+    const content = document.getElementById('obDetailContent')
+    if (content) content.innerHTML = obDetailTabHTML(obState.selectedCandidate)
+    showToast('Marked as contract sent ✓', 'success')
+  } catch(e) { showToast('Failed', 'error') }
+}
+
+// ── Availability ─────────────────────────────────────────────────
+async function obFetchAvailability() {
+  try { obState.availability = await api('/api/onboarding/availability') } catch(_) { obState.availability = [] }
+}
+
+function obToggleAvailType() {
+  const t = $('availType')?.value
+  if (t === 'specific') { $('availDayRow')?.classList.add('hidden'); $('availDateRow')?.classList.remove('hidden') }
+  else { $('availDayRow')?.classList.remove('hidden'); $('availDateRow')?.classList.add('hidden') }
+}
+
+async function obAddSlot() {
+  const isSpecific = $('availType')?.value === 'specific'
+  const body = {
+    day_of_week: isSpecific ? null : parseInt($('availDay')?.value ?? '1'),
+    date: isSpecific ? $('availDate')?.value || null : null,
+    start_time: $('availStart')?.value || '09:00',
+    end_time: $('availEnd')?.value || '17:00',
+    label: $('availLabel')?.value || '',
+  }
+  if (isSpecific && !body.date) { showToast('Please select a date', 'warning'); return }
+  try {
+    await api('/api/onboarding/availability', { method: 'POST', body: JSON.stringify(body) })
+    await obFetchAvailability()
+    obRenderView()
+    showToast('Availability slot added!', 'success')
+  } catch(e) { showToast('Failed to add slot', 'error') }
+}
+
+async function obDeleteSlot(id) {
+  try {
+    await api(`/api/onboarding/availability/${id}`, { method: 'DELETE' })
+    await obFetchAvailability()
+    obRenderView()
+    showToast('Slot removed', 'success')
+  } catch(e) { showToast('Failed to remove', 'error') }
+}
+
+// ── Contract Templates ───────────────────────────────────────────
+async function obFetchTemplates() {
+  try { obState.templates = await api('/api/onboarding/templates') } catch(_) { obState.templates = [] }
+}
+
+async function obLoadContractTemplates() {
+  try {
+    obState.templates = await api('/api/onboarding/templates')
+    const sel = document.getElementById('contractTmplSel')
+    if (!sel) return
+    sel.innerHTML = obState.templates.map(t => `<option value="${t.id}" ${t.is_default?'selected':''}>${escHtml(t.name)}</option>`).join('')
+  } catch(_) {}
+}
+
+async function obLoadContractPreview() {
+  const sel = document.getElementById('contractTmplSel')
+  const preview = document.getElementById('contractPreview')
+  if (!sel || !preview) return
+  const tmplId = sel.value
+  if (!tmplId) return
+  const c = obState.selectedCandidate
+  if (!c) return
+  try {
+    const dateVal = document.getElementById('contractDate')?.value
+    const date = dateVal ? new Date(dateVal).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+    const r = await api(`/api/onboarding/templates/${tmplId}/fill`, {
+      method: 'POST',
+      body: JSON.stringify({ full_name: c.full_name, company_name: c.company_name, ein_ssn: c.ein_ssn, email: c.email, phone: c.phone, specialty: c.specialty, date })
+    })
+    preview.textContent = r.content
+  } catch(_) { preview.textContent = 'Preview unavailable' }
+}
+
+async function obGenerateContract(candidateId) {
+  const sel = document.getElementById('contractTmplSel')
+  const c = obState.selectedCandidate
+  if (!c || !sel?.value) { showToast('Select a template first', 'warning'); return }
+  showLoading('Generating contract PDF…')
+  try {
+    const dateVal = document.getElementById('contractDate')?.value
+    const date = dateVal ? new Date(dateVal).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+    const r = await api(`/api/onboarding/templates/${sel.value}/fill`, {
+      method: 'POST',
+      body: JSON.stringify({ full_name: c.full_name, company_name: c.company_name, ein_ssn: c.ein_ssn, email: c.email, phone: c.phone, specialty: c.specialty, date })
+    })
+    const { jsPDF } = window.jspdf
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+    const PW = doc.internal.pageSize.getWidth()
+    const PH = doc.internal.pageSize.getHeight()
+    const ML = 20, MR = 20, MT = 25
+
+    // Header
+    doc.setFillColor(26, 26, 46)
+    doc.rect(0, 0, PW, 22, 'F')
+    doc.setTextColor(201, 168, 76)
+    doc.setFontSize(13)
+    doc.setFont('helvetica', 'bold')
+    doc.text("LION MD's, PLLC", ML, 13)
+    doc.setTextColor(180, 180, 180)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Independent Contractor Agreement', PW - MR, 13, { align: 'right' })
+
+    // Body text
+    doc.setTextColor(40, 40, 40)
+    doc.setFontSize(9.5)
+    doc.setFont('helvetica', 'normal')
+    const lines = doc.splitTextToSize(r.content, PW - ML - MR)
+    let y = MT + 4
+    const lineH = 5.5
+    const pageLines = Math.floor((PH - y - 15) / lineH)
+
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0 && i % pageLines === 0) {
+        doc.addPage()
+        doc.setFillColor(26, 26, 46)
+        doc.rect(0, 0, PW, 22, 'F')
+        doc.setTextColor(201, 168, 76)
+        doc.setFontSize(13)
+        doc.setFont('helvetica', 'bold')
+        doc.text("LION MD's, PLLC", ML, 13)
+        doc.setTextColor(40, 40, 40)
+        doc.setFontSize(9.5)
+        doc.setFont('helvetica', 'normal')
+        y = MT + 4
+      }
+      doc.text(lines[i], ML, y)
+      y += lineH
+    }
+
+    // Footer on each page
+    const totalPgs = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPgs; p++) {
+      doc.setPage(p)
+      doc.setFillColor(245, 245, 245)
+      doc.rect(0, PH - 12, PW, 12, 'F')
+      doc.setTextColor(150, 150, 150)
+      doc.setFontSize(7)
+      doc.text("Lion MD's, PLLC · Confidential", ML, PH - 4)
+      doc.text(`Page ${p} of ${totalPgs}`, PW - MR, PH - 4, { align: 'right' })
+    }
+
+    const fileName = `Contract_${(c.full_name||'contractor').replace(/\s+/g,'_')}_${date.replace(/\s+/g,'_')}.pdf`
+    doc.save(fileName)
+    hideLoading()
+    showToast('Contract PDF downloaded!', 'success')
+  } catch(e) { hideLoading(); showToast('PDF generation failed: ' + e.message, 'error') }
+}
+
+function obNewTemplate() {
+  document.getElementById('tmplEditor').innerHTML = obTemplateEditorForm(null)
+}
+
+async function obSelectTemplate(id) {
+  try {
+    const t = await api(`/api/onboarding/templates/${id}`)
+    document.getElementById('tmplEditor').innerHTML = obTemplateEditorForm(t)
+  } catch(_) {}
+}
+
+function obTemplateEditorForm(t) {
+  return `
+  <div>
+    <h3 class="font-semibold text-gray-700 mb-4">${t ? 'Edit Template' : 'New Template'}</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Template Name</label>
+        <input type="text" id="tmplName" value="${escHtml(t?.name||'')}" placeholder="e.g. Standard Agreement" class="w-full text-sm">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Contract Content</label>
+        <div class="text-xs text-gray-400 mb-1">Placeholders: <code class="bg-gray-100 px-1 rounded">{{contractor_name}}</code> <code class="bg-gray-100 px-1 rounded">{{company_name}}</code> <code class="bg-gray-100 px-1 rounded">{{ein_ssn}}</code> <code class="bg-gray-100 px-1 rounded">{{email}}</code> <code class="bg-gray-100 px-1 rounded">{{date}}</code> <code class="bg-gray-100 px-1 rounded">{{specialty}}</code></div>
+        <textarea id="tmplContent" rows="18" class="w-full text-xs border border-gray-200 rounded-xl p-3 resize-none font-mono focus:outline-none focus:border-amber-400" style="line-height:1.5">${escHtml(t?.content||'')}</textarea>
+      </div>
+      <label class="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" id="tmplDefault" ${t?.is_default?'checked':''} class="w-4 h-4 accent-amber-500">
+        <span class="text-gray-700">Set as default template</span>
+      </label>
+      <div class="flex gap-2">
+        <button onclick="obSaveTemplate(${t?.id||'null'})" class="btn-primary px-5 py-2.5 rounded-xl text-sm font-medium">
+          <i class="fas fa-save mr-2"></i>Save Template
+        </button>
+        ${t?.id ? `<button onclick="obDeleteTemplate(${t.id})" class="px-4 py-2.5 text-red-400 border border-red-200 rounded-xl text-sm hover:bg-red-50">Delete</button>` : ''}
+      </div>
+    </div>
+  </div>`
+}
+
+async function obSaveTemplate(id) {
+  const name = ($('tmplName')?.value || '').trim()
+  const content = $('tmplContent')?.value || ''
+  const isDefault = $('tmplDefault')?.checked ? 1 : 0
+  if (!name) { showToast('Template name is required', 'warning'); return }
+  if (!content) { showToast('Template content is required', 'warning'); return }
+  try {
+    if (id) {
+      await api(`/api/onboarding/templates/${id}`, { method: 'PUT', body: JSON.stringify({ name, content, is_default: isDefault }) })
+    } else {
+      await api('/api/onboarding/templates', { method: 'POST', body: JSON.stringify({ name, content, is_default: isDefault }) })
+    }
+    await obFetchTemplates()
+    obRenderView()
+    showToast('Template saved!', 'success')
+  } catch(e) { showToast('Failed to save: ' + e.message, 'error') }
+}
+
+async function obDeleteTemplate(id) {
+  if (!confirm('Delete this template?')) return
+  try {
+    await api(`/api/onboarding/templates/${id}`, { method: 'DELETE' })
+    await obFetchTemplates()
+    obRenderView()
+    showToast('Template deleted', 'success')
+  } catch(e) { showToast('Failed to delete', 'error') }
 }
 
 // ════════════════════════════════════════════════════

@@ -1425,4 +1425,505 @@ app.get('/api/debug/orderly-sync-all/:period_key', async (c) => {
   return c.json(rows.results)
 })
 
+// ══════════════════════════════════════════════════════════════════
+// ONBOARDING MODULE
+// Tables: onboarding_candidates, onboarding_documents, onboarding_meetings,
+//         onboarding_availability, contract_templates
+// ══════════════════════════════════════════════════════════════════
+
+async function ensureOnboardingSchema(db: D1Database) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS onboarding_candidates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      full_name TEXT NOT NULL,
+      company_name TEXT,
+      email TEXT,
+      phone TEXT,
+      ein_ssn TEXT,
+      contractor_type TEXT DEFAULT 'regular',
+      specialty TEXT,
+      status TEXT DEFAULT 'new',
+      source TEXT,
+      notes TEXT,
+      resume_text TEXT,
+      resume_summary TEXT,
+      resume_key_points TEXT,
+      -- Hired checklist
+      payroll_sent INTEGER DEFAULT 0,
+      payroll_sent_at DATETIME,
+      contract_sent INTEGER DEFAULT 0,
+      contract_sent_at DATETIME,
+      contract_signed INTEGER DEFAULT 0,
+      contract_signed_at DATETIME,
+      training_scheduled INTEGER DEFAULT 0,
+      training_scheduled_at DATETIME,
+      training_completed INTEGER DEFAULT 0,
+      training_completed_at DATETIME,
+      docs_received INTEGER DEFAULT 0,
+      docs_received_at DATETIME,
+      -- Conversion
+      converted_contractor_id INTEGER,
+      converted_at DATETIME,
+      -- Metadata
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(() => {})
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS onboarding_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      doc_type TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      file_data TEXT NOT NULL,
+      file_size INTEGER,
+      mime_type TEXT,
+      uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (candidate_id) REFERENCES onboarding_candidates(id)
+    )
+  `).run().catch(() => {})
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS onboarding_meetings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      candidate_id INTEGER NOT NULL,
+      title TEXT,
+      scheduled_at DATETIME,
+      duration_min INTEGER DEFAULT 30,
+      meeting_link TEXT,
+      meeting_type TEXT DEFAULT 'interview',
+      status TEXT DEFAULT 'scheduled',
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (candidate_id) REFERENCES onboarding_candidates(id)
+    )
+  `).run().catch(() => {})
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS onboarding_availability (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      day_of_week INTEGER,
+      date TEXT,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      label TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(() => {})
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS contract_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(() => {})
+
+  // seed a default contract template if none exists
+  const tmplCount = await db.prepare('SELECT COUNT(*) as c FROM contract_templates').first() as any
+  if ((tmplCount?.c ?? 0) === 0) {
+    await db.prepare(`
+      INSERT INTO contract_templates (name, content, is_default) VALUES (?, ?, 1)
+    `).bind('Standard Independent Contractor Agreement', `INDEPENDENT CONTRACTOR AGREEMENT
+
+This Independent Contractor Agreement ("Agreement") is entered into as of {{date}} between:
+
+COMPANY: Lion MD's, PLLC, a Professional Limited Liability Company ("Company")
+
+CONTRACTOR: {{contractor_name}}
+{{#if company_name}}Business Name: {{company_name}}{{/if}}
+{{#if ein_ssn}}Tax ID: {{ein_ssn}}{{/if}}
+Email: {{email}}
+
+1. SERVICES
+Contractor agrees to provide telehealth consultation and medical review services as an independent contractor. Specific services will be outlined in applicable work orders.
+
+2. COMPENSATION
+Contractor will be compensated per completed consultation at the rates established in the current Payment Rate Schedule, which may be updated by Company upon 30 days' notice.
+  - Async Text/Email: per current rate schedule
+  - Sync (Phone/Video/In-Person): per current rate schedule
+  - OrderlyMeds consultations: per current rate schedule
+
+3. INDEPENDENT CONTRACTOR STATUS
+Contractor is an independent contractor, not an employee. Contractor is responsible for all taxes on compensation received. Company will not withhold taxes or provide employee benefits.
+
+4. CONFIDENTIALITY
+Contractor agrees to maintain strict confidentiality regarding all patient information, Company business practices, and proprietary information in compliance with HIPAA and applicable law.
+
+5. TERM AND TERMINATION
+This Agreement commences on {{date}} and continues until terminated by either party with 30 days written notice, or immediately for cause.
+
+6. GOVERNING LAW
+This Agreement is governed by the laws of the state in which the Company is incorporated.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.
+
+LION MD'S, PLLC                    CONTRACTOR
+
+_______________________            _______________________
+Authorized Signature               {{contractor_name}}
+Date: __________________           Date: __________________`, 1).run().catch(() => {})
+  }
+}
+
+// ── Candidates CRUD ──────────────────────────────────────────────
+
+app.get('/api/onboarding/candidates', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const status = c.req.query('status')
+  const search = c.req.query('search')
+  let q = `SELECT oc.*,
+    (SELECT COUNT(*) FROM onboarding_documents od WHERE od.candidate_id = oc.id) as doc_count,
+    (SELECT COUNT(*) FROM onboarding_meetings om WHERE om.candidate_id = oc.id) as meeting_count
+    FROM onboarding_candidates oc WHERE 1=1`
+  const params: any[] = []
+  if (status && status !== 'all') { q += ' AND oc.status=?'; params.push(status) }
+  if (search) { q += ` AND (oc.full_name LIKE ? OR oc.email LIKE ? OR oc.company_name LIKE ?)`; const s = `%${search}%`; params.push(s, s, s) }
+  q += ' ORDER BY oc.updated_at DESC'
+  const rows = await c.env.DB.prepare(q).bind(...params).all()
+  return c.json(rows.results)
+})
+
+app.get('/api/onboarding/candidates/:id', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const id = c.req.param('id')
+  const candidate = await c.env.DB.prepare(`
+    SELECT oc.*,
+      (SELECT COUNT(*) FROM onboarding_documents od WHERE od.candidate_id = oc.id) as doc_count,
+      (SELECT COUNT(*) FROM onboarding_meetings om WHERE om.candidate_id = oc.id) as meeting_count
+    FROM onboarding_candidates oc WHERE oc.id=?
+  `).bind(id).first()
+  if (!candidate) return c.json({ error: 'Not found' }, 404)
+  const docs = await c.env.DB.prepare(
+    'SELECT id, doc_type, file_name, file_size, mime_type, uploaded_at FROM onboarding_documents WHERE candidate_id=? ORDER BY uploaded_at DESC'
+  ).bind(id).all()
+  const meetings = await c.env.DB.prepare(
+    'SELECT * FROM onboarding_meetings WHERE candidate_id=? ORDER BY scheduled_at DESC'
+  ).bind(id).all()
+  return c.json({ ...candidate, documents: docs.results, meetings: meetings.results })
+})
+
+app.post('/api/onboarding/candidates', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const body = await c.req.json() as any
+  const r = await c.env.DB.prepare(`
+    INSERT INTO onboarding_candidates
+      (full_name, company_name, email, phone, ein_ssn, contractor_type, specialty, status, source, notes)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    body.full_name || '', body.company_name || '', body.email || '',
+    body.phone || '', body.ein_ssn || '', body.contractor_type || 'regular',
+    body.specialty || '', body.status || 'new', body.source || '', body.notes || ''
+  ).run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+app.put('/api/onboarding/candidates/:id', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const id = c.req.param('id')
+  const body = await c.req.json() as any
+  // Build update dynamically for any fields passed
+  const allowed = ['full_name','company_name','email','phone','ein_ssn','contractor_type','specialty',
+    'status','source','notes','payroll_sent','payroll_sent_at','contract_sent','contract_sent_at',
+    'contract_signed','contract_signed_at','training_scheduled','training_scheduled_at',
+    'training_completed','training_completed_at','docs_received','docs_received_at',
+    'resume_summary','resume_key_points','resume_text','converted_contractor_id','converted_at']
+  const sets: string[] = []
+  const vals: any[] = []
+  for (const k of allowed) {
+    if (body[k] !== undefined) { sets.push(`${k}=?`); vals.push(body[k]) }
+  }
+  if (sets.length === 0) return c.json({ ok: true })
+  sets.push('updated_at=CURRENT_TIMESTAMP')
+  vals.push(id)
+  await c.env.DB.prepare(`UPDATE onboarding_candidates SET ${sets.join(',')} WHERE id=?`).bind(...vals).run()
+  return c.json({ ok: true })
+})
+
+app.delete('/api/onboarding/candidates/:id', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM onboarding_documents WHERE candidate_id=?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM onboarding_meetings WHERE candidate_id=?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM onboarding_candidates WHERE id=?').bind(id).run()
+  return c.json({ ok: true })
+})
+
+// ── Documents ────────────────────────────────────────────────────
+
+app.get('/api/onboarding/candidates/:id/documents', async (c) => {
+  const id = c.req.param('id')
+  const rows = await c.env.DB.prepare(
+    'SELECT id, doc_type, file_name, file_size, mime_type, uploaded_at FROM onboarding_documents WHERE candidate_id=? ORDER BY uploaded_at DESC'
+  ).bind(id).all()
+  return c.json(rows.results)
+})
+
+// Upload document (base64 encoded in JSON body)
+app.post('/api/onboarding/candidates/:id/documents', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const id = c.req.param('id')
+  const body = await c.req.json() as any
+  const r = await c.env.DB.prepare(`
+    INSERT INTO onboarding_documents (candidate_id, doc_type, file_name, file_data, file_size, mime_type)
+    VALUES (?,?,?,?,?,?)
+  `).bind(id, body.doc_type || 'other', body.file_name || 'document', body.file_data || '',
+          body.file_size || 0, body.mime_type || 'application/octet-stream').run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+// Download document (returns base64 data)
+app.get('/api/onboarding/documents/:id', async (c) => {
+  const id = c.req.param('id')
+  const doc = await c.env.DB.prepare('SELECT * FROM onboarding_documents WHERE id=?').bind(id).first() as any
+  if (!doc) return c.json({ error: 'Not found' }, 404)
+  return c.json(doc)
+})
+
+app.delete('/api/onboarding/documents/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM onboarding_documents WHERE id=?').bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// ── Resume AI Analysis ───────────────────────────────────────────
+// Stores the resume text and generated summary/key-points on the candidate
+
+app.post('/api/onboarding/candidates/:id/analyze-resume', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const id = c.req.param('id')
+  const body = await c.req.json() as any
+  const resumeText: string = body.resume_text || ''
+
+  if (!resumeText.trim()) return c.json({ error: 'No resume text provided' }, 400)
+
+  // Simple rule-based extraction when no AI key is available —
+  // pattern-match for skills, experience, education etc.
+  // The front-end can also call this endpoint after extracting text from a PDF.
+  const lines = resumeText.split(/\n/).map((l: string) => l.trim()).filter(Boolean)
+
+  // Heuristic key point extraction
+  const keyPoints: string[] = []
+
+  // Specialty / board certs
+  const specMatch = resumeText.match(/(?:board[- ]certified|fellowship|residency|specialt|physician|MD|DO|NP|PA|ARNP|LCSW|PharmD)[^.\n]{0,80}/gi)
+  if (specMatch) keyPoints.push(...specMatch.slice(0, 3).map((s: string) => '🏥 ' + s.trim()))
+
+  // Years of experience
+  const expMatch = resumeText.match(/(\d+)\+?\s*years?\s*(?:of\s*)?(?:experience|practice|clinical)/gi)
+  if (expMatch) keyPoints.push(...expMatch.slice(0, 2).map((s: string) => '📅 ' + s.trim()))
+
+  // Telehealth
+  const teleMatch = resumeText.match(/(?:telehealth|telemedicine|virtual|remote)[^.\n]{0,60}/gi)
+  if (teleMatch) keyPoints.push(...teleMatch.slice(0, 2).map((s: string) => '💻 ' + s.trim()))
+
+  // Availability / hours
+  const availMatch = resumeText.match(/(?:available|availability|hours|full[- ]time|part[- ]time|weekends?|evenings?)[^.\n]{0,60}/gi)
+  if (availMatch) keyPoints.push(...availMatch.slice(0, 2).map((s: string) => '🕐 ' + s.trim()))
+
+  // Education
+  const eduMatch = resumeText.match(/(?:University|College|School of Medicine|Medical School|M\.D\.|D\.O\.|graduated)[^.\n]{0,80}/gi)
+  if (eduMatch) keyPoints.push(...eduMatch.slice(0, 2).map((s: string) => '🎓 ' + s.trim()))
+
+  // State licenses
+  const licMatch = resumeText.match(/(?:licensed in|license(?:d)?\s+(?:in\s+)?[A-Z]{2}(?:[,\s]+[A-Z]{2})*)[^.\n]{0,60}/gi)
+  if (licMatch) keyPoints.push(...licMatch.slice(0, 2).map((s: string) => '📋 ' + s.trim()))
+
+  // Build summary from first 3 substantial lines
+  const summaryLines = lines.filter((l: string) => l.length > 30).slice(0, 4)
+  const summary = summaryLines.join(' ').substring(0, 500)
+
+  const finalPoints = [...new Set(keyPoints)].slice(0, 8)
+
+  await c.env.DB.prepare(
+    'UPDATE onboarding_candidates SET resume_text=?, resume_summary=?, resume_key_points=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+  ).bind(resumeText.substring(0, 8000), summary, JSON.stringify(finalPoints), id).run()
+
+  return c.json({ ok: true, summary, key_points: finalPoints })
+})
+
+// ── Meetings ─────────────────────────────────────────────────────
+
+app.get('/api/onboarding/candidates/:id/meetings', async (c) => {
+  const id = c.req.param('id')
+  const rows = await c.env.DB.prepare(
+    'SELECT * FROM onboarding_meetings WHERE candidate_id=? ORDER BY scheduled_at DESC'
+  ).bind(id).all()
+  return c.json(rows.results)
+})
+
+app.post('/api/onboarding/candidates/:id/meetings', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const id = c.req.param('id')
+  const body = await c.req.json() as any
+  const r = await c.env.DB.prepare(`
+    INSERT INTO onboarding_meetings (candidate_id, title, scheduled_at, duration_min, meeting_link, meeting_type, notes)
+    VALUES (?,?,?,?,?,?,?)
+  `).bind(id, body.title || 'Interview', body.scheduled_at || null,
+          body.duration_min || 30, body.meeting_link || '', body.meeting_type || 'interview',
+          body.notes || '').run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+app.put('/api/onboarding/meetings/:id', async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json() as any
+  await c.env.DB.prepare(`
+    UPDATE onboarding_meetings SET title=?, scheduled_at=?, duration_min=?, meeting_link=?,
+    meeting_type=?, status=?, notes=? WHERE id=?
+  `).bind(body.title, body.scheduled_at, body.duration_min, body.meeting_link,
+          body.meeting_type, body.status || 'scheduled', body.notes, id).run()
+  return c.json({ ok: true })
+})
+
+app.delete('/api/onboarding/meetings/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM onboarding_meetings WHERE id=?').bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// ── Availability slots ───────────────────────────────────────────
+
+app.get('/api/onboarding/availability', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const rows = await c.env.DB.prepare(
+    'SELECT * FROM onboarding_availability WHERE is_active=1 ORDER BY day_of_week, date, start_time'
+  ).all()
+  return c.json(rows.results)
+})
+
+app.post('/api/onboarding/availability', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const body = await c.req.json() as any
+  const r = await c.env.DB.prepare(`
+    INSERT INTO onboarding_availability (day_of_week, date, start_time, end_time, label)
+    VALUES (?,?,?,?,?)
+  `).bind(body.day_of_week ?? null, body.date ?? null, body.start_time, body.end_time, body.label || '').run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+app.delete('/api/onboarding/availability/:id', async (c) => {
+  await c.env.DB.prepare('UPDATE onboarding_availability SET is_active=0 WHERE id=?').bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// ── Contract Templates ───────────────────────────────────────────
+
+app.get('/api/onboarding/templates', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const rows = await c.env.DB.prepare('SELECT id, name, is_default, created_at, updated_at FROM contract_templates ORDER BY is_default DESC, name').all()
+  return c.json(rows.results)
+})
+
+app.get('/api/onboarding/templates/:id', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const t = await c.env.DB.prepare('SELECT * FROM contract_templates WHERE id=?').bind(c.req.param('id')).first()
+  if (!t) return c.json({ error: 'Not found' }, 404)
+  return c.json(t)
+})
+
+app.post('/api/onboarding/templates', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const body = await c.req.json() as any
+  if (body.is_default) await c.env.DB.prepare('UPDATE contract_templates SET is_default=0').run()
+  const r = await c.env.DB.prepare(
+    'INSERT INTO contract_templates (name, content, is_default) VALUES (?,?,?)'
+  ).bind(body.name, body.content, body.is_default ? 1 : 0).run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+app.put('/api/onboarding/templates/:id', async (c) => {
+  const body = await c.req.json() as any
+  if (body.is_default) await c.env.DB.prepare('UPDATE contract_templates SET is_default=0').run()
+  await c.env.DB.prepare(
+    'UPDATE contract_templates SET name=?, content=?, is_default=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+  ).bind(body.name, body.content, body.is_default ? 1 : 0, c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+app.delete('/api/onboarding/templates/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM contract_templates WHERE id=?').bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// Fill template placeholders with candidate data and return the filled text
+app.post('/api/onboarding/templates/:id/fill', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const body = await c.req.json() as any
+  const tmpl = await c.env.DB.prepare('SELECT * FROM contract_templates WHERE id=?').bind(c.req.param('id')).first() as any
+  if (!tmpl) return c.json({ error: 'Template not found' }, 404)
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  let content: string = tmpl.content
+  content = content.replace(/{{date}}/g, body.date || today)
+  content = content.replace(/{{contractor_name}}/g, body.full_name || body.contractor_name || '')
+  content = content.replace(/{{company_name}}/g, body.company_name || '')
+  content = content.replace(/{{ein_ssn}}/g, body.ein_ssn || '')
+  content = content.replace(/{{email}}/g, body.email || '')
+  content = content.replace(/{{phone}}/g, body.phone || '')
+  content = content.replace(/{{specialty}}/g, body.specialty || '')
+  // Handle conditional blocks {{#if field}}...{{/if}}
+  content = content.replace(/{{#if (\w+)}}([\s\S]*?){{\/if}}/g, (_: string, field: string, inner: string) => {
+    return body[field] ? inner : ''
+  })
+  return c.json({ ok: true, content, template_name: tmpl.name })
+})
+
+// ── Stats / Pipeline overview ────────────────────────────────────
+
+app.get('/api/onboarding/stats', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const byStatus = await c.env.DB.prepare(
+    `SELECT status, COUNT(*) as count FROM onboarding_candidates GROUP BY status`
+  ).all()
+  const total = await c.env.DB.prepare('SELECT COUNT(*) as c FROM onboarding_candidates').first() as any
+  const hired = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM onboarding_candidates WHERE status='hired'`).first() as any
+  const rejected = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM onboarding_candidates WHERE status='rejected'`).first() as any
+  const recentActivity = await c.env.DB.prepare(
+    `SELECT id, full_name, status, updated_at FROM onboarding_candidates ORDER BY updated_at DESC LIMIT 5`
+  ).all()
+  return c.json({
+    total: total?.c ?? 0,
+    hired: hired?.c ?? 0,
+    rejected: rejected?.c ?? 0,
+    by_status: byStatus.results,
+    recent_activity: recentActivity.results
+  })
+})
+
+// ── Convert hired candidate → active contractor ──────────────────
+
+app.post('/api/onboarding/candidates/:id/convert', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const id = c.req.param('id')
+  const candidate = await c.env.DB.prepare('SELECT * FROM onboarding_candidates WHERE id=?').bind(id).first() as any
+  if (!candidate) return c.json({ error: 'Candidate not found' }, 404)
+  if (candidate.converted_contractor_id) {
+    return c.json({ ok: true, contractor_id: candidate.converted_contractor_id, already_converted: true })
+  }
+
+  // Create contractor record
+  const r = await c.env.DB.prepare(`
+    INSERT INTO contractors (name, company, ein_ssn, email, contractor_type, is_active)
+    VALUES (?,?,?,?,?,1)
+  `).bind(
+    candidate.full_name,
+    candidate.company_name || '',
+    candidate.ein_ssn || '',
+    candidate.email || '',
+    candidate.contractor_type || 'regular'
+  ).run()
+
+  const contractorId = r.meta.last_row_id
+
+  // Mark candidate as converted
+  await c.env.DB.prepare(
+    `UPDATE onboarding_candidates SET converted_contractor_id=?, converted_at=CURRENT_TIMESTAMP, status='hired', updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(contractorId, id).run()
+
+  return c.json({ ok: true, contractor_id: contractorId })
+})
+
 export default app
