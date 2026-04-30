@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Lion MD Payroll Portal</title>
+  <title>Lion MD Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -325,7 +325,7 @@
       <div class="w-24 h-24 rounded-2xl mx-auto mb-4 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
         <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
       </div>
-      <h1 class="text-2xl font-bold text-gray-800">Lion MD Payroll Portal</h1>
+      <h1 class="text-2xl font-bold text-gray-800">Lion MD Portal</h1>
       <p class="text-gray-500 text-sm mt-1">Select your access level to continue</p>
     </div>
     <div class="space-y-3">
@@ -349,6 +349,16 @@
         </div>
         <i class="fas fa-arrow-right ml-auto text-gray-300 group-hover:text-blue-500 transition-colors"></i>
       </button>
+      <button onclick="setRole('onboarding')" class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all group">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-600">
+          <i class="fas fa-user-plus text-white text-xl"></i>
+        </div>
+        <div class="text-left">
+          <div class="font-semibold text-gray-800">Onboarding</div>
+          <div class="text-xs text-gray-500">Manage contractor pipeline &amp; hiring</div>
+        </div>
+        <i class="fas fa-arrow-right ml-auto text-gray-300 group-hover:text-emerald-500 transition-colors"></i>
+      </button>
     </div>
   </div>
 </div>
@@ -366,8 +376,8 @@
         <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
       </div>
       <div id="sidebarTitle" class="overflow-hidden flex-1">
-        <div class="font-bold text-white text-sm">Lion MD</div>
-        <div class="text-xs text-gray-400">Payroll Portal</div>
+        <div class="font-bold text-white text-sm">Lion MD Portal</div>
+        <div id="sidebarSubtitle" class="text-xs text-gray-400">Payroll</div>
       </div>
       <!-- Mobile close ✕ -->
       <button onclick="closeMobileSidebar()" id="sidebarCloseBtn" class="text-gray-400 hover:text-white p-1 rounded-lg flex-shrink-0 md:hidden" aria-label="Close menu">
@@ -486,12 +496,19 @@ function setRole(role) {
   loadInitialData()
 
   const roleTag = $('roleTag')
+  const subtitle = $('sidebarSubtitle')
   if (role === 'admin') {
     roleTag.textContent = '👑 Admin'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 hidden md:block'
-  } else {
+    if (subtitle) subtitle.textContent = 'Payroll'
+  } else if (role === 'carevalidate') {
     roleTag.textContent = '🏥 CareValidate'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-800 hidden md:block'
+    if (subtitle) subtitle.textContent = 'CareValidate'
+  } else {
+    roleTag.textContent = '🟢 Onboarding'
+    roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 hidden md:block'
+    if (subtitle) subtitle.textContent = 'Onboarding'
   }
 }
 
@@ -500,6 +517,8 @@ function logout() {
   $('roleModal').classList.remove('hidden')
   $('app').classList.add('hidden')
   $('sessionSelector').innerHTML = '<option value="">Select Period...</option>'
+  const subtitle = $('sidebarSubtitle')
+  if (subtitle) subtitle.textContent = 'Payroll'
 }
 
 // ════════════════════════════════════════════════════
@@ -528,21 +547,24 @@ window.addEventListener('resize', () => {
 // ════════════════════════════════════════════════════
 function buildNav() {
   const adminNav = [
-    { id: 'dashboard', icon: 'fa-chart-pie', label: 'Dashboard' },
-    { id: 'upload', icon: 'fa-upload', label: 'Upload Report' },
-    { id: 'consults', icon: 'fa-table', label: 'Consult Records' },
-    { id: 'payroll', icon: 'fa-money-bill-wave', label: 'Contractor Payroll' },
-    { id: 'contractors', icon: 'fa-user-md', label: 'Contractors' },
-    { id: 'onboarding', icon: 'fa-user-plus', label: 'Onboarding' },
-    { id: 'rates', icon: 'fa-sliders-h', label: 'Payment Rates' },
-    { id: 'carevalidate', icon: 'fa-eye', label: 'CareValidate View' },
+    { id: 'dashboard',   icon: 'fa-chart-pie',       label: 'Dashboard' },
+    { id: 'upload',      icon: 'fa-upload',           label: 'Upload Report' },
+    { id: 'consults',    icon: 'fa-table',            label: 'Consult Records' },
+    { id: 'payroll',     icon: 'fa-money-bill-wave',  label: 'Contractor Payroll' },
+    { id: 'contractors', icon: 'fa-user-md',          label: 'Contractors' },
+    { id: 'onboarding',  icon: 'fa-user-plus',        label: 'Onboarding' },
+    { id: 'rates',       icon: 'fa-sliders-h',        label: 'Payment Rates' },
+    { id: 'carevalidate',icon: 'fa-eye',              label: 'CareValidate View' },
   ]
   const cvNav = [
     { id: 'cv_dashboard', icon: 'fa-chart-bar', label: 'Summary' },
-    { id: 'cv_detail', icon: 'fa-list', label: 'Detail View' },
+    { id: 'cv_detail',    icon: 'fa-list',      label: 'Detail View' },
+  ]
+  const obNav = [
+    { id: 'onboarding', icon: 'fa-user-plus', label: 'Onboarding' },
   ]
 
-  const items = state.role === 'admin' ? adminNav : cvNav
+  const items = state.role === 'admin' ? adminNav : state.role === 'onboarding' ? obNav : cvNav
   $('sidebarNav').innerHTML = items.map(item => `
     <button onclick="navigate('${item.id}')" id="nav_${item.id}"
       class="nav-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-gray-400 hover:text-white transition-all">
@@ -581,6 +603,18 @@ function contractorTypeBadge(t) {
 // INITIAL DATA
 // ════════════════════════════════════════════════════
 async function loadInitialData() {
+  // Onboarding-only role: skip all payroll APIs, hide period selector
+  if (state.role === 'onboarding') {
+    $('sessionSelector').closest('div.flex.items-center.gap-2').style.display = 'none'
+    hideLoading()
+    navigate('onboarding')
+    return
+  }
+
+  // Restore period selector visibility (in case user switched from onboarding)
+  const topBarRight = $('sessionSelector').closest('div.flex.items-center.gap-2')
+  if (topBarRight) topBarRight.style.display = ''
+
   showLoading('Loading data...')
   try {
     state.periods = await api('/api/sessions')
@@ -593,7 +627,8 @@ async function loadInitialData() {
       await selectPeriod(state.periods[0].period_key)
     }
 
-    navigate(state.role === 'admin' ? 'dashboard' : 'cv_dashboard')
+    const landingPage = state.role === 'admin' ? 'dashboard' : 'cv_dashboard'
+    navigate(landingPage)
   } catch(e) {
     showToast('Error loading data: ' + e.message, 'error')
   } finally {
