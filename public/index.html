@@ -244,6 +244,17 @@
     /* Search dim */
     .kb-card.kb-dim { opacity: 0.18; pointer-events: none; transform: none !important; }
     /* Quick-add inline form */
+    /* Status select on kanban card */
+    .kb-status-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239ca3af' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: 22px !important;
+    }
+    .kb-status-select:hover { opacity: 0.88; }
+
     #obQuickAdd {
       background: #fff;
       border-radius: 11px;
@@ -4005,19 +4016,79 @@ function obKanbanCard(c) {
       <span class="ml-auto text-gray-300 text-xs">${obTimeAgo(c.updated_at)}</span>
     </div>
 
-    <!-- Action row -->
-    <div class="flex gap-1 mt-2 pt-2 border-t border-gray-50">
-      <button onclick="event.stopPropagation();obOpenDetail(${c.id})"
-        class="flex-1 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg py-1 transition-colors text-center font-medium">
-        <i class="fas fa-arrow-right mr-1"></i>Open
-      </button>
-      ${hired && !c.converted_contractor_id ? `
-      <button onclick="event.stopPropagation();obConvert(${c.id})"
-        class="flex-1 text-xs text-green-500 hover:text-green-700 hover:bg-green-50 rounded-lg py-1 transition-colors text-center font-medium">
-        <i class="fas fa-user-check mr-1"></i>→ Payroll
-      </button>` : ''}
+    <!-- Status dropdown + actions -->
+    <div class="mt-2 pt-2 border-t border-gray-50">
+      <!-- Status select -->
+      <select
+        onclick="event.stopPropagation()"
+        onmousedown="event.stopPropagation()"
+        onchange="event.stopPropagation(); obCardStatusChange(${c.id}, this)"
+        class="kb-status-select w-full text-xs rounded-lg px-2 py-1.5 mb-1.5 border font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-300 transition-colors"
+        style="${obCardSelectStyle(c.status)}">
+        ${OB_STATUSES.map(s => `<option value="${s.key}" ${c.status===s.key?'selected':''}>${s.label}</option>`).join('')}
+      </select>
+      <!-- Open + Payroll buttons -->
+      <div class="flex gap-1">
+        <button onclick="event.stopPropagation();obOpenDetail(${c.id})"
+          class="flex-1 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg py-1 transition-colors text-center font-medium">
+          <i class="fas fa-arrow-right mr-1"></i>Open
+        </button>
+        ${hired && !c.converted_contractor_id ? `
+        <button onclick="event.stopPropagation();obConvert(${c.id})"
+          class="flex-1 text-xs text-green-500 hover:text-green-700 hover:bg-green-50 rounded-lg py-1 transition-colors text-center font-medium">
+          <i class="fas fa-user-check mr-1"></i>→ Payroll
+        </button>` : ''}
+      </div>
     </div>
   </div>`
+}
+
+// Returns inline style string for the status select based on current status
+function obCardSelectStyle(status) {
+  const styles = {
+    new:                 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe',
+    resume_received:     'background:#f5f3ff;color:#5b21b6;border-color:#ddd6fe',
+    contacted:           'background:#faf5ff;color:#7e22ce;border-color:#e9d5ff',
+    interview_scheduled: 'background:#fefce8;color:#92400e;border-color:#fde68a',
+    interviewed:         'background:#fff7ed;color:#9a3412;border-color:#fed7aa',
+    hired:               'background:#f0fdf4;color:#15803d;border-color:#bbf7d0',
+    rejected:            'background:#fff5f5;color:#b91c1c;border-color:#fecaca',
+  }
+  return styles[status] || 'background:#f9fafb;color:#374151;border-color:#e5e7eb'
+}
+
+// Called when the select on a Kanban card changes
+async function obCardStatusChange(id, selectEl) {
+  const newStatus = selectEl.value
+  const candidate = obState.candidates.find(c => c.id === id)
+  if (!candidate || candidate.status === newStatus) return
+
+  const oldStatus = candidate.status
+
+  // Optimistic: update local state and restyle the select immediately
+  candidate.status = newStatus
+  selectEl.style.cssText = obCardSelectStyle(newStatus)
+
+  // Move the whole card to the correct column by re-rendering
+  obRenderView()
+
+  try {
+    await api(`/api/onboarding/candidates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: newStatus })
+    })
+    await obLoadStats()
+    obRenderView()
+    showToast(`Status → ${obStatusInfo(newStatus).label}`, 'success')
+    if (newStatus === 'hired') {
+      setTimeout(() => showToast('Candidate hired! Complete the checklist in their profile.', 'info'), 700)
+    }
+  } catch(e) {
+    // Revert
+    candidate.status = oldStatus
+    obRenderView()
+    showToast('Failed to update status', 'error')
+  }
 }
 
 function obCheckDot(val, label) {
