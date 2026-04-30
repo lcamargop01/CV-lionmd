@@ -98,6 +98,161 @@
       border: 1px solid #fcd34d;
     }
 
+    /* ── Kanban Board ─────────────────────────────── */
+    #obKanbanBoard {
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      padding-bottom: 16px;
+      padding-top: 4px;
+      align-items: flex-start;
+      height: calc(100vh - 200px);
+      min-height: 520px;
+      /* Custom scrollbar */
+      scrollbar-width: thin;
+      scrollbar-color: #d1d5db #f9fafb;
+    }
+    #obKanbanBoard::-webkit-scrollbar { height: 6px; }
+    #obKanbanBoard::-webkit-scrollbar-track { background: #f9fafb; border-radius: 3px; }
+    #obKanbanBoard::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+    .kb-col {
+      flex-shrink: 0;
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      border-radius: 16px;
+      background: #f4f5f7;
+      border: 1.5px solid #e5e7eb;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .kb-col.drag-target {
+      border-color: var(--lion-gold);
+      background: #fffbeb;
+    }
+    .kb-col-header {
+      padding: 11px 13px 9px;
+      border-radius: 16px 16px 0 0;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.5);
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .kb-col-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 8px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-radius: 0 0 16px 16px;
+      transition: background 0.15s, outline 0.15s;
+      min-height: 80px;
+      /* Custom scrollbar for column */
+      scrollbar-width: thin;
+      scrollbar-color: #d1d5db transparent;
+    }
+    .kb-col-body::-webkit-scrollbar { width: 4px; }
+    .kb-col-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    .kb-col-body.drag-over {
+      background: rgba(201,168,76,0.12);
+      outline: 2.5px dashed var(--lion-gold);
+      outline-offset: -5px;
+      border-radius: 0 0 14px 14px;
+    }
+    .kb-card {
+      background: #fff;
+      border-radius: 11px;
+      padding: 12px 13px 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+      cursor: grab;
+      border: 1.5px solid transparent;
+      transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s, opacity 0.15s;
+      user-select: none;
+      position: relative;
+    }
+    .kb-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.13);
+      border-color: #e5e7eb;
+      transform: translateY(-1px);
+    }
+    .kb-card:active { cursor: grabbing; }
+    .kb-card.dragging {
+      opacity: 0.4;
+      transform: scale(0.96) rotate(-1deg);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+      z-index: 999;
+    }
+    .kb-card.drag-ghost { opacity: 0.3; }
+    .kb-drop-indicator {
+      height: 3px;
+      border-radius: 3px;
+      background: var(--lion-gold);
+      margin: 0 2px;
+      flex-shrink: 0;
+      box-shadow: 0 0 6px rgba(201,168,76,0.5);
+    }
+    .kb-empty {
+      border: 1.5px dashed #d1d5db;
+      border-radius: 10px;
+      padding: 24px 12px;
+      text-align: center;
+      color: #d1d5db;
+      font-size: 11px;
+      pointer-events: none;
+      flex-shrink: 0;
+    }
+    .kb-add-btn {
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      color: #9ca3af;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, color 0.15s;
+      flex-shrink: 0;
+      margin: 4px 8px 8px;
+      width: calc(100% - 16px);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .kb-add-btn:hover { background: rgba(0,0,0,0.05); color: #374151; }
+    /* Column color accents */
+    .kb-col[data-status="new"] { background: #f0f4ff; border-color: #c7d2fe; }
+    .kb-col[data-status="new"] .kb-col-header { background: rgba(238,242,255,0.8); }
+    .kb-col[data-status="resume_received"] { background: #f5f0ff; border-color: #ddd6fe; }
+    .kb-col[data-status="resume_received"] .kb-col-header { background: rgba(245,243,255,0.8); }
+    .kb-col[data-status="contacted"] { background: #faf0ff; border-color: #e9d5ff; }
+    .kb-col[data-status="contacted"] .kb-col-header { background: rgba(250,240,255,0.8); }
+    .kb-col[data-status="interview_scheduled"] { background: #fffdf0; border-color: #fde68a; }
+    .kb-col[data-status="interview_scheduled"] .kb-col-header { background: rgba(255,253,240,0.8); }
+    .kb-col[data-status="interviewed"] { background: #fff8f0; border-color: #fed7aa; }
+    .kb-col[data-status="interviewed"] .kb-col-header { background: rgba(255,248,240,0.8); }
+    .kb-col[data-status="hired"] { background: #f0fdf4; border-color: #bbf7d0; }
+    .kb-col[data-status="hired"] .kb-col-header { background: #dcfce7; }
+    .kb-col[data-status="rejected"] { background: #fff5f5; border-color: #fecaca; }
+    .kb-col[data-status="rejected"] .kb-col-header { background: #fee2e2; }
+    /* Card accent borders */
+    .kb-card.kb-hired { border-left: 3px solid #22c55e; }
+    .kb-card.kb-rejected { border-left: 3px solid #ef4444; opacity: 0.72; }
+    /* Search dim */
+    .kb-card.kb-dim { opacity: 0.18; pointer-events: none; transform: none !important; }
+    /* Quick-add inline form */
+    #obQuickAdd {
+      background: #fff;
+      border-radius: 11px;
+      padding: 11px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border: 1.5px solid var(--lion-gold);
+      flex-shrink: 0;
+    }
+
     /* ── Sidebar ───────────────────────────────────────── */
     #sidebar {
       transition: transform 0.3s cubic-bezier(.4,0,.2,1);
@@ -3697,188 +3852,170 @@ function obRenderView() {
   obBindEvents()
 }
 
-// ── Pipeline / List View ─────────────────────────────────────────
+// ── Kanban Board (Pipeline View) ─────────────────────────────────
 function obPipelineHTML() {
   const s = obState.stats || {}
   const byStatus = {}
   ;(s.by_status || []).forEach(r => { byStatus[r.status] = r.count })
-
-  const pipelineCols = OB_STATUSES.filter(s => s.key !== 'rejected')
-  const rejected = obState.candidates.filter(c => c.status === 'rejected')
-  const active   = obState.candidates.filter(c => c.status !== 'rejected')
+  const total = s.total || 0
+  const inPipe = total - (s.hired||0) - (s.rejected||0)
 
   return `
-  <!-- Header -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+  <!-- Top bar -->
+  <div class="flex flex-wrap items-center gap-2 mb-4">
     <div>
-      <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-        <i class="fas fa-user-plus text-lion-gold"></i> Contractor Onboarding
+      <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <i class="fas fa-user-plus" style="color:var(--lion-gold)"></i> Contractor Onboarding
       </h2>
-      <p class="text-sm text-gray-500 mt-0.5">Track candidates from first contact through payroll</p>
     </div>
-    <div class="flex gap-2 flex-wrap">
-      <button onclick="obGoAvailability()" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium">
-        <i class="fas fa-calendar-alt mr-1"></i> Availability
-      </button>
-      <button onclick="obGoTemplates()" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium">
-        <i class="fas fa-file-contract mr-1"></i> Contracts
-      </button>
-      <button onclick="obGoAdd()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
-        <i class="fas fa-plus mr-2"></i> Add Candidate
-      </button>
+    <!-- KPI pills -->
+    <div class="flex gap-2 ml-0 md:ml-2 flex-wrap">
+      <span class="text-xs bg-gray-100 text-gray-600 rounded-full px-3 py-1 font-semibold">
+        <i class="fas fa-users mr-1"></i>${total} total
+      </span>
+      <span class="text-xs bg-blue-100 text-blue-700 rounded-full px-3 py-1 font-semibold">
+        <i class="fas fa-stream mr-1"></i>${inPipe} active
+      </span>
+      <span class="text-xs bg-green-100 text-green-700 rounded-full px-3 py-1 font-semibold">
+        <i class="fas fa-check-circle mr-1"></i>${s.hired||0} hired
+      </span>
+      <span class="text-xs bg-red-100 text-red-500 rounded-full px-3 py-1 font-semibold">
+        <i class="fas fa-times-circle mr-1"></i>${s.rejected||0} rejected
+      </span>
     </div>
+    <!-- Search -->
+    <div class="relative ml-auto" style="min-width:180px">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
+      <input type="text" id="obSearch" placeholder="Search…" value="${escHtml(obState.search)}"
+        class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-xl bg-white"
+        oninput="obOnSearch(this.value)">
+    </div>
+    <!-- Actions -->
+    <button onclick="obGoAvailability()" class="btn-outline px-3 py-1.5 rounded-xl text-sm font-medium">
+      <i class="fas fa-calendar-alt mr-1"></i>Availability
+    </button>
+    <button onclick="obGoTemplates()" class="btn-outline px-3 py-1.5 rounded-xl text-sm font-medium">
+      <i class="fas fa-file-contract mr-1"></i>Contracts
+    </button>
+    <button onclick="obGoAdd()" class="btn-primary px-4 py-1.5 rounded-xl text-sm font-medium">
+      <i class="fas fa-plus mr-1"></i>Add
+    </button>
   </div>
 
-  <!-- KPI Row -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-    ${[
-      { label: 'Total', value: s.total || 0, icon: 'fa-users', color: 'text-gray-700', bg: 'bg-gray-50' },
-      { label: 'In Pipeline', value: (s.total||0)-(s.hired||0)-(s.rejected||0), icon: 'fa-funnel-dollar', color: 'text-blue-600', bg: 'bg-blue-50' },
-      { label: 'Hired', value: s.hired || 0, icon: 'fa-check-circle', color: 'text-green-600', bg: 'bg-green-50' },
-      { label: 'Rejected', value: s.rejected || 0, icon: 'fa-times-circle', color: 'text-red-500', bg: 'bg-red-50' },
-    ].map(k => `
-      <div class="card p-4 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl ${k.bg} flex items-center justify-center flex-shrink-0">
-          <i class="fas ${k.icon} ${k.color}"></i>
+  <!-- Kanban board -->
+  <div id="obKanbanBoard">
+    ${OB_STATUSES.map(col => {
+      // When search is active, show all statuses but filter cards
+      const allCards = obState.candidates.filter(c => c.status === col.key)
+      const search   = (obState.search || '').toLowerCase().trim()
+      const cards    = search
+        ? obState.candidates.filter(c => c.status === col.key)   // all fetched (server already filtered)
+        : allCards
+      return `
+      <div class="kb-col" data-status="${col.key}">
+        <div class="kb-col-header">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${col.dot}" style="display:inline-block"></span>
+          <span class="text-xs font-bold text-gray-700 uppercase tracking-wider flex-1 truncate">${col.label}</span>
+          <span class="text-xs font-bold rounded-full min-w-[20px] text-center px-1.5 py-0.5 bg-white/90 text-gray-500 shadow-sm border border-gray-100">${cards.length}</span>
         </div>
-        <div>
-          <div class="text-xl font-bold text-gray-800">${k.value}</div>
-          <div class="text-xs text-gray-500">${k.label}</div>
+        <div class="kb-col-body"
+          data-status="${col.key}"
+          ondragover="obDragOver(event)"
+          ondragleave="obDragLeave(event)"
+          ondrop="obDrop(event)">
+          ${cards.length === 0
+            ? `<div class="kb-empty"><i class="fas fa-arrow-down block text-lg mb-1 opacity-50"></i>Drop cards here</div>`
+            : cards.map(c => obKanbanCard(c)).join('')}
         </div>
-      </div>
-    `).join('')}
-  </div>
-
-  <!-- Filters -->
-  <div class="card p-3 mb-4 flex flex-col md:flex-row gap-2">
-    <div class="flex-1 relative">
-      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-      <input type="text" id="obSearch" placeholder="Search by name, email, company…" value="${escHtml(obState.search)}"
-        class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg" oninput="obOnSearch(this.value)">
-    </div>
-    <div class="flex gap-2 flex-wrap">
-      <button onclick="obSetFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${obState.filterStatus==='all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">
-        All (${s.total||0})
-      </button>
-      ${OB_STATUSES.map(st => `
-        <button onclick="obSetFilter('${st.key}')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${obState.filterStatus===st.key ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">
-          ${st.label} (${byStatus[st.key]||0})
+        <button class="kb-add-btn" onclick="obQuickAddInCol('${col.key}')">
+          <i class="fas fa-plus text-xs"></i><span>Add card</span>
         </button>
-      `).join('')}
-    </div>
+      </div>`
+    }).join('')}
   </div>
-
-  <!-- Pipeline Board -->
-  ${obState.filterStatus === 'all' && !obState.search ? `
-  <div class="mb-4 overflow-x-auto pb-2">
-    <div class="flex gap-3" style="min-width:${pipelineCols.length * 220}px">
-      ${pipelineCols.map(col => {
-        const colCandidates = obState.candidates.filter(c => c.status === col.key)
-        return `
-        <div class="flex-shrink-0 w-52">
-          <div class="flex items-center gap-2 mb-2">
-            <div class="w-2 h-2 rounded-full ${col.dot}"></div>
-            <span class="text-xs font-bold text-gray-600 uppercase tracking-wider">${col.label}</span>
-            <span class="ml-auto text-xs bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5">${colCandidates.length}</span>
-          </div>
-          <div class="flex flex-col gap-2">
-            ${colCandidates.length === 0 ? `<div class="text-xs text-gray-300 text-center py-4 border border-dashed border-gray-200 rounded-xl">Empty</div>` : ''}
-            ${colCandidates.map(c => obKanbanCard(c)).join('')}
-          </div>
-        </div>`
-      }).join('')}
-    </div>
-  </div>
-  ` : ''}
-
-  <!-- List Table -->
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-      <span class="text-sm font-semibold text-gray-700">${obState.filterStatus === 'all' && !obState.search ? 'All Candidates' : 'Filtered Results'}</span>
-      <span class="text-xs text-gray-400">${obState.candidates.length} records</span>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-gray-100 bg-gray-50/50">
-            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Name / Company</th>
-            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Contact</th>
-            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Status</th>
-            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Checklist</th>
-            <th class="text-left px-4 py-3 text-gray-500 font-semibold text-xs">Updated</th>
-            <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${obState.candidates.length === 0 ? `<tr><td colspan="6" class="text-center py-12 text-gray-400"><i class="fas fa-user-plus text-3xl mb-3 block text-gray-200"></i>No candidates found</td></tr>` : ''}
-          ${obState.candidates.map(c => `
-            <tr class="table-row border-b border-gray-50 cursor-pointer hover:bg-amber-50/20" onclick="obOpenDetail(${c.id})">
-              <td class="px-4 py-3">
-                <div class="font-semibold text-gray-800">${escHtml(c.full_name)}</div>
-                ${c.company_name ? `<div class="text-xs text-gray-400">${escHtml(c.company_name)}</div>` : ''}
-                ${c.specialty ? `<div class="text-xs text-purple-500">${escHtml(c.specialty)}</div>` : ''}
-              </td>
-              <td class="px-4 py-3 text-xs text-gray-500">
-                ${c.email ? `<div><i class="fas fa-envelope mr-1 text-gray-300"></i>${escHtml(c.email)}</div>` : ''}
-                ${c.phone ? `<div><i class="fas fa-phone mr-1 text-gray-300"></i>${escHtml(c.phone)}</div>` : ''}
-              </td>
-              <td class="px-4 py-3">${obStatusBadge(c.status)}</td>
-              <td class="px-4 py-3">
-                ${c.status === 'hired' ? `
-                  <div class="flex gap-1 flex-wrap">
-                    ${obCheckDot(c.payroll_sent, 'Payroll Sent')}
-                    ${obCheckDot(c.contract_signed, 'Contract Signed')}
-                    ${obCheckDot(c.training_completed, 'Training')}
-                    ${obCheckDot(c.docs_received, 'Docs')}
-                  </div>
-                  ${c.converted_contractor_id ? '<div class="text-xs text-green-600 mt-1"><i class="fas fa-check-circle mr-1"></i>In Payroll</div>' : ''}
-                ` : `<span class="text-gray-300 text-xs">—</span>`}
-              </td>
-              <td class="px-4 py-3 text-xs text-gray-400">${obTimeAgo(c.updated_at)}</td>
-              <td class="px-4 py-3 text-center">
-                <button onclick="event.stopPropagation();obOpenDetail(${c.id})" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
-                  <i class="fas fa-arrow-right mr-1"></i>Open
-                </button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Rejected section collapsible -->
-  ${rejected.length > 0 && obState.filterStatus === 'all' && !obState.search ? `
-  <details class="mt-4">
-    <summary class="cursor-pointer text-sm text-red-400 font-medium px-2 py-1 hover:text-red-600">
-      <i class="fas fa-times-circle mr-1"></i> ${rejected.length} Rejected candidate${rejected.length>1?'s':''}
-    </summary>
-    <div class="mt-2 card overflow-hidden">
-      ${rejected.map(c => `
-        <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onclick="obOpenDetail(${c.id})">
-          <div>
-            <span class="font-medium text-gray-600 text-sm">${escHtml(c.full_name)}</span>
-            ${c.company_name ? `<span class="text-xs text-gray-400 ml-2">${escHtml(c.company_name)}</span>` : ''}
-          </div>
-          <span class="text-xs text-gray-400">${obTimeAgo(c.updated_at)}</span>
-        </div>
-      `).join('')}
-    </div>
-  </details>
-  ` : ''}
   `
 }
 
+// Build a single draggable kanban card
 function obKanbanCard(c) {
-  return `
-  <div class="card p-3 cursor-pointer hover:shadow-md transition-shadow border border-gray-100" onclick="obOpenDetail(${c.id})">
-    <div class="font-medium text-gray-800 text-sm leading-tight">${escHtml(c.full_name)}</div>
-    ${c.company_name ? `<div class="text-xs text-gray-400 mt-0.5 truncate">${escHtml(c.company_name)}</div>` : ''}
-    ${c.specialty ? `<div class="text-xs text-purple-400 mt-0.5">${escHtml(c.specialty)}</div>` : ''}
-    <div class="flex items-center gap-1.5 mt-2">
-      ${c.doc_count > 0 ? `<span class="text-xs bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded"><i class="fas fa-paperclip mr-0.5"></i>${c.doc_count}</span>` : ''}
-      ${c.meeting_count > 0 ? `<span class="text-xs bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded"><i class="fas fa-calendar mr-0.5"></i>${c.meeting_count}</span>` : ''}
+  const hired    = c.status === 'hired'
+  const rejected = c.status === 'rejected'
+  // Hired checklist: payroll_sent, contract_sent, contract_signed, training_scheduled, training_completed, docs_received
+  const checkItems = ['payroll_sent','contract_sent','contract_signed','training_scheduled','training_completed','docs_received']
+  const done = hired ? checkItems.filter(k => c[k]).length : 0
+  const total = hired ? checkItems.length : 0
+  const pct   = hired && total > 0 ? Math.round((done / total) * 100) : 0
+
+  // Avatar initials
+  const initials = (c.full_name || '?').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase()
+  const avatarColors = ['bg-blue-100 text-blue-600','bg-purple-100 text-purple-600','bg-amber-100 text-amber-600',
+    'bg-emerald-100 text-emerald-600','bg-rose-100 text-rose-600','bg-indigo-100 text-indigo-600']
+  const avatarColor = avatarColors[c.id % avatarColors.length]
+
+  return `<div class="kb-card${hired?' kb-hired':''}${rejected?' kb-rejected':''}"
+    draggable="true"
+    data-id="${c.id}"
+    data-status="${c.status}"
+    ondragstart="obDragStart(event)"
+    ondragend="obDragEnd(event)">
+
+    <!-- Header row: avatar + name + grip -->
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-full ${avatarColor} flex items-center justify-center text-xs font-bold flex-shrink-0 select-none">
+        ${initials}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-gray-800 text-sm leading-snug truncate cursor-pointer hover:text-blue-600 transition-colors"
+             onclick="obOpenDetail(${c.id})">${escHtml(c.full_name)}</div>
+        ${c.company_name ? `<div class="text-xs text-gray-400 truncate leading-tight">${escHtml(c.company_name)}</div>` : ''}
+        ${c.specialty    ? `<div class="text-xs text-purple-500 truncate leading-tight">${escHtml(c.specialty)}</div>` : ''}
+      </div>
+      <div class="text-gray-200 text-xs flex-shrink-0 cursor-grab hover:text-gray-400 transition-colors mt-0.5" title="Drag to move">
+        <i class="fas fa-grip-vertical"></i>
+      </div>
+    </div>
+
+    <!-- Hired progress bar -->
+    ${hired ? `
+      <div class="mt-2.5">
+        <div class="flex justify-between text-xs text-gray-400 mb-1">
+          <span class="font-medium">Onboarding</span>
+          <span class="${done===total?'text-green-500 font-semibold':''}">${done}/${total}</span>
+        </div>
+        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full rounded-full transition-all ${pct===100?'bg-green-500':'bg-amber-400'}" style="width:${pct}%"></div>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Footer: chips + timestamp -->
+    <div class="flex items-center gap-1 mt-2.5 flex-wrap">
+      ${c.doc_count > 0
+        ? `<span class="text-xs bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-medium" title="${c.doc_count} document(s)">
+             <i class="fas fa-paperclip mr-0.5"></i>${c.doc_count}
+           </span>` : ''}
+      ${c.meeting_count > 0
+        ? `<span class="text-xs bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded-md font-medium" title="${c.meeting_count} meeting(s)">
+             <i class="fas fa-calendar mr-0.5"></i>${c.meeting_count}
+           </span>` : ''}
+      ${c.converted_contractor_id
+        ? `<span class="text-xs bg-green-100 text-green-600 px-1.5 py-0.5 rounded-md font-medium" title="In Payroll">
+             <i class="fas fa-check mr-0.5"></i>Payroll
+           </span>` : ''}
       <span class="ml-auto text-gray-300 text-xs">${obTimeAgo(c.updated_at)}</span>
+    </div>
+
+    <!-- Action row -->
+    <div class="flex gap-1 mt-2 pt-2 border-t border-gray-50">
+      <button onclick="event.stopPropagation();obOpenDetail(${c.id})"
+        class="flex-1 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg py-1 transition-colors text-center font-medium">
+        <i class="fas fa-arrow-right mr-1"></i>Open
+      </button>
+      ${hired && !c.converted_contractor_id ? `
+      <button onclick="event.stopPropagation();obConvert(${c.id})"
+        class="flex-1 text-xs text-green-500 hover:text-green-700 hover:bg-green-50 rounded-lg py-1 transition-colors text-center font-medium">
+        <i class="fas fa-user-check mr-1"></i>→ Payroll
+      </button>` : ''}
     </div>
   </div>`
 }
@@ -5259,6 +5396,183 @@ async function obDeleteTemplate(id) {
     obRenderView()
     showToast('Template deleted', 'success')
   } catch(e) { showToast('Failed to delete', 'error') }
+}
+
+// ════════════════════════════════════════════════════
+// KANBAN DRAG-AND-DROP
+// ════════════════════════════════════════════════════
+
+let _obDragId = null          // candidate id being dragged
+let _obDragEl = null          // the DOM element being dragged
+let _obDragIndicator = null   // current drop-indicator element
+let _obDragOverCol = null     // column key currently hovered
+
+function obDragStart(event) {
+  _obDragId = parseInt(event.currentTarget.dataset.id)
+  _obDragEl  = event.currentTarget
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', String(_obDragId))
+  // Short delay so the drag image renders before we add the dim class
+  setTimeout(() => {
+    if (_obDragEl) _obDragEl.classList.add('dragging')
+    // Dim all other cards
+    document.querySelectorAll('.kb-card').forEach(c => {
+      if (parseInt(c.dataset.id) !== _obDragId) c.classList.add('kb-dim')
+    })
+  }, 0)
+}
+
+function obDragEnd(event) {
+  if (_obDragEl) _obDragEl.classList.remove('dragging')
+  _obDragEl = null
+  _obDragId = null
+  _obDragOverCol = null
+  // Remove all visual states
+  document.querySelectorAll('.kb-card').forEach(c => c.classList.remove('kb-dim', 'dragging'))
+  document.querySelectorAll('.kb-col-body').forEach(b => b.classList.remove('drag-over'))
+  _removeDropIndicator()
+}
+
+function obDragOver(event) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  const body = event.currentTarget
+  const colKey = body.dataset.status
+  if (colKey === _obDragOverCol) return   // already handling this col
+  _obDragOverCol = colKey
+  // Highlight target column
+  document.querySelectorAll('.kb-col-body').forEach(b => b.classList.remove('drag-over'))
+  body.classList.add('drag-over')
+  // Show drop indicator line
+  _placeDropIndicator(body, event.clientY)
+}
+
+function obDragLeave(event) {
+  // Only clear if leaving the column body itself (not a child)
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    event.currentTarget.classList.remove('drag-over')
+    if (_obDragOverCol === event.currentTarget.dataset.status) {
+      _obDragOverCol = null
+    }
+  }
+}
+
+async function obDrop(event) {
+  event.preventDefault()
+  const body      = event.currentTarget
+  const newStatus = body.dataset.status
+  const id        = parseInt(event.dataTransfer.getData('text/plain'))
+  if (!id || !newStatus) return
+
+  body.classList.remove('drag-over')
+  _removeDropIndicator()
+
+  const candidate = obState.candidates.find(c => c.id === id)
+  if (!candidate || candidate.status === newStatus) return
+
+  // Optimistic UI update
+  const oldStatus = candidate.status
+  candidate.status = newStatus
+  obRenderView()
+
+  try {
+    await api(`/api/onboarding/candidates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: newStatus })
+    })
+    // Refresh stats
+    await obLoadStats()
+    obRenderView()
+    showToast(`Moved to "${obStatusInfo(newStatus).label}"`, 'success')
+    if (newStatus === 'hired') {
+      setTimeout(() => showToast('Candidate hired! Complete the checklist in their profile.', 'info'), 700)
+    }
+  } catch(e) {
+    // Revert on failure
+    candidate.status = oldStatus
+    obRenderView()
+    showToast('Failed to update status', 'error')
+  }
+}
+
+function _placeDropIndicator(colBody, clientY) {
+  _removeDropIndicator()
+  const cards = [...colBody.querySelectorAll('.kb-card:not(.dragging)')]
+  let insertBefore = null
+  for (const card of cards) {
+    const rect = card.getBoundingClientRect()
+    if (clientY < rect.top + rect.height / 2) { insertBefore = card; break }
+  }
+  const ind = document.createElement('div')
+  ind.className = 'kb-drop-indicator'
+  ind.id = '_obDropInd'
+  if (insertBefore) colBody.insertBefore(ind, insertBefore)
+  else colBody.appendChild(ind)
+  _obDragIndicator = ind
+}
+
+function _removeDropIndicator() {
+  if (_obDragIndicator) { _obDragIndicator.remove(); _obDragIndicator = null }
+  const old = document.getElementById('_obDropInd')
+  if (old) old.remove()
+}
+
+// ── Quick-add inline form inside a column ────────────────────────
+function obQuickAddInCol(statusKey) {
+  // Remove any existing quick-add form
+  const existing = document.getElementById('obQuickAdd')
+  if (existing) {
+    const wasInCol = existing.closest('.kb-col')?.dataset.status
+    existing.remove()
+    if (wasInCol === statusKey) return   // toggle off
+  }
+
+  const colBody = document.querySelector(`.kb-col-body[data-status="${statusKey}"]`)
+  if (!colBody) return
+
+  const form = document.createElement('div')
+  form.id = 'obQuickAdd'
+  form.innerHTML = `
+    <input id="obQAName" type="text" placeholder="Full name…" class="w-full text-sm px-2 py-1.5 border border-gray-200 rounded-lg mb-2 focus:outline-none focus:border-amber-400" autofocus>
+    <input id="obQASpecialty" type="text" placeholder="Specialty (optional)" class="w-full text-sm px-2 py-1.5 border border-gray-200 rounded-lg mb-2 focus:outline-none focus:border-amber-400">
+    <div class="flex gap-2">
+      <button onclick="obQuickAddSave('${statusKey}')" class="flex-1 text-xs btn-primary py-1.5 rounded-lg font-medium">
+        <i class="fas fa-plus mr-1"></i>Add
+      </button>
+      <button onclick="document.getElementById('obQuickAdd')?.remove()" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
+        Cancel
+      </button>
+    </div>
+  `
+  colBody.appendChild(form)
+  form.querySelector('#obQAName')?.focus()
+
+  // Allow Enter key to save
+  form.querySelector('#obQAName')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') obQuickAddSave(statusKey)
+    if (e.key === 'Escape') form.remove()
+  })
+  form.querySelector('#obQASpecialty')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') obQuickAddSave(statusKey)
+    if (e.key === 'Escape') form.remove()
+  })
+}
+
+async function obQuickAddSave(statusKey) {
+  const name = (document.getElementById('obQAName')?.value || '').trim()
+  if (!name) { showToast('Name is required', 'warning'); document.getElementById('obQAName')?.focus(); return }
+  const specialty = (document.getElementById('obQASpecialty')?.value || '').trim()
+  try {
+    const r = await api('/api/onboarding/candidates', {
+      method: 'POST',
+      body: JSON.stringify({ full_name: name, specialty, status: statusKey })
+    })
+    showToast('Candidate added!', 'success')
+    document.getElementById('obQuickAdd')?.remove()
+    await obLoadStats()
+    await obLoadCandidates()
+    obRenderView()
+  } catch(e) { showToast('Failed to add: ' + e.message, 'error') }
 }
 
 // ════════════════════════════════════════════════════
