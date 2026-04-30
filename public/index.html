@@ -414,45 +414,73 @@
       </div>
     </div>
 
+    <!-- View Picker Card (step 2 for admins) -->
+    <div id="viewPickerCard" class="hidden bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-2xl">
+      <div class="text-center mb-5">
+        <p id="vpWelcome" class="text-yellow-300 font-semibold text-base">Welcome back!</p>
+        <h2 class="text-white font-bold text-xl mt-1">Where would you like to go?</h2>
+      </div>
+      <div class="space-y-3">
+        <button onclick="vpGo('payroll')"
+          class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-white/10 hover:border-yellow-400 hover:bg-white/5 transition-all group">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#1a1a2e,#C9A84C);">
+            <i class="fas fa-money-bill-wave text-yellow-300 text-xl"></i>
+          </div>
+          <div class="text-left flex-1">
+            <div class="font-bold text-white">Payroll & Admin</div>
+            <div class="text-blue-300 text-xs mt-0.5">Dashboard, reports, contractors, rates</div>
+          </div>
+          <i class="fas fa-arrow-right text-white/30 group-hover:text-yellow-400 transition-colors"></i>
+        </button>
+        <button onclick="vpGo('onboarding')"
+          class="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-white/10 hover:border-emerald-400 hover:bg-white/5 transition-all group">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-700">
+            <i class="fas fa-user-plus text-white text-xl"></i>
+          </div>
+          <div class="text-left flex-1">
+            <div class="font-bold text-white">Onboarding</div>
+            <div class="text-blue-300 text-xs mt-0.5">Contractor pipeline, Kanban board, hiring</div>
+          </div>
+          <i class="fas fa-arrow-right text-white/30 group-hover:text-emerald-400 transition-colors"></i>
+        </button>
+      </div>
+      <button onclick="showLoginCard()" class="mt-4 w-full text-center text-blue-400 hover:text-white text-xs py-2 transition-colors">
+        <i class="fas fa-arrow-left mr-1"></i> Back to login
+      </button>
+    </div>
+
     <p class="text-center text-blue-400/50 text-xs mt-6">Lion MD Portal · Confidential</p>
   </div>
 </div>
 
-<!-- View Picker (shown to admin after login) -->
-<div id="viewPicker" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);">
-  <div class="w-full max-w-md mx-4">
-    <div class="text-center mb-8">
-      <div class="w-16 h-16 rounded-2xl mx-auto mb-4 overflow-hidden shadow-xl" style="background:linear-gradient(135deg,#C9A84C,#f59e0b);">
-        <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
+<!-- Invite Link Modal (fixed, outside mainContent so umDrawPage can't wipe it) -->
+<div id="inviteModal" class="hidden fixed inset-0 modal-backdrop z-50 flex items-center justify-center">
+  <div class="card p-6 w-full max-w-md mx-4">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style="background:var(--lion-gold);">
+          <i class="fas fa-link text-white text-sm"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800">Invite Link Ready</h3>
+          <p class="text-xs text-gray-500">Share with the user — expires in 48 hours</p>
+        </div>
       </div>
-      <p id="vpWelcome" class="text-blue-300 text-sm">Welcome back</p>
-      <h1 class="text-2xl font-bold text-white mt-1">Where would you like to go?</h1>
-    </div>
-    <div class="space-y-3">
-      <button onclick="vpGo('payroll')"
-        class="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-white/10 hover:border-yellow-400 hover:bg-white/5 transition-all group">
-        <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#1a1a2e,#C9A84C);">
-          <i class="fas fa-money-bill-wave text-yellow-300 text-2xl"></i>
-        </div>
-        <div class="text-left flex-1">
-          <div class="font-bold text-white text-base">Payroll & Admin</div>
-          <div class="text-blue-300 text-sm mt-0.5">Dashboard, reports, contractors, rates</div>
-        </div>
-        <i class="fas fa-arrow-right text-white/30 group-hover:text-yellow-400 transition-colors text-lg"></i>
-      </button>
-      <button onclick="vpGo('onboarding')"
-        class="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-white/10 hover:border-emerald-400 hover:bg-white/5 transition-all group">
-        <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-700">
-          <i class="fas fa-user-plus text-white text-2xl"></i>
-        </div>
-        <div class="text-left flex-1">
-          <div class="font-bold text-white text-base">Onboarding</div>
-          <div class="text-blue-300 text-sm mt-0.5">Contractor pipeline, Kanban board, hiring</div>
-        </div>
-        <i class="fas fa-arrow-right text-white/30 group-hover:text-emerald-400 transition-colors text-lg"></i>
+      <button onclick="$('inviteModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 p-1">
+        <i class="fas fa-times"></i>
       </button>
     </div>
-    <p class="text-center text-blue-400/40 text-xs mt-8">Lion MD Portal · Confidential</p>
+    <div class="bg-gray-50 rounded-xl p-3 mb-4 border border-gray-200">
+      <input id="inviteModalLink" type="text" readonly
+        onclick="this.select()"
+        class="w-full bg-transparent text-xs text-gray-700 font-mono border-none outline-none cursor-pointer"
+        title="Click to select all"/>
+    </div>
+    <button onclick="inviteModalCopy()" id="inviteModalCopyBtn"
+      class="w-full btn-primary py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2">
+      <i class="fas fa-copy"></i> Copy Link to Clipboard
+    </button>
+    <p class="text-center text-xs text-gray-400 mt-3">The user will be prompted to set their own password on first visit.</p>
   </div>
 </div>
 
@@ -689,30 +717,39 @@ function applySession(token, user) {
   state.role  = user.role
   localStorage.setItem('lmd_token', token)
   localStorage.setItem('lmd_user',  JSON.stringify(user))
-  $('loginScreen').classList.add('hidden')
   applyRoleUI(user.role, user.name)
   buildNav()
 
-  // Admins choose their view; other roles go straight in
   if (user.role === 'admin') {
-    const vp = $('viewPicker')
+    // Show view picker card (still within loginScreen)
+    $('loginCard').classList.add('hidden')
+    $('setupCard').classList.add('hidden')
+    $('viewPickerCard').classList.remove('hidden')
     const wl = $('vpWelcome')
     if (wl) wl.textContent = 'Welcome back, ' + user.name.split(' ')[0] + '!'
-    vp.classList.remove('hidden')
   } else {
+    $('loginScreen').classList.add('hidden')
     $('app').classList.remove('hidden')
-    if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+    if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
     loadInitialData()
   }
 }
 
-// Called when user picks a view from the picker
+// Called when admin picks Payroll or Onboarding
 function vpGo(view) {
-  $('viewPicker').classList.add('hidden')
+  $('loginScreen').classList.add('hidden')
+  $('viewPickerCard').classList.add('hidden')
   $('app').classList.remove('hidden')
-  if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
-  state.adminView = view   // 'payroll' | 'onboarding'
+  if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
+  state.adminView = view
   loadInitialData()
+}
+
+// Back to login card from view picker
+function showLoginCard() {
+  $('viewPickerCard').classList.add('hidden')
+  $('setupCard').classList.add('hidden')
+  $('loginCard').classList.remove('hidden')
 }
 
 function applyRoleUI(role, name) {
@@ -739,13 +776,15 @@ function applyRoleUI(role, name) {
   }
 }
 
-// Show the view picker overlay (admin switches between Payroll / Onboarding)
+// Show the view picker (admin switches between Payroll / Onboarding)
 function showViewPicker() {
-  const vp = $('viewPicker')
   const wl = $('vpWelcome')
   if (wl && state.user) wl.textContent = 'Hi ' + state.user.name.split(' ')[0] + '! Where would you like to go?'
   $('app').classList.add('hidden')
-  vp.classList.remove('hidden')
+  $('loginCard').classList.add('hidden')
+  $('setupCard').classList.add('hidden')
+  $('viewPickerCard').classList.remove('hidden')
+  $('loginScreen').classList.remove('hidden')
 }
 
 function logout() {
@@ -755,6 +794,7 @@ function logout() {
   $('loginScreen').classList.remove('hidden')
   $('loginCard').classList.remove('hidden')
   $('setupCard').classList.add('hidden')
+  $('viewPickerCard').classList.add('hidden')
   $('app').classList.add('hidden')
   $('loginEmail').value = ''
   $('loginPassword').value = ''
@@ -775,18 +815,18 @@ async function tryRestoreSession() {
     state.token = token
     state.user  = me
     state.role  = me.role
-    $('loginScreen').classList.add('hidden')
     applyRoleUI(me.role, me.name)
     buildNav()
-    // Admins choose view; others go straight in
     if (me.role === 'admin') {
-      const vp = $('viewPicker')
+      $('loginCard').classList.add('hidden')
+      $('setupCard').classList.add('hidden')
+      $('viewPickerCard').classList.remove('hidden')
       const wl = $('vpWelcome')
       if (wl) wl.textContent = 'Welcome back, ' + me.name.split(' ')[0] + '!'
-      vp.classList.remove('hidden')
     } else {
+      $('loginScreen').classList.add('hidden')
       $('app').classList.remove('hidden')
-      if (isMobile()) $('sidebar').style.transform = 'translateX(-100%)'
+      if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
       loadInitialData()
     }
     return true
@@ -6196,9 +6236,10 @@ async function umSave() {
       // Show invite link if generated
       if (result.invite_token) {
         const link = window.location.origin + '/?token=' + result.invite_token
-        $('umInviteLink').value = link
-        $('umInviteBox').classList.remove('hidden')
-        $('umInviteBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        umState.users = await api('/api/admin/users')
+        umDrawPage()
+        showInviteModal(link)
+        return
       }
     }
     umState.users = await api('/api/admin/users')
@@ -6232,9 +6273,10 @@ async function umResendInvite(id, name) {
     const result = await api(`/api/admin/users/${id}/reset-invite`, { method: 'POST' })
     if (result.invite_token) {
       const link = window.location.origin + '/?token=' + result.invite_token
-      $('umInviteLink').value = link
-      $('umInviteBox').classList.remove('hidden')
-      $('umInviteBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      umState.users = await api('/api/admin/users')
+      umDrawPage()
+      showInviteModal(link)
+      return
     }
     showToast('New invite link generated!', 'success')
     umState.users = await api('/api/admin/users')
@@ -6242,19 +6284,37 @@ async function umResendInvite(id, name) {
   } catch(e) { showToast(e.message, 'error') }
 }
 
-function umCopyInvite() {
-  const link = $('umInviteLink').value
-  if (!link) return
-  const btn = $('umCopyBtn')
-  const doFlash = () => {
-    if (btn) { btn.innerHTML = '<i class="fas fa-check"></i> Copied!'; btn.style.background = '#16a34a' }
-    showToast('Invite link copied to clipboard!', 'success')
-    setTimeout(() => { if (btn) { btn.innerHTML = '<i class="fas fa-copy"></i> Copy Link'; btn.style.background = '' } }, 2500)
-  }
-  navigator.clipboard.writeText(link).then(doFlash).catch(() => {
-    $('umInviteLink').select(); document.execCommand('copy'); doFlash()
-  })
+function showInviteModal(link) {
+  $('inviteModalLink').value = link
+  $('inviteModalCopyBtn').innerHTML = '<i class="fas fa-copy"></i> Copy Link to Clipboard'
+  $('inviteModalCopyBtn').style.background = ''
+  $('inviteModal').classList.remove('hidden')
 }
+
+function inviteModalCopy() {
+  const link = $('inviteModalLink').value
+  if (!link) return
+  const btn = $('inviteModalCopyBtn')
+  const doFlash = () => {
+    btn.innerHTML = '<i class="fas fa-check"></i> Copied!'
+    btn.style.background = '#16a34a'
+    showToast('Invite link copied!', 'success')
+    setTimeout(() => {
+      btn.innerHTML = '<i class="fas fa-copy"></i> Copy Link to Clipboard'
+      btn.style.background = ''
+    }, 2500)
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(link).then(doFlash).catch(() => {
+      $('inviteModalLink').select(); document.execCommand('copy'); doFlash()
+    })
+  } else {
+    $('inviteModalLink').select(); document.execCommand('copy'); doFlash()
+  }
+}
+
+// Legacy — kept so any remaining inline refs don't crash
+function umCopyInvite() { inviteModalCopy() }
 
 // ════════════════════════════════════════════════════
 // APP INITIALIZATION
