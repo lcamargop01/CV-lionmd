@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <style>
     :root {
       --lion-gold: #C9A84C;
@@ -5413,69 +5414,164 @@ async function obHandleResumeUpload(event, candidateId) {
 }
 
 async function obProcessResumeFile(file, candidateId) {
-  showLoading('Reading resume…')
+  // Show inline spinner on the drop zone instead of full-screen overlay
+  // (full-screen overlay blocks file I/O callbacks in some browsers)
+  const rdz = document.getElementById('resumeDropZone')
+  const rdzOrig = rdz ? rdz.innerHTML : ''
+  if (rdz) rdz.innerHTML = '<i class="fas fa-spinner fa-spin text-2xl text-indigo-400 my-2"></i><p class="text-sm text-gray-500 mt-1">Reading file…</p>'
+
   try {
     let text = ''
+
     if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      // Plain text — just read it
       text = await file.text()
+
     } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      // Extract text from PDF using basic approach
-      const arrBuf = await file.arrayBuffer()
-      const bytes = new Uint8Array(arrBuf)
-      // Decode printable ASCII from PDF for basic text extraction
-      let raw = ''
-      for (let i = 0; i < bytes.length; i++) {
-        const b = bytes[i]
-        if (b >= 32 && b < 127) raw += String.fromCharCode(b)
-        else if (b === 10 || b === 13) raw += '\n'
+      // Use PDF.js for proper text extraction
+      try {
+        const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib
+        if (pdfjsLib) {
+          // Point worker to CDN
+          if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+          }
+          const arrBuf = await file.arrayBuffer()
+          const pdf = await pdfjsLib.getDocument({ data: arrBuf }).promise
+          const pages = []
+          for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p)
+            const tc = await page.getTextContent()
+            pages.push(tc.items.map(i => i.str).join(' '))
+          }
+          text = pages.join('\n\n')
+        }
+      } catch(pdfErr) {
+        console.warn('PDF.js extraction failed, falling back:', pdfErr)
       }
-      // Extract text between BT/ET markers (basic PDF text extraction)
-      const matches = [...raw.matchAll(/BT\s+([\s\S]*?)\s+ET/g)]
-      if (matches.length > 0) {
-        text = matches.map(m => {
-          return m[1].replace(/\(([^)]*)\)\s*Tj/g, '$1 ')
-                     .replace(/\(([^)]*)\)\s*TJ/g, '$1 ')
-                     .replace(/\/[A-Za-z]+\d*\s+\d+\s+Tf/g, '\n')
-                     .replace(/T\*/g, '\n').replace(/Td/g, ' ')
-        }).join('\n')
+
+      // Fallback: scan for printable ASCII if PDF.js failed or not loaded
+      if (!text.trim()) {
+        const arrBuf = await file.arrayBuffer()
+        const bytes = new Uint8Array(arrBuf)
+        let raw = ''
+        for (let i = 0; i < bytes.length; i++) {
+          const b = bytes[i]
+          if (b >= 32 && b < 127) raw += String.fromCharCode(b)
+          else if (b === 10 || b === 13) raw += '\n'
+        }
+        const matches = [...raw.matchAll(/BT\s+([\s\S]*?)\s+ET/g)]
+        if (matches.length > 0) {
+          text = matches.map(m =>
+            m[1].replace(/\(([^)]*)\)\s*Tj/g, '$1 ')
+                 .replace(/\(([^)]*)\)\s*TJ/g, '$1 ')
+                 .replace(/\/[A-Za-z]+\d*\s+\d+\s+Tf/g, '\n')
+                 .replace(/T\*/g, '\n').replace(/Td/g, ' ')
+          ).join('\n')
+        }
+        if (!text.trim()) text = raw.replace(/[^\x20-\x7E\n]/g, '').replace(/\n{3,}/g, '\n\n')
       }
-      if (!text.trim()) text = raw.replace(/[^\x20-\x7E\n]/g, '').replace(/\n{3,}/g, '\n\n')
+
+    } else if (file.name.endsWith('.docx') || file.type.includes('word') || file.type.includes('officedocument')) {
+      // DOCX: extract the word/document.xml from the ZIP structure
+      // DOCX files are ZIP archives containing XML
+      try {
+        const arrBuf = await file.arrayBuffer()
+        const bytes = new Uint8Array(arrBuf)
+        // Convert to string to find XML content
+        let raw = ''
+        for (let i = 0; i < bytes.length; i++) {
+          raw += String.fromCharCode(bytes[i])
+        }
+        // Look for XML text content between word/document.xml patterns
+        // Extract text from <w:t> tags which contain the actual text in DOCX
+        const xmlMatches = raw.match(/<w:t[^>]*>([^<]+)<\/w:t>/g)
+        if (xmlMatches && xmlMatches.length > 0) {
+          text = xmlMatches
+            .map(m => m.replace(/<[^>]+>/g, ''))
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        }
+        // If XML parsing fails, try reading as UTF-8 text and strip binary
+        if (!text.trim()) {
+          const decoder = new TextDecoder('utf-8', { fatal: false })
+          const decoded = decoder.decode(new Uint8Array(arrBuf))
+          const wt = decoded.match(/<w:t[^>]*>([^<]+)<\/w:t>/g)
+          if (wt) text = wt.map(m => m.replace(/<[^>]+>/g, '')).join(' ')
+        }
+      } catch(docxErr) {
+        console.warn('DOCX extraction error:', docxErr)
+      }
+      // Last resort: readable ASCII
+      if (!text.trim()) {
+        const arrBuf = await file.arrayBuffer()
+        const bytes = new Uint8Array(arrBuf)
+        let raw = ''
+        for (let i = 0; i < bytes.length; i++) {
+          if (bytes[i] >= 32 && bytes[i] < 127) raw += String.fromCharCode(bytes[i])
+          else if (bytes[i] === 10 || bytes[i] === 13) raw += '\n'
+        }
+        text = raw.replace(/[^\x20-\x7E\n]/g, '').replace(/\n{3,}/g, '\n\n')
+      }
+
     } else {
-      // For DOCX, try to extract plain text
+      // Unknown type — try reading as text
       text = await file.text().catch(() => '')
     }
+
+    // Clean up extracted text
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n{4,}/g, '\n\n').trim()
 
     // Store in textarea
     const ta = document.getElementById('obResumeText')
     if (ta) ta.value = text.substring(0, 8000)
 
-    // Also upload as document
-    const b64 = await obFileToBase64(file)
-    await api(`/api/onboarding/candidates/${candidateId}/documents`, {
-      method: 'POST',
-      body: JSON.stringify({ doc_type: 'resume', file_name: file.name, file_data: b64, file_size: file.size, mime_type: file.type })
-    })
+    // Restore drop zone
+    if (rdz) rdz.innerHTML = rdzOrig
 
-    hideLoading()
-    showToast('Resume loaded — click Analyze to extract key points', 'success')
-  } catch(e) { hideLoading(); showToast('Error reading file: ' + e.message, 'error') }
+    if (!text.trim()) {
+      showToast('Could not extract text from file. Please paste the resume text manually.', 'warning')
+      return
+    }
+
+    // Upload as document (non-blocking, don't await so UI stays responsive)
+    obFileToBase64(file).then(b64 =>
+      api(`/api/onboarding/candidates/${candidateId}/documents`, {
+        method: 'POST',
+        body: JSON.stringify({ doc_type: 'resume', file_name: file.name, file_data: b64, file_size: file.size, mime_type: file.type })
+      })
+    ).catch(err => console.warn('Doc upload failed:', err))
+
+    showToast('Resume loaded — click Analyze Resume to extract key points', 'success')
+  } catch(e) {
+    if (rdz) rdz.innerHTML = rdzOrig
+    showToast('Error reading file: ' + e.message, 'error')
+  }
 }
 
 async function obAnalyzeResume(id) {
   const text = (document.getElementById('obResumeText')?.value || '').trim()
   if (!text) { showToast('Please paste or upload resume text first', 'warning'); return }
-  showLoading('Analyzing resume…')
+
+  // Use inline button spinner — NOT the full-screen overlay (which blocks API callbacks)
+  const btn = document.querySelector(`[onclick="obAnalyzeResume(${id})"]`)
+  const btnOrig = btn ? btn.innerHTML : ''
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing…' }
+
   try {
-    const result = await api(`/api/onboarding/candidates/${id}/analyze-resume`, {
+    await api(`/api/onboarding/candidates/${id}/analyze-resume`, {
       method: 'POST', body: JSON.stringify({ resume_text: text })
     })
     obState.selectedCandidate = await api(`/api/onboarding/candidates/${id}`)
-    hideLoading()
     showToast('Analysis complete! Key points extracted.', 'success')
-    // Re-render resume tab
+    // Re-render resume tab to show key points
     const content = document.getElementById('obDetailContent')
     if (content) content.innerHTML = obDetailTabHTML(obState.selectedCandidate)
-  } catch(e) { hideLoading(); showToast('Analysis failed: ' + e.message, 'error') }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = btnOrig }
+    showToast('Analysis failed: ' + e.message, 'error')
+  }
 }
 
 // ── Document Handling ────────────────────────────────────────────
@@ -6320,6 +6416,15 @@ function umCopyInvite() { inviteModalCopy() }
 // APP INITIALIZATION
 // ════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
+  // Initialize PDF.js worker early so it's ready for resume uploads
+  try {
+    const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib
+    if (pdfjsLib && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+    }
+  } catch(_) {}
+
   // Check for invite token in URL first
   const hasInvite = await checkInviteToken()
   if (hasInvite) return  // Show setup card, don't try to restore session
