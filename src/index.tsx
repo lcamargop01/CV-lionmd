@@ -2204,6 +2204,63 @@ app.get('/api/auth/check-bootstrap', async (c) => {
 
 // ── Convert hired candidate → active contractor ──────────────────
 
+// ── Calendar ─────────────────────────────────────────────────────
+// Returns all upcoming meetings, checklist due items, and pending flags
+// aggregated across all candidates for the calendar view.
+app.get('/api/onboarding/calendar', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+
+  // 1. All scheduled meetings
+  const meetings = await c.env.DB.prepare(`
+    SELECT om.id, om.title, om.scheduled_at, om.duration_min, om.meeting_type,
+           om.meeting_link, om.status as meeting_status, om.notes,
+           oc.id as candidate_id, oc.full_name, oc.status as candidate_status
+    FROM onboarding_meetings om
+    JOIN onboarding_candidates oc ON oc.id = om.candidate_id
+    WHERE om.scheduled_at IS NOT NULL
+    ORDER BY om.scheduled_at ASC
+  `).all()
+
+  // 2. Hired candidates with incomplete checklist items → become "due" tasks
+  const hired = await c.env.DB.prepare(`
+    SELECT id, full_name, status,
+           payroll_sent, payroll_sent_at,
+           contract_sent, contract_sent_at,
+           contract_signed, contract_signed_at,
+           training_scheduled, training_scheduled_at,
+           training_completed, training_completed_at,
+           docs_received, docs_received_at,
+           converted_contractor_id, updated_at
+    FROM onboarding_candidates
+    WHERE status = 'hired'
+    ORDER BY updated_at DESC
+  `).all()
+
+  // 3. Candidates with status = interview_scheduled (flagged for attention)
+  const interviewScheduled = await c.env.DB.prepare(`
+    SELECT id, full_name, status, updated_at
+    FROM onboarding_candidates
+    WHERE status = 'interview_scheduled'
+    ORDER BY updated_at ASC
+  `).all()
+
+  // 4. Candidates with no update in 7+ days (stale)
+  const stale = await c.env.DB.prepare(`
+    SELECT id, full_name, status, updated_at
+    FROM onboarding_candidates
+    WHERE status NOT IN ('hired','rejected')
+      AND datetime(updated_at) < datetime('now', '-7 days')
+    ORDER BY updated_at ASC
+  `).all()
+
+  return c.json({
+    meetings: meetings.results,
+    hired_pending: hired.results,
+    interview_scheduled: interviewScheduled.results,
+    stale: stale.results,
+  })
+})
+
 app.post('/api/onboarding/candidates/:id/convert', async (c) => {
   await ensureOnboardingSchema(c.env.DB)
   const id = c.req.param('id')
