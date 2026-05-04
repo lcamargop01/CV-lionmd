@@ -3191,6 +3191,96 @@ function detectDuplicateGroups(contractors) {
   return Object.values(byName).filter(group => group.length > 1)
 }
 
+// ── Role group badge helper ──────────────────────────────────────
+function roleGroupBadge(rg) {
+  if (rg === 'NP')         return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">NP</span>`
+  if (rg === 'Physician')  return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">MD</span>`
+  if (rg === 'Contractor') return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">Contractor</span>`
+  return ''
+}
+
+// ── Grouped contractors table (shared by admin + onboarding views) ─
+function renderContractorGroupedTable(contractors, duplicateIds = new Set(), clickFn = null) {
+  const groups = [
+    { key: 'NP',         label: 'NPs / ARNPs / PAs',   icon: 'fa-user-nurse',   color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { key: 'Physician',  label: 'Physicians',            icon: 'fa-stethoscope',  color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { key: 'Contractor', label: 'Contractors',           icon: 'fa-briefcase',    color: 'bg-gray-50 text-gray-600 border-gray-200' },
+    { key: '',           label: 'Other / Unassigned',   icon: 'fa-user',         color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+  ]
+
+  const byGroup = {}
+  groups.forEach(g => { byGroup[g.key] = [] })
+  contractors.forEach(c => {
+    const k = (c.role_group || '')
+    if (byGroup[k] !== undefined) byGroup[k].push(c)
+    else byGroup[''].push(c)
+  })
+
+  const tableHead = `
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Name</th>
+        <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Group</th>
+        <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Company</th>
+        <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">EIN / SSN</th>
+        <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Email</th>
+        <th class="text-center px-5 py-3 text-gray-500 font-semibold text-xs">Actions</th>
+      </tr>
+    </thead>`
+
+  return groups.filter(g => byGroup[g.key].length > 0).map(g => {
+    const list = byGroup[g.key]
+    const rows = list.map(c => {
+      const isDup = duplicateIds.has(c.id)
+      const rowClick = clickFn ? `onclick="${clickFn}(${c.id})"` : ''
+      const rowHover = clickFn ? 'hover:bg-yellow-50/40 cursor-pointer' : ''
+      return `
+        <tr class="table-row border-b border-gray-50 ${isDup ? 'bg-amber-50/40' : ''} ${rowHover}" ${rowClick}>
+          <td class="px-5 py-3 font-semibold text-gray-800">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(c.name || '?')[0].toUpperCase()}</div>
+              <div>
+                ${escHtml(c.name)}
+                ${isDup ? '<span class="ml-1 text-xs text-amber-500 font-normal"><i class="fas fa-clone"></i> dup</span>' : ''}
+                <div class="text-xs text-gray-400 font-normal">ID #${c.id}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-5 py-3">${roleGroupBadge(c.role_group || '')}</td>
+          <td class="px-5 py-3 text-gray-600">${escHtml(c.company || '—')}</td>
+          <td class="px-5 py-3 font-mono text-xs text-gray-500">${escHtml(c.ein_ssn || '—')}</td>
+          <td class="px-5 py-3 text-gray-500 text-xs">${escHtml(c.email || '—')}</td>
+          <td class="px-5 py-3 text-center" onclick="event.stopPropagation()">
+            <div class="flex gap-2 justify-center flex-wrap">
+              <button onclick="openContractorModal(${JSON.stringify(c).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
+                <i class="fas fa-edit mr-1"></i>Edit
+              </button>
+              ${isDup ? `<button onclick="openMergeModal(${JSON.stringify(state.contractors.filter(x=>x.name.trim().toLowerCase()===c.name.trim().toLowerCase())).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-300">
+                <i class="fas fa-compress-arrows-alt mr-1"></i>Merge
+              </button>` : ''}
+              <button onclick="deleteContractor(${c.id}, '${escHtml(c.name)}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>`
+    }).join('')
+
+    return `
+      <div class="card overflow-hidden mb-4">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 ${g.color} bg-opacity-40">
+          <i class="fas ${g.icon} text-sm"></i>
+          <span class="font-bold text-sm">${g.label}</span>
+          <span class="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-white/60">${list.length}</span>
+        </div>
+        <table class="w-full text-sm">
+          ${tableHead}
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`
+  }).join('')
+}
+
 function renderContractors() {
   const duplicateGroups = detectDuplicateGroups(state.contractors)
   const duplicateIds = new Set(duplicateGroups.flatMap(g => g.map(c => c.id)))
@@ -3207,6 +3297,9 @@ function renderContractors() {
           ${hasDuplicates ? `<button onclick="openMergeWizard()" class="px-4 py-2.5 rounded-xl font-medium text-sm border-2 border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors">
             <i class="fas fa-compress-arrows-alt mr-2"></i>Merge Duplicates (${duplicateGroups.length})
           </button>` : ''}
+          <button onclick="runContractorMigration()" id="migrateBtn" class="px-4 py-2.5 rounded-xl font-medium text-sm border-2 border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+            <i class="fas fa-sync-alt mr-2"></i>Sync Names &amp; Groups
+          </button>
           <button onclick="openContractorModal()" class="btn-primary px-5 py-2.5 rounded-xl font-medium text-sm">
             <i class="fas fa-plus mr-2"></i>Add Contractor
           </button>
@@ -3237,52 +3330,7 @@ function renderContractors() {
         </div>
       </div>` : ''}
 
-      <div class="card overflow-hidden">
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Name</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Type</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Company</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">EIN / SSN</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Email</th>
-              <th class="text-center px-5 py-3 text-gray-500 font-semibold text-xs">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${state.contractors.map(c => `
-              <tr class="table-row border-b border-gray-50 ${duplicateIds.has(c.id) ? 'bg-amber-50/40' : ''}">
-                <td class="px-5 py-3 font-semibold text-gray-800">
-                  <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(c.name || '?')[0]}</div>
-                    <div>
-                      ${escHtml(c.name)}
-                      ${duplicateIds.has(c.id) ? '<span class="ml-1 text-xs text-amber-500 font-normal"><i class="fas fa-clone"></i> dup</span>' : ''}
-                      <div class="text-xs text-gray-400 font-normal">ID #${c.id}</div>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-5 py-3">${contractorTypeBadge(c.contractor_type || 'regular')}</td>
-                <td class="px-5 py-3 text-gray-600">${escHtml(c.company || '—')}</td>
-                <td class="px-5 py-3 font-mono text-sm text-gray-500">${escHtml(c.ein_ssn || '—')}</td>
-                <td class="px-5 py-3 text-gray-500">${escHtml(c.email || '—')}</td>
-                <td class="px-5 py-3 text-center">
-                  <div class="flex gap-2 justify-center flex-wrap">
-                    <button onclick="openContractorModal(${JSON.stringify(c).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
-                      <i class="fas fa-edit mr-1"></i>Edit
-                    </button>
-                    ${duplicateIds.has(c.id) ? `<button onclick="openMergeModal(${JSON.stringify(state.contractors.filter(x=>x.name.trim().toLowerCase()===c.name.trim().toLowerCase())).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-300">
-                      <i class="fas fa-compress-arrows-alt mr-1"></i>Merge
-                    </button>` : ''}
-                    <button onclick="deleteContractor(${c.id}, '${escHtml(c.name)}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
-                      <i class="fas fa-trash"></i>
-                    </button>
-                  </div>
-                </td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
+      ${renderContractorGroupedTable(state.contractors, duplicateIds)}
     </div>
 
     <!-- Contractor Add/Edit Modal -->
@@ -3290,6 +3338,15 @@ function renderContractors() {
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
         <h3 class="text-lg font-bold text-gray-800 mb-5" id="contractorModalTitle">Add Contractor</h3>
         <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Group</label>
+            <select id="ctRoleGroup" class="w-full">
+              <option value="">— Unassigned —</option>
+              <option value="NP">NP / ARNP / PA</option>
+              <option value="Physician">Physician</option>
+              <option value="Contractor">Contractor</option>
+            </select>
+          </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1.5">Contractor Type *</label>
             <select id="ctType" class="w-full">
@@ -3367,6 +3424,30 @@ function renderContractors() {
         </div>
       </div>
     </div>`
+}
+
+// ── Run bulk data migration: rename contractors + assign role_group ──────────
+async function runContractorMigration() {
+  const btn = $('migrateBtn')
+  if (!btn) return
+  const orig = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Running…'
+  try {
+    const res = await api('/api/admin/contractors/migrate', { method: 'POST' })
+    if (res.ok) {
+      showToast(`✅ Migration complete — ${res.updated} contractors updated${res.amy_gaines_added ? ', Amy Gaines added' : ''}.`, 'success')
+      state.contractors = await api('/api/contractors')
+      renderContractors()
+    } else {
+      showToast('Migration failed: ' + (res.error || 'Unknown error'), 'error')
+    }
+  } catch(e) {
+    showToast('Migration error: ' + e.message, 'error')
+  } finally {
+    btn.disabled = false
+    btn.innerHTML = orig
+  }
 }
 
 // Store current merge group for executeMerge
@@ -3474,6 +3555,7 @@ function toggleGustoFields() {
 function openContractorModal(contractor = null) {
   $('contractorModalTitle').textContent = contractor ? 'Edit Contractor' : 'Add Contractor'
   $('ctId').value = contractor?.id || ''
+  $('ctRoleGroup').value = contractor?.role_group || ''
   $('ctType').value = contractor?.contractor_type || 'regular'
   $('ctGustoType').value = contractor?.gusto_type || 'Individual'
   $('ctFirstName').value = contractor?.first_name || ''
@@ -3507,7 +3589,8 @@ async function saveContractor() {
     ein_ssn: $('ctEin').value.trim(),
     email: $('ctEmail').value.trim(),
     contractor_type: $('ctType').value,
-    gusto_type: gustoType
+    gusto_type: gustoType,
+    role_group: $('ctRoleGroup').value
   }
   if (!data.name) { showToast('Name is required', 'warning'); return }
   try {
@@ -4570,9 +4653,9 @@ function obOnboardedHTML() {
     `}
   </div>
 
-  <!-- ── Section 2: Active Payroll Contractors ── -->
+  <!-- ── Section 2: Active Payroll Contractors (grouped by NP / Physician / Contractor) ── -->
   <div>
-    <div class="flex items-center gap-2 mb-3">
+    <div class="flex items-center gap-2 mb-4">
       <span class="w-2 h-2 rounded-full bg-green-400"></span>
       <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Active Contractors</h3>
       <span class="text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">${active.length}</span>
@@ -4584,52 +4667,79 @@ function obOnboardedHTML() {
         <i class="fas fa-user-md text-4xl mb-2 block"></i>
         <p class="text-sm text-gray-400">No active contractors yet.</p>
       </div>
-    ` : `
-      <div class="card overflow-hidden">
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-100">
-            <tr>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Name</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Type</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Company</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">EIN / SSN</th>
-              <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Email</th>
-              <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs">Onboarding</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${active.map(ct => {
-              const linked = candidateByContractorId[ct.id]
-              const fromOb = convertedIds.has(ct.id)
-              return `
-              <tr class="border-b border-gray-50 hover:bg-yellow-50/40 transition-colors cursor-pointer" onclick="obOpenContractorDetail(${ct.id})">
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(ct.name||'?')[0].toUpperCase()}</div>
-                    <div>
-                      <p class="font-semibold text-gray-800">${escHtml(ct.name)}</p>
-                      <p class="text-xs text-gray-400">ID #${ct.id}</p>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-5 py-3">${contractorTypeBadge(ct.contractor_type || 'regular')}</td>
-                <td class="px-5 py-3 text-gray-600">${escHtml(ct.company || '—')}</td>
-                <td class="px-5 py-3 font-mono text-xs text-gray-500">${escHtml(ct.ein_ssn || '—')}</td>
-                <td class="px-5 py-3 text-gray-500 text-xs">${escHtml(ct.email || '—')}</td>
-                <td class="px-4 py-3 text-center" onclick="event.stopPropagation()">
-                  ${fromOb && linked
-                    ? `<button onclick="obOpenDetail(${linked.id})" class="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100">
-                        <i class="fas fa-check-circle mr-1"></i>Onboarding
-                      </button>`
-                    : `<span class="text-xs text-gray-300">—</span>`
-                  }
-                </td>
-              </tr>`
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    `}
+    ` : (() => {
+      // Group contractors by role_group
+      const groups = [
+        { key: 'NP',         label: 'NPs / ARNPs / PAs', icon: 'fa-user-nurse',  color: 'bg-blue-50 text-blue-700 border-blue-200' },
+        { key: 'Physician',  label: 'Physicians',          icon: 'fa-stethoscope', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+        { key: 'Contractor', label: 'Contractors',         icon: 'fa-briefcase',   color: 'bg-gray-50 text-gray-600 border-gray-200' },
+        { key: '',           label: 'Other / Unassigned',  icon: 'fa-user',        color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+      ]
+      const byGroup = {}
+      groups.forEach(g => { byGroup[g.key] = [] })
+      active.forEach(ct => {
+        const k = ct.role_group || ''
+        if (byGroup[k] !== undefined) byGroup[k].push(ct)
+        else byGroup[''].push(ct)
+      })
+
+      const thead = `
+        <thead class="bg-gray-50 border-b border-gray-100">
+          <tr>
+            <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Name</th>
+            <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Group</th>
+            <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Company</th>
+            <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">EIN / SSN</th>
+            <th class="text-left px-5 py-3 text-gray-500 font-semibold text-xs">Email</th>
+            <th class="text-center px-4 py-3 text-gray-500 font-semibold text-xs">Onboarding</th>
+          </tr>
+        </thead>`
+
+      return groups.filter(g => byGroup[g.key].length > 0).map(g => {
+        const list = byGroup[g.key]
+        const rows = list.map(ct => {
+          const linked = candidateByContractorId[ct.id]
+          const fromOb = convertedIds.has(ct.id)
+          return `
+          <tr class="border-b border-gray-50 hover:bg-yellow-50/40 transition-colors cursor-pointer" onclick="obOpenContractorDetail(${ct.id})">
+            <td class="px-5 py-3">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(ct.name||'?')[0].toUpperCase()}</div>
+                <div>
+                  <p class="font-semibold text-gray-800">${escHtml(ct.name)}</p>
+                  <p class="text-xs text-gray-400">ID #${ct.id}</p>
+                </div>
+              </div>
+            </td>
+            <td class="px-5 py-3">${roleGroupBadge(ct.role_group || '')}</td>
+            <td class="px-5 py-3 text-gray-600">${escHtml(ct.company || '—')}</td>
+            <td class="px-5 py-3 font-mono text-xs text-gray-500">${escHtml(ct.ein_ssn || '—')}</td>
+            <td class="px-5 py-3 text-gray-500 text-xs">${escHtml(ct.email || '—')}</td>
+            <td class="px-4 py-3 text-center" onclick="event.stopPropagation()">
+              ${fromOb && linked
+                ? `<button onclick="obOpenDetail(${linked.id})" class="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100">
+                    <i class="fas fa-check-circle mr-1"></i>Onboarding
+                  </button>`
+                : `<span class="text-xs text-gray-300">—</span>`
+              }
+            </td>
+          </tr>`
+        }).join('')
+
+        return `
+        <div class="card overflow-hidden mb-4">
+          <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 ${g.color} bg-opacity-40">
+            <i class="fas ${g.icon} text-sm"></i>
+            <span class="font-bold text-sm">${g.label}</span>
+            <span class="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-white/60">${list.length}</span>
+          </div>
+          <table class="w-full text-sm">
+            ${thead}
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`
+      }).join('')
+    })()}
   </div>
   `
 }
@@ -4701,7 +4811,10 @@ function obRenderContractorDetail(data) {
       <div class="flex-1 min-w-0">
         <p class="font-bold text-gray-900 text-base">${escHtml(ct.name)}</p>
         <p class="text-sm text-gray-500">${escHtml(ct.company || '—')}</p>
-        <div class="mt-1">${contractorTypeBadge(ct.contractor_type || 'regular')}</div>
+        <div class="mt-1.5 flex items-center gap-2 flex-wrap">
+          ${contractorTypeBadge(ct.contractor_type || 'regular')}
+          ${roleGroupBadge(ct.role_group || '')}
+        </div>
       </div>
     </div>
 

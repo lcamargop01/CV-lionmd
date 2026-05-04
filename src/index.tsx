@@ -319,28 +319,29 @@ app.get('/api/contractors', async (c) => {
   await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN first_name TEXT DEFAULT ''`).run().catch(() => {})
   await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN last_name TEXT DEFAULT ''`).run().catch(() => {})
   await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN earns_commission INTEGER DEFAULT 0`).run().catch(() => {})
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN role_group TEXT DEFAULT ''`).run().catch(() => {})
   // Default earns_commission=1 for Lion MD, PLLC contractors (Ana Lisa Carr, Kelly Tenbrink)
   await c.env.DB.prepare(
     `UPDATE contractors SET earns_commission=1 WHERE (LOWER(company) LIKE '%lion md%') AND earns_commission=0`
   ).run().catch(() => {})
-  const rows = await c.env.DB.prepare('SELECT * FROM contractors WHERE is_active=1 ORDER BY name').all()
+  const rows = await c.env.DB.prepare('SELECT * FROM contractors WHERE is_active=1 ORDER BY role_group, name').all()
   return c.json(rows.results)
 })
 
 app.post('/api/contractors', async (c) => {
-  const { name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type } = await c.req.json()
+  const { name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type, role_group } = await c.req.json()
   const result = await c.env.DB.prepare(
-    `INSERT INTO contractors (name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', contractor_type || 'regular', gusto_type || 'Individual').run()
-  return c.json({ id: result.meta.last_row_id, name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type })
+    `INSERT INTO contractors (name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type, role_group) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', contractor_type || 'regular', gusto_type || 'Individual', role_group || '').run()
+  return c.json({ id: result.meta.last_row_id, name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type, role_group })
 })
 
 app.put('/api/contractors/:id', async (c) => {
   const id = c.req.param('id')
-  const { name, first_name, last_name, company, ein_ssn, email, is_active, contractor_type, gusto_type, earns_commission } = await c.req.json()
+  const { name, first_name, last_name, company, ein_ssn, email, is_active, contractor_type, gusto_type, earns_commission, role_group } = await c.req.json()
   await c.env.DB.prepare(
-    `UPDATE contractors SET name=?, first_name=?, last_name=?, company=?, ein_ssn=?, email=?, is_active=?, contractor_type=?, gusto_type=?, earns_commission=? WHERE id=?`
-  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', is_active ?? 1, contractor_type || 'regular', gusto_type || 'Individual', earns_commission ? 1 : 0, id).run()
+    `UPDATE contractors SET name=?, first_name=?, last_name=?, company=?, ein_ssn=?, email=?, is_active=?, contractor_type=?, gusto_type=?, earns_commission=?, role_group=? WHERE id=?`
+  ).bind(name, first_name || '', last_name || '', company || '', ein_ssn || '', email || '', is_active ?? 1, contractor_type || 'regular', gusto_type || 'Individual', earns_commission ? 1 : 0, role_group || '', id).run()
   return c.json({ ok: true })
 })
 
@@ -474,6 +475,69 @@ app.post('/api/contractors/merge', async (c) => {
 app.get('/api/contractors/all', async (c) => {
   const rows = await c.env.DB.prepare('SELECT * FROM contractors ORDER BY name, is_active DESC').all()
   return c.json(rows.results)
+})
+
+// POST /api/admin/contractors/migrate — bulk rename + role_group assignment (admin only)
+app.post('/api/admin/contractors/migrate', requireAdmin, async (c) => {
+  const db = c.env.DB
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN role_group TEXT DEFAULT ''`).run().catch(() => {})
+
+  const updates: Array<[string, string, number]> = [
+    // [new_name, role_group, id]
+    ['Cristin Adams',           'NP',         17],
+    ['Rachel Recore',           'NP',         13],
+    ['Laurenmarie Cormier',     'NP',          8],
+    ['Jackie Ramsey-Rosenhien', 'NP',         18],
+    ['Stefanie Barr',           'NP',         15],
+    ['Jessica Hicks',           'NP',          4],
+    ['Yana Metcalf',            'NP',         19],
+    ['Lea Thomas',              'NP',          9],
+    ['Tiffany Alexander',       'NP',         16],
+    ['Miklos Major',            'NP',         10],
+    ['Nicole Rau',              'NP',         12],
+    ['Jill McLaughlin',         'NP',          5],
+    ['Rashelle Phelps',         'NP',         14],
+    ['Maria Zayas',             'NP',         24],
+    ['Chris Kempf',             'NP',         28],
+    ['Nicole Simone',           'NP',         27],
+    ['Emily Youngblood',        'NP',         23],
+    ['Dina Whiteaker',          'NP',         46],
+    ['Afsheen Masood',          'NP',         47],
+    ['Jennifer Henson',         'NP',         48],
+    ['Holly Lunsford',          'NP',         55],
+    ['Kelly Tenbrink',          'Physician',   7],
+    ['Ana Lisa Carr',           'Physician',   2],
+    ['Mohammed Usman',          'Physician',  11],
+    ['Juan Bayolo',             'Physician',   6],
+    ['Jennifer Frangos',        'Physician',  20],
+    ['Yonitte Kinsella',        'Physician',  22],
+    ['Manharkumar Patel',       'Physician',  26],
+    ['Muhammed Imran',          'Physician',  49],
+    ['Robert Vichich',          'Physician',  52],
+    ['Nauman Rashid',           'Physician',  51],
+    ['Keri Marques',            'Physician',  53],
+    ['Chris Garcia',            'Contractor', 21],
+    ['Cooper Moore',            'Contractor', 25],
+  ]
+
+  let updated = 0
+  for (const [name, role_group, id] of updates) {
+    await db.prepare(`UPDATE contractors SET name=?, role_group=? WHERE id=?`).bind(name, role_group, id).run()
+    updated++
+  }
+
+  // Add Amy Gaines if not already present
+  const existing = await db.prepare(`SELECT id FROM contractors WHERE LOWER(name) LIKE '%amy gaines%' AND is_active=1`).first()
+  let amyAdded = false
+  if (!existing) {
+    await db.prepare(
+      `INSERT INTO contractors (name, first_name, last_name, company, ein_ssn, email, contractor_type, gusto_type, role_group, is_active)
+       VALUES ('Amy Gaines','Amy','Gaines','','','','regular','Individual','NP',1)`
+    ).run()
+    amyAdded = true
+  }
+
+  return c.json({ ok: true, updated, amy_gaines_added: amyAdded })
 })
 
 // GET /api/contractors/:id/history — full payroll history for a contractor across all periods
