@@ -3297,6 +3297,9 @@ function renderContractors() {
           ${hasDuplicates ? `<button onclick="openMergeWizard()" class="px-4 py-2.5 rounded-xl font-medium text-sm border-2 border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors">
             <i class="fas fa-compress-arrows-alt mr-2"></i>Merge Duplicates (${duplicateGroups.length})
           </button>` : ''}
+          <button onclick="exportContractorsXlsx()" class="px-4 py-2.5 rounded-xl font-medium text-sm border-2 border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+            <i class="fas fa-file-excel mr-2"></i>Export XLSX
+          </button>
           <button onclick="runContractorMigration()" id="migrateBtn" class="px-4 py-2.5 rounded-xl font-medium text-sm border-2 border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors">
             <i class="fas fa-sync-alt mr-2"></i>Sync Names &amp; Groups
           </button>
@@ -3424,6 +3427,87 @@ function renderContractors() {
         </div>
       </div>
     </div>`
+}
+
+// ── Export contractors to XLSX grouped by NP / Physician / Contractor ────────
+function exportContractorsXlsx() {
+  const contractors = state.contractors || []
+  if (!contractors.length) { showToast('No contractors to export.', 'warning'); return }
+
+  const groups = [
+    { key: 'NP',         label: 'NPs & ARNPs' },
+    { key: 'Physician',  label: 'Physicians'   },
+    { key: 'Contractor', label: 'Contractors'  },
+    { key: '',           label: 'Unassigned'   },
+  ]
+
+  const wb = XLSX.utils.book_new()
+
+  // ── Sheet 1: All Contractors (master list) ────────────────────────────────
+  const allRows = []
+  groups.forEach(g => {
+    const list = contractors.filter(c => (c.role_group || '') === g.key)
+    if (!list.length) return
+    // Section header row
+    allRows.push({ Group: `— ${g.label} —`, Name: '', Company: '', 'EIN / SSN': '', Email: '', Type: '' })
+    list.forEach(c => allRows.push({
+      Group:      g.label,
+      Name:       c.name        || '',
+      Company:    c.company     || '',
+      'EIN / SSN': c.ein_ssn   || '',
+      Email:      c.email       || '',
+      Type:       c.contractor_type === 'owner' ? 'Owner' : 'Regular',
+    }))
+    // Blank spacer
+    allRows.push({ Group: '', Name: '', Company: '', 'EIN / SSN': '', Email: '', Type: '' })
+  })
+
+  const wsMaster = XLSX.utils.json_to_sheet(allRows, {
+    header: ['Group', 'Name', 'Company', 'EIN / SSN', 'Email', 'Type'],
+    skipHeader: false,
+  })
+
+  // Column widths
+  wsMaster['!cols'] = [
+    { wch: 18 },  // Group
+    { wch: 30 },  // Name
+    { wch: 30 },  // Company
+    { wch: 14 },  // EIN/SSN
+    { wch: 32 },  // Email
+    { wch: 10 },  // Type
+  ]
+  XLSX.utils.book_append_sheet(wb, wsMaster, 'All Contractors')
+
+  // ── Sheets 2-4: One sheet per group ─────────────────────────────────────
+  groups.forEach(g => {
+    const list = contractors.filter(c => (c.role_group || '') === g.key)
+    if (!list.length) return
+    const rows = list.map((c, i) => ({
+      '#':           i + 1,
+      Name:          c.name        || '',
+      Company:       c.company     || '',
+      'EIN / SSN':   c.ein_ssn    || '',
+      Email:         c.email       || '',
+      Type:          c.contractor_type === 'owner' ? 'Owner' : 'Regular',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows, {
+      header: ['#', 'Name', 'Company', 'EIN / SSN', 'Email', 'Type'],
+    })
+    ws['!cols'] = [
+      { wch: 4  },  // #
+      { wch: 30 },  // Name
+      { wch: 30 },  // Company
+      { wch: 14 },  // EIN/SSN
+      { wch: 32 },  // Email
+      { wch: 10 },  // Type
+    ]
+    XLSX.utils.book_append_sheet(wb, ws, g.label)
+  })
+
+  // ── Download ─────────────────────────────────────────────────────────────
+  const date = new Date().toISOString().slice(0, 10)   // YYYY-MM-DD
+  XLSX.writeFile(wb, `LionMD_Contractors_${date}.xlsx`)
+  showToast(`Exported ${contractors.length} contractors to Excel.`, 'success')
 }
 
 // ── Run bulk data migration: rename contractors + assign role_group ──────────
