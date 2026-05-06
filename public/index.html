@@ -991,7 +991,7 @@ async function loadInitialData() {
   showLoading('Loading data...')
   try {
     state.periods = await api('/api/sessions')
-    state.contractors = await api('/api/contractors')
+    await reloadContractors()
     state.rates = await api('/api/rates')
     state.typeRates = await api('/api/contractor-type-rates').catch(() => [])
     populateSessionSelector()
@@ -3258,8 +3258,8 @@ function renderContractorGroupedTable(contractors, duplicateIds = new Set(), cli
               ${isDup ? `<button onclick="openMergeModal(${JSON.stringify(state.contractors.filter(x=>x.name.trim().toLowerCase()===c.name.trim().toLowerCase())).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-300">
                 <i class="fas fa-compress-arrows-alt mr-1"></i>Merge
               </button>` : ''}
-              <button onclick="deleteContractor(${c.id}, '${escHtml(c.name)}')" class="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100">
-                <i class="fas fa-trash"></i>
+              <button onclick="toggleContractorActive(${c.id}, true, '${escHtml(c.name)}')" title="Deactivate contractor" class="text-xs px-3 py-1.5 bg-gray-50 text-gray-400 rounded-lg hover:bg-red-50 hover:text-red-500 border border-gray-200 transition-colors">
+                <i class="fas fa-user-slash"></i>
               </button>
             </div>
           </td>
@@ -3281,6 +3281,71 @@ function renderContractorGroupedTable(contractors, duplicateIds = new Set(), cli
   }).join('')
 }
 
+// ── Inactive contractors section ─────────────────────────────────────────────
+function renderInactiveContractorsSection() {
+  const inactive = state.inactiveContractors || []
+  if (inactive.length === 0) return ''
+
+  const rows = inactive.map(c => `
+    <tr class="border-b border-gray-50 bg-gray-50/60 opacity-75">
+      <td class="px-5 py-3">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 bg-gray-400">${(c.name||'?')[0].toUpperCase()}</div>
+          <div>
+            <p class="font-semibold text-gray-500">${escHtml(c.name)}</p>
+            <p class="text-xs text-gray-400">ID #${c.id}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-5 py-3">${roleGroupBadge(c.role_group || '')}</td>
+      <td class="px-5 py-3 text-gray-400">${escHtml(c.company || '—')}</td>
+      <td class="px-5 py-3 font-mono text-xs text-gray-400">${escHtml(c.ein_ssn || '—')}</td>
+      <td class="px-5 py-3 text-gray-400 text-xs">${escHtml(c.email || '—')}</td>
+      <td class="px-5 py-3 text-center">
+        <div class="flex gap-2 justify-center">
+          <button onclick="openContractorModal(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+            class="text-xs px-3 py-1.5 btn-outline rounded-lg">
+            <i class="fas fa-edit mr-1"></i>Edit
+          </button>
+          <button onclick="toggleContractorActive(${c.id}, false, '${escHtml(c.name)}')"
+            class="text-xs px-3 py-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 border border-green-200 transition-colors">
+            <i class="fas fa-user-check mr-1"></i>Reactivate
+          </button>
+        </div>
+      </td>
+    </tr>`).join('')
+
+  return `
+    <div class="card overflow-hidden">
+      <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50 text-gray-500">
+        <i class="fas fa-user-slash text-sm text-gray-400"></i>
+        <span class="font-bold text-sm text-gray-500">Inactive</span>
+        <span class="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-500">${inactive.length}</span>
+        <span class="ml-auto text-xs text-gray-400">History preserved · not included in payroll</span>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-100">
+          <tr>
+            <th class="text-left px-5 py-3 text-gray-400 font-semibold text-xs">Name</th>
+            <th class="text-left px-5 py-3 text-gray-400 font-semibold text-xs">Group</th>
+            <th class="text-left px-5 py-3 text-gray-400 font-semibold text-xs">Company</th>
+            <th class="text-left px-5 py-3 text-gray-400 font-semibold text-xs">EIN / SSN</th>
+            <th class="text-left px-5 py-3 text-gray-400 font-semibold text-xs">Email</th>
+            <th class="text-center px-5 py-3 text-gray-400 font-semibold text-xs">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`
+}
+
+// ── Load both active + inactive contractors into state ───────────────────────
+async function reloadContractors() {
+  const all = await api('/api/contractors/all')
+  state.contractors         = all.filter(c => c.is_active)
+  state.inactiveContractors = all.filter(c => !c.is_active)
+}
+
 function renderContractors() {
   const duplicateGroups = detectDuplicateGroups(state.contractors)
   const duplicateIds = new Set(duplicateGroups.flatMap(g => g.map(c => c.id)))
@@ -3290,7 +3355,7 @@ function renderContractors() {
     <div class="space-y-4">
       <div class="flex justify-between items-center flex-wrap gap-3">
         <div>
-          <p class="text-sm text-gray-500">${state.contractors.length} active contractors</p>
+          <p class="text-sm text-gray-500">${state.contractors.length} active · ${(state.inactiveContractors||[]).length} inactive</p>
           ${hasDuplicates ? `<p class="text-xs text-amber-600 font-medium mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>${duplicateGroups.length} duplicate group${duplicateGroups.length>1?'s':''} found — merge recommended</p>` : ''}
         </div>
         <div class="flex gap-2 flex-wrap">
@@ -3334,6 +3399,7 @@ function renderContractors() {
       </div>` : ''}
 
       ${renderContractorGroupedTable(state.contractors, duplicateIds)}
+      ${renderInactiveContractorsSection()}
     </div>
 
     <!-- Contractor Add/Edit Modal -->
@@ -3504,10 +3570,31 @@ function exportContractorsXlsx() {
     XLSX.utils.book_append_sheet(wb, ws, g.label)
   })
 
+  // ── Sheet: Inactive ──────────────────────────────────────────────────────
+  const inactive = state.inactiveContractors || []
+  if (inactive.length) {
+    const inactiveRows = inactive.map((c, i) => ({
+      '#':           i + 1,
+      Name:          c.name        || '',
+      Group:         c.role_group  || '',
+      Company:       c.company     || '',
+      'EIN / SSN':   c.ein_ssn    || '',
+      Email:         c.email       || '',
+      Type:          c.contractor_type === 'owner' ? 'Owner' : 'Regular',
+    }))
+    const wsInactive = XLSX.utils.json_to_sheet(inactiveRows, {
+      header: ['#', 'Name', 'Group', 'Company', 'EIN / SSN', 'Email', 'Type'],
+    })
+    wsInactive['!cols'] = [
+      { wch: 4  }, { wch: 30 }, { wch: 14 }, { wch: 30 }, { wch: 14 }, { wch: 32 }, { wch: 10 },
+    ]
+    XLSX.utils.book_append_sheet(wb, wsInactive, 'Inactive')
+  }
+
   // ── Download ─────────────────────────────────────────────────────────────
   const date = new Date().toISOString().slice(0, 10)   // YYYY-MM-DD
   XLSX.writeFile(wb, `LionMD_Contractors_${date}.xlsx`)
-  showToast(`Exported ${contractors.length} contractors to Excel.`, 'success')
+  showToast(`Exported ${contractors.length} active${inactive.length ? ' + ' + inactive.length + ' inactive' : ''} contractors to Excel.`, 'success')
 }
 
 // ── Run bulk data migration: rename contractors + assign role_group ──────────
@@ -3521,7 +3608,7 @@ async function runContractorMigration() {
     const res = await api('/api/admin/contractors/migrate', { method: 'POST' })
     if (res.ok) {
       showToast(`✅ Migration complete — ${res.updated} contractors updated${res.amy_gaines_added ? ', Amy Gaines added' : ''}.`, 'success')
-      state.contractors = await api('/api/contractors')
+      await reloadContractors()
       renderContractors()
     } else {
       showToast('Migration failed: ' + (res.error || 'Unknown error'), 'error')
@@ -3615,7 +3702,7 @@ async function executeMerge() {
       body: JSON.stringify({ keep_id: keepId, merge_ids: mergeIds })
     })
     // Reload contractors list
-    state.contractors = await api('/api/contractors')
+    await reloadContractors()
     hideLoading()
     showToast(`Merged! ${result.consults_moved.toLocaleString()} consults re-pointed to "${name}". Paystubs updated.`, 'success')
     renderContractors()
@@ -3683,18 +3770,19 @@ async function saveContractor() {
     } else {
       await api('/api/contractors', { method: 'POST', body: JSON.stringify(data) })
     }
-    state.contractors = await api('/api/contractors')
+    await reloadContractors()
     $('contractorModal').classList.add('hidden')
     showToast('Contractor saved!', 'success')
     renderContractors()
   } catch(e) { showToast('Error: ' + e.message, 'error') }
 }
 
-async function deleteContractor(id, name) {
-  if (!confirm(`Archive contractor "${name}"?`)) return
-  await api(`/api/contractors/${id}`, { method: 'DELETE' })
-  state.contractors = await api('/api/contractors')
-  showToast('Contractor archived', 'info')
+async function toggleContractorActive(id, currentlyActive, name) {
+  const action = currentlyActive ? 'deactivate' : 'reactivate'
+  if (!confirm(`${currentlyActive ? 'Deactivate' : 'Reactivate'} contractor "${name}"?\n\nAll payroll history will be preserved.`)) return
+  await api(`/api/contractors/${id}/toggle-active`, { method: 'PATCH', body: JSON.stringify({ is_active: currentlyActive ? 0 : 1 }) })
+  await reloadContractors()
+  showToast(`Contractor ${currentlyActive ? 'deactivated' : 'reactivated'}.`, currentlyActive ? 'info' : 'success')
   renderContractors()
 }
 
@@ -6369,7 +6457,7 @@ async function obConvert(id) {
       showToast('Contractor created! They are now in the Payroll module.', 'success')
       // Reload candidate data and update state.contractors
       obState.selectedCandidate = await api(`/api/onboarding/candidates/${id}`)
-      state.contractors = await api('/api/contractors')
+      await reloadContractors()
       obRenderView()
     }
   } catch(e) { hideLoading(); showToast('Failed: ' + e.message, 'error') }

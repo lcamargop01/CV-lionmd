@@ -361,6 +361,14 @@ app.delete('/api/contractors/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// PATCH /api/contractors/:id/toggle-active — flip is_active 0↔1
+app.patch('/api/contractors/:id/toggle-active', async (c) => {
+  const id = c.req.param('id')
+  const { is_active } = await c.req.json() as { is_active: number }
+  await c.env.DB.prepare('UPDATE contractors SET is_active=? WHERE id=?').bind(is_active ? 1 : 0, id).run()
+  return c.json({ ok: true, id, is_active: is_active ? 1 : 0 })
+})
+
 // ──────────────────────────────────────────────
 // MERGE CONTRACTORS
 // Body: { keep_id: number, merge_ids: number[] }
