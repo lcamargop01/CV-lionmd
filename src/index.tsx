@@ -2414,4 +2414,711 @@ app.post('/api/onboarding/candidates/:id/convert', async (c) => {
   return c.json({ ok: true, contractor_id: contractorId })
 })
 
+// ════════════════════════════════════════════════════════════════════
+// CLIENT PAYMENTS MODULE  (admin-only)
+// Tables: cp_clients, cp_payment_entries
+// ════════════════════════════════════════════════════════════════════
+
+async function ensureClientPaymentsSchema(db: D1Database) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cp_clients (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL UNIQUE,
+      is_active   INTEGER DEFAULT 1,
+      notes       TEXT,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(() => {})
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cp_payment_entries (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL,
+      period_key   TEXT    NOT NULL,   -- 'YYYY-MM'
+      amount       REAL,               -- NULL = no payment recorded
+      status       TEXT    DEFAULT 'paid',  -- 'paid'|'cancelled'|'past_due'|'venmo'|'pending'|'no_payment'
+      notes        TEXT,               -- dates, breakdown, extra info
+      created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES cp_clients(id),
+      UNIQUE(client_id, period_key)
+    )
+  `).run().catch(() => {})
+}
+
+// ── GET /api/client-payments/clients ────────────────────────────────
+app.get('/api/client-payments/clients', requireAdmin, async (c) => {
+  await ensureClientPaymentsSchema(c.env.DB)
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM cp_clients ORDER BY name`
+  ).all()
+  return c.json(rows.results)
+})
+
+// ── POST /api/client-payments/clients ───────────────────────────────
+app.post('/api/client-payments/clients', requireAdmin, async (c) => {
+  await ensureClientPaymentsSchema(c.env.DB)
+  const { name, notes } = await c.req.json() as any
+  if (!name) return c.json({ error: 'name required' }, 400)
+  const r = await c.env.DB.prepare(
+    `INSERT INTO cp_clients (name, notes) VALUES (?, ?)`
+  ).bind(name.trim(), notes || '').run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+// ── PUT /api/client-payments/clients/:id ────────────────────────────
+app.put('/api/client-payments/clients/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  const { name, notes, is_active } = await c.req.json() as any
+  await c.env.DB.prepare(
+    `UPDATE cp_clients SET name=?, notes=?, is_active=? WHERE id=?`
+  ).bind(name, notes || '', is_active ?? 1, id).run()
+  return c.json({ ok: true })
+})
+
+// ── DELETE /api/client-payments/clients/:id ─────────────────────────
+app.delete('/api/client-payments/clients/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare(`DELETE FROM cp_payment_entries WHERE client_id=?`).bind(id).run()
+  await c.env.DB.prepare(`DELETE FROM cp_clients WHERE id=?`).bind(id).run()
+  return c.json({ ok: true })
+})
+
+// ── GET /api/client-payments/entries?period=YYYY-MM ──────────────────
+app.get('/api/client-payments/entries', requireAdmin, async (c) => {
+  await ensureClientPaymentsSchema(c.env.DB)
+  const period = c.req.query('period') || ''
+  let rows
+  if (period) {
+    rows = await c.env.DB.prepare(
+      `SELECT e.*, cl.name as client_name
+       FROM cp_payment_entries e
+       JOIN cp_clients cl ON cl.id = e.client_id
+       WHERE e.period_key = ?
+       ORDER BY cl.name`
+    ).bind(period).all()
+  } else {
+    rows = await c.env.DB.prepare(
+      `SELECT e.*, cl.name as client_name
+       FROM cp_payment_entries e
+       JOIN cp_clients cl ON cl.id = e.client_id
+       ORDER BY e.period_key DESC, cl.name`
+    ).all()
+  }
+  return c.json(rows.results)
+})
+
+// ── GET /api/client-payments/summary ─────────────────────────────────
+// Returns per-period totals + per-client totals across all periods
+app.get('/api/client-payments/summary', requireAdmin, async (c) => {
+  await ensureClientPaymentsSchema(c.env.DB)
+
+  const byPeriod = await c.env.DB.prepare(`
+    SELECT period_key,
+           COUNT(*)                                            as total_entries,
+           SUM(CASE WHEN status='paid'      THEN 1 ELSE 0 END) as paid_count,
+           SUM(CASE WHEN status='cancelled' THEN 1 ELSE 0 END) as cancelled_count,
+           SUM(CASE WHEN status='past_due'  THEN 1 ELSE 0 END) as past_due_count,
+           SUM(CASE WHEN status='pending'   THEN 1 ELSE 0 END) as pending_count,
+           SUM(CASE WHEN amount IS NOT NULL THEN amount ELSE 0 END) as total_amount
+    FROM cp_payment_entries
+    GROUP BY period_key
+    ORDER BY period_key DESC
+  `).all()
+
+  const byClient = await c.env.DB.prepare(`
+    SELECT cl.id, cl.name,
+           COUNT(e.id)                                            as months_tracked,
+           SUM(CASE WHEN e.status='paid' THEN 1 ELSE 0 END)      as months_paid,
+           SUM(CASE WHEN e.amount IS NOT NULL THEN e.amount ELSE 0 END) as lifetime_total
+    FROM cp_clients cl
+    LEFT JOIN cp_payment_entries e ON e.client_id = cl.id
+    WHERE cl.is_active = 1
+    GROUP BY cl.id
+    ORDER BY lifetime_total DESC
+  `).all()
+
+  return c.json({ byPeriod: byPeriod.results, byClient: byClient.results })
+})
+
+// ── PUT /api/client-payments/entries/:id ─────────────────────────────
+app.put('/api/client-payments/entries/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  const { amount, status, notes } = await c.req.json() as any
+  await c.env.DB.prepare(
+    `UPDATE cp_payment_entries SET amount=?, status=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(amount ?? null, status || 'paid', notes || '', id).run()
+  return c.json({ ok: true })
+})
+
+// ── POST /api/client-payments/entries ────────────────────────────────
+app.post('/api/client-payments/entries', requireAdmin, async (c) => {
+  await ensureClientPaymentsSchema(c.env.DB)
+  const { client_id, period_key, amount, status, notes } = await c.req.json() as any
+  if (!client_id || !period_key) return c.json({ error: 'client_id and period_key required' }, 400)
+  await c.env.DB.prepare(
+    `INSERT INTO cp_payment_entries (client_id, period_key, amount, status, notes)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(client_id, period_key) DO UPDATE SET
+       amount=excluded.amount, status=excluded.status,
+       notes=excluded.notes, updated_at=CURRENT_TIMESTAMP`
+  ).bind(client_id, period_key, amount ?? null, status || 'paid', notes || '').run()
+  return c.json({ ok: true })
+})
+
+// ── DELETE /api/client-payments/entries/:id ──────────────────────────
+app.delete('/api/client-payments/entries/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare(`DELETE FROM cp_payment_entries WHERE id=?`).bind(id).run()
+  return c.json({ ok: true })
+})
+
+// ── POST /api/client-payments/seed ───────────────────────────────────
+// One-time seed: loads all historical data from the Excel (admin only)
+app.post('/api/client-payments/seed', requireAdmin, async (c) => {
+  await ensureClientPaymentsSchema(c.env.DB)
+  const db = c.env.DB
+
+  // ── Client list ───────────────────────────────────────────────────
+  const clientNames = [
+    'All About Health','Alpha Medical','Archer Health','Blue Sage Wellness',
+    'Callondoc','Care Validate','DePasquale (Truist)','Doctronic',
+    'Doug Smith / Sharon Orso','Dove Med Spa','Dr Scott Kirby',
+    'Game Day','Groups Recover','Healing Hands','Healthy Haus','Homewood',
+    'Huntsville','Inspira-CVS','Kestners','Laser Fresh Aesthetics',
+    'Laser Skin Med','Layton','Leslie Sullins',"Lolli's Pop",
+    'Mindful Haven','Montgomery','Mountain View','Nashville-NIS',
+    'New Jersey Birdi','Oak Street','Olga Laser','Optimal Mens Health',
+    'Pelle Dolce Aesthetics','Premier Health','QuickMD','Regen MD (Devin)',
+    'Rethink Tattoo','Roman Health','Sev Medical','Sevlaser',
+    'Skin Clique (Chase)','Skin Clique (Truist)','Skin Riched',
+    'Spero Health','Tazewell','Tennessee Valley','The Erasure',
+    'The Skin Clique','Thrive Heal','Viking','Weekend Health',
+    'West Broad','WhiteFox Tattoo','Zaghi'
+  ]
+
+  // Upsert all clients
+  const clientIdMap: Record<string,number> = {}
+  for (const name of clientNames) {
+    const existing = await db.prepare(`SELECT id FROM cp_clients WHERE name=?`).bind(name).first() as any
+    if (existing) {
+      clientIdMap[name] = existing.id
+    } else {
+      const r = await db.prepare(`INSERT OR IGNORE INTO cp_clients (name) VALUES (?)`).bind(name).run()
+      if (r.meta.last_row_id) {
+        clientIdMap[name] = r.meta.last_row_id as number
+      } else {
+        const row = await db.prepare(`SELECT id FROM cp_clients WHERE name=?`).bind(name).first() as any
+        if (row) clientIdMap[name] = row.id
+      }
+    }
+  }
+
+  // Helper to parse amount string → number or null
+  function parseAmt(val: any): number | null {
+    if (val === null || val === undefined || val === '') return null
+    if (typeof val === 'number') return val
+    const s = String(val).replace(/\s/g,'')
+    const parts = s.split('+').map(p => parseFloat(p)).filter(n => !isNaN(n))
+    if (parts.length === 0) return null
+    return parts.reduce((a,b) => a+b, 0)
+  }
+  function parseStatus(pay: any): string {
+    if (pay === null || pay === undefined || pay === '') return 'pending'
+    const s = String(pay).toUpperCase().trim()
+    if (s.includes('CANCEL')) return 'cancelled'
+    if (s.includes('PAST DUE')) return 'past_due'
+    if (s.includes('VENMO')) return 'venmo'
+    if (s.includes('NO PAYMENT') || s === 'NO') return 'no_payment'
+    return 'paid'
+  }
+
+  // ── Historical data from Excel ────────────────────────────────────
+  type Row = { name: string; period: string; amount: any; notes: string }
+  const rows: Row[] = [
+    // ── August 2025 ────────────────────────────────────────────────
+    { name:'Blue Sage Wellness',      period:'2025-08', amount:1750,              notes:'8/19/25' },
+    { name:'Care Validate',           period:'2025-08', amount:19986.4,           notes:'8/29/25' },
+    { name:'DePasquale (Truist)',      period:'2025-08', amount:7446,              notes:'8/11/25' },
+    { name:'Dove Med Spa',            period:'2025-08', amount:750,               notes:'8/1/25' },
+    { name:'Dr Scott Kirby',          period:'2025-08', amount:800,               notes:'8/1/25' },
+    { name:'Game Day',                period:'2025-08', amount:'1250+1250+1250',  notes:'8/1, 8/15, 8/29' },
+    { name:'Groups Recover',          period:'2025-08', amount:'PAST DUE',        notes:'' },
+    { name:'Healing Hands',           period:'2025-08', amount:'500+500',         notes:'8/4 and 8/11' },
+    { name:'Homewood',                period:'2025-08', amount:500,               notes:'8/1/25' },
+    { name:'Huntsville',              period:'2025-08', amount:500,               notes:'8/5/25' },
+    { name:'Kestners',                period:'2025-08', amount:'319.68+319.68',   notes:'8/9 and 8/22' },
+    { name:'Laser Fresh Aesthetics',  period:'2025-08', amount:400,               notes:'8/20/25' },
+    { name:'Laser Skin Med',          period:'2025-08', amount:750,               notes:'8/15/25' },
+    { name:'Layton',                  period:'2025-08', amount:1000,              notes:'8/1/25' },
+    { name:'Leslie Sullins',          period:'2025-08', amount:400,               notes:'8/1/25' },
+    { name:"Lolli's Pop",             period:'2025-08', amount:'VENMO',           notes:'' },
+    { name:'Montgomery',              period:'2025-08', amount:1000,              notes:'8/1/25' },
+    { name:'Mountain View',           period:'2025-08', amount:'1000+1000+1000',  notes:'8/1, 8/15, 8/29' },
+    { name:'Nashville-NIS',           period:'2025-08', amount:1000,              notes:'8/1/25' },
+    { name:'New Jersey Birdi',        period:'2025-08', amount:14435,             notes:'8/22/25' },
+    { name:'Oak Street',              period:'2025-08', amount:'5864.86+5864.85', notes:'8/15 and 8/29' },
+    { name:'Olga Laser',              period:'2025-08', amount:400,               notes:'8/1/25' },
+    { name:'Premier Health',          period:'2025-08', amount:1000,              notes:'8/1/25' },
+    { name:'QuickMD',                 period:'2025-08', amount:395,               notes:'8/29/25' },
+    { name:'Rethink Tattoo',          period:'2025-08', amount:400,               notes:'8/1/25' },
+    { name:'Sev Medical',             period:'2025-08', amount:'1310.98+1310.98', notes:'8/8 and 8/25' },
+    { name:'Sevlaser',                period:'2025-08', amount:'750+750',         notes:'8/8 and 8/25' },
+    { name:'Skin Clique (Truist)',     period:'2025-08', amount:2600,             notes:'8/8/25' },
+    { name:'Skin Riched',             period:'2025-08', amount:500,               notes:'8/1/25' },
+    { name:'Tazewell',                period:'2025-08', amount:1000,              notes:'8/1/25' },
+    { name:'Tennessee Valley',        period:'2025-08', amount:'2500+2500+2500',  notes:'8/1, 8/15, 8/29' },
+    { name:'The Skin Clique',         period:'2025-08', amount:'2600+5720',       notes:'8/8 and 8/27' },
+    { name:'Viking',                  period:'2025-08', amount:'375+5208.50+375+3056.28+5208.50+5208.50+375', notes:'8/1, 8/15, 8/29' },
+    { name:'West Broad',              period:'2025-08', amount:1000,              notes:'8/1/25' },
+    { name:'WhiteFox Tattoo',         period:'2025-08', amount:400,               notes:'8/1/25' },
+    { name:'Zaghi',                   period:'2025-08', amount:5000,              notes:'8/25/25' },
+    { name:'Archer Health',           period:'2025-08', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2025-08', amount:'CANCELLED',       notes:'' },
+    { name:'The Erasure',             period:'2025-08', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2025-08', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2025-08', amount:'CANCELLED',       notes:'' },
+    // ── September 2025 ─────────────────────────────────────────────
+    { name:'All About Health',        period:'2025-09', amount:500,               notes:'9/3/25' },
+    { name:'Alpha Medical',           period:'2025-09', amount:470,               notes:'9/15/25' },
+    { name:'Blue Sage Wellness',      period:'2025-09', amount:1750,              notes:'9/30/25' },
+    { name:'Care Validate',           period:'2025-09', amount:'87800+500000+612250', notes:'9/4, 9/8, 9/27' },
+    { name:'DePasquale (Truist)',      period:'2025-09', amount:6890,              notes:'9/11/25' },
+    { name:'Doctronic',               period:'2025-09', amount:5400,              notes:'9/11/25' },
+    { name:'Dove Med Spa',            period:'2025-09', amount:750,               notes:'9/1/25' },
+    { name:'Dr Scott Kirby',          period:'2025-09', amount:800,               notes:'9/1/25' },
+    { name:'Game Day',                period:'2025-09', amount:'1250+1250',        notes:'9/12 and 9/26' },
+    { name:'Healing Hands',           period:'2025-09', amount:500,               notes:'9/1/25' },
+    { name:'Healthy Haus',            period:'2025-09', amount:5330.96,           notes:'9/30/25' },
+    { name:'Homewood',                period:'2025-09', amount:500,               notes:'9/1/25' },
+    { name:'Huntsville',              period:'2025-09', amount:500,               notes:'9/1/25' },
+    { name:'Kestners',                period:'2025-09', amount:319,               notes:'9/5/25' },
+    { name:'Laser Fresh Aesthetics',  period:'2025-09', amount:400,               notes:'9/1/25' },
+    { name:'Laser Skin Med',          period:'2025-09', amount:750,               notes:'9/15/25' },
+    { name:'Layton',                  period:'2025-09', amount:1000,              notes:'9/1/25' },
+    { name:'Leslie Sullins',          period:'2025-09', amount:400,               notes:'9/11/25' },
+    { name:"Lolli's Pop",             period:'2025-09', amount:'VENMO',           notes:'' },
+    { name:'Montgomery',              period:'2025-09', amount:1000,              notes:'9/1/25' },
+    { name:'Mountain View',           period:'2025-09', amount:'1000+1000',        notes:'9/12 and 9/26' },
+    { name:'Nashville-NIS',           period:'2025-09', amount:1000,              notes:'9/1/25' },
+    { name:'New Jersey Birdi',        period:'2025-09', amount:14807.5,           notes:'9/23/25' },
+    { name:'Oak Street',              period:'2025-09', amount:'5864.85+5910.21', notes:'9/15 and 9/30' },
+    { name:'Olga Laser',              period:'2025-09', amount:400,               notes:'9/1/25' },
+    { name:'Optimal Mens Health',     period:'2025-09', amount:'1250+1250+888+1250', notes:'9/5,9/12,9/16,9/17' },
+    { name:'QuickMD',                 period:'2025-09', amount:'2080+1970',        notes:'9/15 and 9/30' },
+    { name:'Rethink Tattoo',          period:'2025-09', amount:400,               notes:'9/1/25' },
+    { name:'Sev Medical',             period:'2025-09', amount:'1311+1310.98',    notes:'9/10 and 9/25' },
+    { name:'Sevlaser',                period:'2025-09', amount:'750+750',         notes:'9/10 and 9/25' },
+    { name:'Skin Clique (Chase)',      period:'2025-09', amount:5005,              notes:'9/30/25' },
+    { name:'Skin Clique (Truist)',     period:'2025-09', amount:2391,              notes:'9/5/25' },
+    { name:'Skin Riched',             period:'2025-09', amount:500,               notes:'9/1/25' },
+    { name:'Tazewell',                period:'2025-09', amount:1000,              notes:'9/1/25' },
+    { name:'Tennessee Valley',        period:'2025-09', amount:'2500+2500',        notes:'9/12 and 9/26' },
+    { name:'The Skin Clique',         period:'2025-09', amount:2391,              notes:'9/5/25' },
+    { name:'Viking',                  period:'2025-09', amount:'375+5208.50+2632.97', notes:'9/12 and 9/19' },
+    { name:'West Broad',              period:'2025-09', amount:1000,              notes:'9/1/25' },
+    { name:'WhiteFox Tattoo',         period:'2025-09', amount:400,               notes:'9/1/25' },
+    { name:'Zaghi',                   period:'2025-09', amount:5000,              notes:'9/25/25' },
+    { name:'Archer Health',           period:'2025-09', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2025-09', amount:'CANCELLED',       notes:'' },
+    { name:'Groups Recover',          period:'2025-09', amount:'CANCELLED',       notes:'' },
+    { name:'The Erasure',             period:'2025-09', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2025-09', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2025-09', amount:'CANCELLED',       notes:'' },
+    // ── October 2025 ───────────────────────────────────────────────
+    { name:'All About Health',        period:'2025-10', amount:500,               notes:'10/7/25' },
+    { name:'Alpha Medical',           period:'2025-10', amount:80,                notes:'10/15/25' },
+    { name:'Blue Sage Wellness',      period:'2025-10', amount:1750,              notes:'10/30/25' },
+    { name:'Care Validate',           period:'2025-10', amount:569330,            notes:'10/30/25' },
+    { name:'DePasquale (Truist)',      period:'2025-10', amount:7719,              notes:'10/22/25' },
+    { name:'Doctronic',               period:'2025-10', amount:8000,              notes:'10/16/25' },
+    { name:'Dr Scott Kirby',          period:'2025-10', amount:800,               notes:'10/1/25' },
+    { name:'Game Day',                period:'2025-10', amount:'1250+1250',        notes:'10/10 and 10/24' },
+    { name:'Healing Hands',           period:'2025-10', amount:500,               notes:'10/1/25' },
+    { name:'Healthy Haus',            period:'2025-10', amount:4971.65,           notes:'10/31/25' },
+    { name:'Homewood',                period:'2025-10', amount:500,               notes:'10/1/25' },
+    { name:'Huntsville',              period:'2025-10', amount:500,               notes:'10/1/25' },
+    { name:'Kestners',                period:'2025-10', amount:'319.68+319.67',   notes:'10/6 and 10/20' },
+    { name:'Laser Fresh Aesthetics',  period:'2025-10', amount:400,               notes:'10/1/25' },
+    { name:'Laser Skin Med',          period:'2025-10', amount:750,               notes:'10/15/25' },
+    { name:'Layton',                  period:'2025-10', amount:1000,              notes:'10/1/25' },
+    { name:"Lolli's Pop",             period:'2025-10', amount:'VENMO',           notes:'' },
+    { name:'Montgomery',              period:'2025-10', amount:1000,              notes:'10/1/25' },
+    { name:'Mountain View',           period:'2025-10', amount:'1000+1000',        notes:'10/10 and 10/24' },
+    { name:'Nashville-NIS',           period:'2025-10', amount:1000,              notes:'10/1/25' },
+    { name:'New Jersey Birdi',        period:'2025-10', amount:13637.5,           notes:'10/24/25' },
+    { name:'Oak Street',              period:'2025-10', amount:'6431.03+6431.03', notes:'10/15 and 10/31' },
+    { name:'Olga Laser',              period:'2025-10', amount:400,               notes:'10/1/25' },
+    { name:'Optimal Mens Health',     period:'2025-10', amount:1250,              notes:'10/8/25' },
+    { name:'Premier Health',          period:'2025-10', amount:1000,              notes:'10/1/25' },
+    { name:'QuickMD',                 period:'2025-10', amount:245,               notes:'10/15/25' },
+    { name:'Rethink Tattoo',          period:'2025-10', amount:400,               notes:'10/6/25' },
+    { name:'Sev Medical',             period:'2025-10', amount:'1310.98+1310.98', notes:'10/10 and 10/24' },
+    { name:'Sevlaser',                period:'2025-10', amount:'750+750',         notes:'10/10 and 10/24' },
+    { name:'Skin Clique (Chase)',      period:'2025-10', amount:5065,              notes:'10/31/25' },
+    { name:'Skin Clique (Truist)',     period:'2025-10', amount:'5050+2376.80+4250', notes:'10/3, 10/10, 10/29' },
+    { name:'Tazewell',                period:'2025-10', amount:1000,              notes:'10/1/25' },
+    { name:'Tennessee Valley',        period:'2025-10', amount:'2500+2500',        notes:'10/10 and 10/24' },
+    { name:'Viking',                  period:'2025-10', amount:'375+5208.50+375+5208.50+5208.50+375', notes:'10/1, 10/15, 10/31' },
+    { name:'West Broad',              period:'2025-10', amount:1000,              notes:'10/1/25' },
+    { name:'WhiteFox Tattoo',         period:'2025-10', amount:400,               notes:'10/1/25' },
+    { name:'Zaghi',                   period:'2025-10', amount:5000,              notes:'10/24/25' },
+    { name:'Archer Health',           period:'2025-10', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2025-10', amount:'CANCELLED',       notes:'' },
+    { name:'Dove Med Spa',            period:'2025-10', amount:'CANCELLED',       notes:'' },
+    { name:'Groups Recover',          period:'2025-10', amount:'CANCELLED',       notes:'' },
+    { name:'Leslie Sullins',          period:'2025-10', amount:'PAST DUE',        notes:'' },
+    { name:'Pelle Dolce Aesthetics',  period:'2025-10', amount:'PAST DUE',        notes:'' },
+    { name:'Roman Health',            period:'2025-10', amount:'PAST DUE',        notes:'' },
+    { name:'Spero Health',            period:'2025-10', amount:'PAST DUE',        notes:'' },
+    { name:'The Erasure',             period:'2025-10', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2025-10', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2025-10', amount:'CANCELLED',       notes:'' },
+    // ── November 2025 ──────────────────────────────────────────────
+    { name:'All About Health',        period:'2025-11', amount:500,               notes:'11/4/25' },
+    { name:'Alpha Medical',           period:'2025-11', amount:216,               notes:'11/12/25' },
+    { name:'Blue Sage Wellness',      period:'2025-11', amount:1750,              notes:'11/28/25' },
+    { name:'Care Validate',           period:'2025-11', amount:590,               notes:'11/6/25' },
+    { name:'Doctronic',               period:'2025-11', amount:10320,             notes:'11/19/25' },
+    { name:'Dr Scott Kirby',          period:'2025-11', amount:800,               notes:'11/1/25' },
+    { name:'Game Day',                period:'2025-11', amount:'1250+1250',        notes:'11/7 and 11/21' },
+    { name:'Healing Hands',           period:'2025-11', amount:500,               notes:'11/1/25' },
+    { name:'Homewood',                period:'2025-11', amount:500,               notes:'11/1/25' },
+    { name:'Huntsville',              period:'2025-11', amount:500,               notes:'11/1/25' },
+    { name:'Kestners',                period:'2025-11', amount:319.68,            notes:'11/4/25' },
+    { name:'Laser Fresh Aesthetics',  period:'2025-11', amount:400,               notes:'11/1/25' },
+    { name:'Laser Skin Med',          period:'2025-11', amount:750,               notes:'11/15/25' },
+    { name:"Lolli's Pop",             period:'2025-11', amount:'VENMO',           notes:'' },
+    { name:'Montgomery',              period:'2025-11', amount:1000,              notes:'11/1/25' },
+    { name:'Mountain View',           period:'2025-11', amount:'1000+1000',        notes:'11/7 and 11/21' },
+    { name:'Nashville-NIS',           period:'2025-11', amount:1000,              notes:'11/1/25' },
+    { name:'New Jersey Birdi',        period:'2025-11', amount:13815,             notes:'11/25/25' },
+    { name:'Oak Street',              period:'2025-11', amount:'7037.89+7217.64', notes:'11/14 and 11/28' },
+    { name:'Olga Laser',              period:'2025-11', amount:400,               notes:'11/1/25' },
+    { name:'Premier Health',          period:'2025-11', amount:1000,              notes:'11/1/25' },
+    { name:'Rethink Tattoo',          period:'2025-11', amount:400,               notes:'11/1/25' },
+    { name:'Sev Medical',             period:'2025-11', amount:'1310+1310',        notes:'11/10 and 11/25' },
+    { name:'Sevlaser',                period:'2025-11', amount:'750+750',         notes:'11/10 and 11/25' },
+    { name:'Skin Clique (Truist)',     period:'2025-11', amount:2086,              notes:'11/7/25' },
+    { name:'Skin Riched',             period:'2025-11', amount:500,               notes:'11/1/25' },
+    { name:'Tazewell',                period:'2025-11', amount:1000,              notes:'11/1/25' },
+    { name:'Tennessee Valley',        period:'2025-11', amount:'2500+2500',        notes:'11/7 and 11/21' },
+    { name:'Viking',                  period:'2025-11', amount:'375+5208.50+3144.88+2796.51+5208.50+375', notes:'11/14, 11/21, 11/28' },
+    { name:'West Broad',              period:'2025-11', amount:1000,              notes:'11/1/25' },
+    { name:'WhiteFox Tattoo',         period:'2025-11', amount:400,               notes:'11/1/25' },
+    { name:'Zaghi',                   period:'2025-11', amount:5000,              notes:'11/25/25' },
+    { name:'Archer Health',           period:'2025-11', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2025-11', amount:'CANCELLED',       notes:'' },
+    { name:'Dove Med Spa',            period:'2025-11', amount:'CANCELLED',       notes:'' },
+    { name:'Groups Recover',          period:'2025-11', amount:'CANCELLED',       notes:'' },
+    { name:'Layton',                  period:'2025-11', amount:'CANCELLED',       notes:'' },
+    { name:'Leslie Sullins',          period:'2025-11', amount:'PAST DUE',        notes:'' },
+    { name:'Pelle Dolce Aesthetics',  period:'2025-11', amount:'PAST DUE',        notes:'' },
+    { name:'Roman Health',            period:'2025-11', amount:'PAST DUE',        notes:'' },
+    { name:'Spero Health',            period:'2025-11', amount:'PAST DUE',        notes:'' },
+    { name:'The Erasure',             period:'2025-11', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2025-11', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2025-11', amount:'CANCELLED',       notes:'' },
+    // ── December 2025 ──────────────────────────────────────────────
+    { name:'All About Health',        period:'2025-12', amount:'500+500',          notes:'12/2 and 12/30' },
+    { name:'Care Validate',           period:'2025-12', amount:'706687+9956.93+1006825', notes:'12/2, 12/3, 12/31' },
+    { name:'DePasquale (Truist)',      period:'2025-12', amount:'8302+8115',        notes:'12/3 and 12/16' },
+    { name:'Doctronic',               period:'2025-12', amount:17130,              notes:'12/23/25' },
+    { name:'Dr Scott Kirby',          period:'2025-12', amount:800,                notes:'12/1/25' },
+    { name:'Game Day',                period:'2025-12', amount:1250,               notes:'12/5/25' },
+    { name:'Healing Hands',           period:'2025-12', amount:500,                notes:'12/1/25' },
+    { name:'Homewood',                period:'2025-12', amount:500,                notes:'12/1/25' },
+    { name:'Huntsville',              period:'2025-12', amount:500,                notes:'12/1/25' },
+    { name:'Laser Fresh Aesthetics',  period:'2025-12', amount:400,                notes:'12/1/25' },
+    { name:'Leslie Sullins',          period:'2025-12', amount:400,                notes:'12/1/25' },
+    { name:"Lolli's Pop",             period:'2025-12', amount:'VENMO',            notes:'' },
+    { name:'Montgomery',              period:'2025-12', amount:1000,               notes:'12/1/25' },
+    { name:'Mountain View',           period:'2025-12', amount:'1000+1000',         notes:'12/5 and 12/19' },
+    { name:'Nashville-NIS',           period:'2025-12', amount:1000,               notes:'12/1/25' },
+    { name:'New Jersey Birdi',        period:'2025-12', amount:12587.5,            notes:'12/24/25' },
+    { name:'Oak Street',              period:'2025-12', amount:'7217.63+7217.65',  notes:'12/15 and 12/31' },
+    { name:'Olga Laser',              period:'2025-12', amount:400,                notes:'12/1/25' },
+    { name:'Optimal Mens Health',     period:'2025-12', amount:2500,               notes:'12/4/25' },
+    { name:'Premier Health',          period:'2025-12', amount:1000,               notes:'12/1/25' },
+    { name:'Regen MD (Devin)',         period:'2025-12', amount:1500,               notes:'12/17/25' },
+    { name:'QuickMD',                 period:'2025-12', amount:80,                 notes:'12/15/25' },
+    { name:'Rethink Tattoo',          period:'2025-12', amount:400,                notes:'12/1/25' },
+    { name:'Sev Medical',             period:'2025-12', amount:'1310.98+1310.98',  notes:'12/10 and 12/24' },
+    { name:'Sevlaser',                period:'2025-12', amount:'750+750',          notes:'12/10 and 12/24' },
+    { name:'Skin Clique (Truist)',     period:'2025-12', amount:'8044+6450',        notes:'12/5 and 12/24' },
+    { name:'Skin Riched',             period:'2025-12', amount:500,                notes:'12/1/25' },
+    { name:'Tazewell',                period:'2025-12', amount:1000,               notes:'12/1/25' },
+    { name:'Tennessee Valley',        period:'2025-12', amount:'2500+2500',         notes:'12/5 and 12/19' },
+    { name:'Viking',                  period:'2025-12', amount:'375+5208.50',       notes:'12/12/25' },
+    { name:'West Broad',              period:'2025-12', amount:1000,               notes:'12/1/25' },
+    { name:'WhiteFox Tattoo',         period:'2025-12', amount:400,                notes:'12/1/25' },
+    { name:'Zaghi',                   period:'2025-12', amount:5000,               notes:'12/24/25' },
+    { name:'Archer Health',           period:'2025-12', amount:'CANCELLED',        notes:'' },
+    { name:'Callondoc',               period:'2025-12', amount:'CANCELLED',        notes:'' },
+    { name:'Dove Med Spa',            period:'2025-12', amount:'CANCELLED',        notes:'' },
+    { name:'Groups Recover',          period:'2025-12', amount:'CANCELLED',        notes:'' },
+    { name:'Layton',                  period:'2025-12', amount:'CANCELLED',        notes:'' },
+    { name:'Pelle Dolce Aesthetics',  period:'2025-12', amount:'PAST DUE',         notes:'' },
+    { name:'Roman Health',            period:'2025-12', amount:'PAST DUE',         notes:'' },
+    { name:'Spero Health',            period:'2025-12', amount:'PAST DUE',         notes:'' },
+    { name:'The Erasure',             period:'2025-12', amount:'CANCELLED',        notes:'' },
+    { name:'Thrive Heal',             period:'2025-12', amount:'CANCELLED',        notes:'' },
+    { name:'Weekend Health',          period:'2025-12', amount:'CANCELLED',        notes:'' },
+    // ── January 2026 ───────────────────────────────────────────────
+    { name:'Blue Sage Wellness',      period:'2026-01', amount:'1750+1750',        notes:'1/2 and 1/30' },
+    { name:'Care Validate',           period:'2026-01', amount:'10038.09+8860+9431.05+1312915', notes:'1/3, 1/28, 1/29, 1/30' },
+    { name:'DePasquale (Truist)',      period:'2026-01', amount:6652,              notes:'1/23/26' },
+    { name:'Doctronic',               period:'2026-01', amount:15960,              notes:'1/29/26' },
+    { name:'Dr Scott Kirby',          period:'2026-01', amount:800,               notes:'1/1/26' },
+    { name:'Game Day',                period:'2026-01', amount:'1250+1250+1250',   notes:'1/2, 1/16, 1/30' },
+    { name:'Healing Hands',           period:'2026-01', amount:500,               notes:'1/1/26' },
+    { name:'Homewood',                period:'2026-01', amount:500,               notes:'1/1/26' },
+    { name:'Huntsville',              period:'2026-01', amount:500,               notes:'1/1/26' },
+    { name:'Inspira-CVS',             period:'2026-01', amount:3966.67,           notes:'1/9/26' },
+    { name:'Laser Fresh Aesthetics',  period:'2026-01', amount:400,               notes:'1/1/26' },
+    { name:'Laser Skin Med',          period:'2026-01', amount:750,               notes:'1/15/26' },
+    { name:"Lolli's Pop",             period:'2026-01', amount:'VENMO',           notes:'' },
+    { name:'Montgomery',              period:'2026-01', amount:1000,              notes:'1/1/26' },
+    { name:'Mountain View',           period:'2026-01', amount:'1000+1000',        notes:'1/2 and 1/16' },
+    { name:'Nashville-NIS',           period:'2026-01', amount:1000,              notes:'1/1/26' },
+    { name:'New Jersey Birdi',        period:'2026-01', amount:13357.5,           notes:'1/23/26' },
+    { name:'Oak Street',              period:'2026-01', amount:'5791.5+5791.50',  notes:'1/15 and 1/30' },
+    { name:'Olga Laser',              period:'2026-01', amount:400,               notes:'1/1/26' },
+    { name:'Optimal Mens Health',     period:'2026-01', amount:'1250+1250',        notes:'1/5 and 1/15' },
+    { name:'Premier Health',          period:'2026-01', amount:1000,              notes:'1/1/26' },
+    { name:'Regen MD (Devin)',         period:'2026-01', amount:'1500+1500',        notes:'1/2/26' },
+    { name:'Rethink Tattoo',          period:'2026-01', amount:400,               notes:'1/1/26' },
+    { name:'Sev Medical',             period:'2026-01', amount:'1320.15+1320.15', notes:'1/9 and 1/23' },
+    { name:'Sevlaser',                period:'2026-01', amount:'750+750',         notes:'1/9 and 1/23' },
+    { name:'Skin Clique (Truist)',     period:'2026-01', amount:'1359.88+6370',    notes:'1/9 and 1/30' },
+    { name:'Skin Riched',             period:'2026-01', amount:500,               notes:'1/1/26' },
+    { name:'Tazewell',                period:'2026-01', amount:1000,              notes:'1/1/26' },
+    { name:'Tennessee Valley',        period:'2026-01', amount:'2500+2500+2500',  notes:'1/2, 1/16, 1/30' },
+    { name:'Viking',                  period:'2026-01', amount:'375+5208.50+5208.50+375+5208.50+375', notes:'1/5, 1/16, 1/30' },
+    { name:'West Broad',              period:'2026-01', amount:1000,              notes:'1/1/26' },
+    { name:'WhiteFox Tattoo',         period:'2026-01', amount:400,               notes:'1/1/26' },
+    { name:'Zaghi',                   period:'2026-01', amount:10000,             notes:'1/23/26' },
+    { name:'Alpha Medical',           period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Archer Health',           period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Dove Med Spa',            period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Groups Recover',          period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Kestners',                period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Layton',                  period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Leslie Sullins',          period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Pelle Dolce Aesthetics',  period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'QuickMD',                 period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Roman Health',            period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Spero Health',            period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'The Erasure',             period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2026-01', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2026-01', amount:'CANCELLED',       notes:'' },
+    // ── February 2026 ──────────────────────────────────────────────
+    { name:'All About Health',        period:'2026-02', amount:500,               notes:'2/3/26' },
+    { name:'Blue Sage Wellness',      period:'2026-02', amount:1750,              notes:'2/27/26' },
+    { name:'Care Validate',           period:'2026-02', amount:2163508.71,        notes:'2/27/26' },
+    { name:'DePasquale (Truist)',      period:'2026-02', amount:5900,              notes:'2/10/26' },
+    { name:'Doug Smith / Sharon Orso',period:'2026-02', amount:'500+1000',        notes:'2/3 and 2/26' },
+    { name:'Dr Scott Kirby',          period:'2026-02', amount:800,               notes:'2/1/26' },
+    { name:'Game Day',                period:'2026-02', amount:'1250+1250',        notes:'2/13 and 2/27' },
+    { name:'Healing Hands',           period:'2026-02', amount:500,               notes:'2/1/26' },
+    { name:'Healthy Haus',            period:'2026-02', amount:4493.71,           notes:'2/26' },
+    { name:'Homewood',                period:'2026-02', amount:500,               notes:'2/1/26' },
+    { name:'Huntsville',              period:'2026-02', amount:500,               notes:'2/1/26' },
+    { name:'Laser Fresh Aesthetics',  period:'2026-02', amount:400,               notes:'2/1/26' },
+    { name:'Laser Skin Med',          period:'2026-02', amount:750,               notes:'2/15/26' },
+    { name:"Lolli's Pop",             period:'2026-02', amount:'VENMO',           notes:'' },
+    { name:'Mindful Haven',           period:'2026-02', amount:'550+1100',        notes:'2/3 and 2/4' },
+    { name:'Montgomery',              period:'2026-02', amount:1000,              notes:'2/1/26' },
+    { name:'Mountain View',           period:'2026-02', amount:'1000+1000',        notes:'2/13 and 2/27' },
+    { name:'Nashville-NIS',           period:'2026-02', amount:1000,              notes:'2/1/26' },
+    { name:'New Jersey Birdi',        period:'2026-02', amount:12532.5,           notes:'2/24/26' },
+    { name:'Oak Street',              period:'2026-02', amount:'5791.51+5791.50', notes:'2/13 and 2/27' },
+    { name:'Olga Laser',              period:'2026-02', amount:400,               notes:'2/1/26' },
+    { name:'Optimal Mens Health',     period:'2026-02', amount:1250,              notes:'2/11/26' },
+    { name:'Premier Health',          period:'2026-02', amount:1000,              notes:'2/1/26' },
+    { name:'Regen MD (Devin)',         period:'2026-02', amount:1500,              notes:'2/26/26' },
+    { name:'Rethink Tattoo',          period:'2026-02', amount:400,               notes:'2/4/26' },
+    { name:'Sev Medical',             period:'2026-02', amount:'1914.21+1914.21', notes:'2/10 and 2/25' },
+    { name:'Sevlaser',                period:'2026-02', amount:'750+750',         notes:'2/10 and 2/25' },
+    { name:'Skin Clique (Chase)',      period:'2026-02', amount:7455,              notes:'2/26' },
+    { name:'Skin Clique (Truist)',     period:'2026-02', amount:'938+6000',        notes:'2/6 and 2/26' },
+    { name:'Skin Riched',             period:'2026-02', amount:500,               notes:'2/1/26' },
+    { name:'Tazewell',                period:'2026-02', amount:1000,              notes:'2/1/26' },
+    { name:'Tennessee Valley',        period:'2026-02', amount:'2500+2500',        notes:'2/13 and 2/27' },
+    { name:'Viking',                  period:'2026-02', amount:'5208.50+375+2631.22+375+5208.50', notes:'2/13, 2/16, 2/27' },
+    { name:'West Broad',              period:'2026-02', amount:1000,              notes:'2/1/26' },
+    { name:'WhiteFox Tattoo',         period:'2026-02', amount:400,               notes:'2/1/26' },
+    { name:'Zaghi',                   period:'2026-02', amount:10000,             notes:'2/25/26' },
+    { name:'Alpha Medical',           period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Archer Health',           period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Dove Med Spa',            period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Groups Recover',          period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Kestners',                period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Layton',                  period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Leslie Sullins',          period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Pelle Dolce Aesthetics',  period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'QuickMD',                 period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Roman Health',            period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Spero Health',            period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'The Erasure',             period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2026-02', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2026-02', amount:'CANCELLED',       notes:'' },
+    // ── March 2026 ─────────────────────────────────────────────────
+    { name:'All About Health',        period:'2026-03', amount:'500+500',          notes:'3/3 and 3/31' },
+    { name:'Care Validate',           period:'2026-03', amount:2519545,            notes:'3/31/26' },
+    { name:'DePasquale (Truist)',      period:'2026-03', amount:5310,              notes:'3/9/26' },
+    { name:'Doctronic',               period:'2026-03', amount:12450,              notes:'3/4/26' },
+    { name:'Doug Smith / Sharon Orso',period:'2026-03', amount:'500+500+500+500',  notes:'3/2, 3/11, 3/17, 3/30' },
+    { name:'Dr Scott Kirby',          period:'2026-03', amount:800,               notes:'3/1/26' },
+    { name:'Game Day',                period:'2026-03', amount:'1250+1250',        notes:'3/13 and 3/27' },
+    { name:'Healing Hands',           period:'2026-03', amount:500,               notes:'3/1/26' },
+    { name:'Healthy Haus',            period:'2026-03', amount:3829.25,           notes:'3/27/26' },
+    { name:'Homewood',                period:'2026-03', amount:500,               notes:'3/1/26' },
+    { name:'Huntsville',              period:'2026-03', amount:500,               notes:'3/1/26' },
+    { name:'Laser Fresh Aesthetics',  period:'2026-03', amount:400,               notes:'3/1/26' },
+    { name:'Laser Skin Med',          period:'2026-03', amount:750,               notes:'3/15/26' },
+    { name:"Lolli's Pop",             period:'2026-03', amount:'VENMO',           notes:'' },
+    { name:'Mountain View',           period:'2026-03', amount:'1000+1000',        notes:'3/13 and 3/27' },
+    { name:'Nashville-NIS',           period:'2026-03', amount:1000,              notes:'3/1/26' },
+    { name:'New Jersey Birdi',        period:'2026-03', amount:8322.5,            notes:'3/18/26' },
+    { name:'Oak Street',              period:'2026-03', amount:'5791.5+5791.49',  notes:'3/13 and 3/31' },
+    { name:'Olga Laser',              period:'2026-03', amount:400,               notes:'3/1/26' },
+    { name:'Premier Health',          period:'2026-03', amount:1000,              notes:'3/1/26' },
+    { name:'Rethink Tattoo',          period:'2026-03', amount:400,               notes:'3/1/26' },
+    { name:'Sev Medical',             period:'2026-03', amount:'1914.21+1914.21', notes:'3/10 and 3/25' },
+    { name:'Sevlaser',                period:'2026-03', amount:'750+750',         notes:'3/10 and 3/25' },
+    { name:'Skin Clique (Chase)',      period:'2026-03', amount:5255,              notes:'3/27/26' },
+    { name:'Skin Clique (Truist)',     period:'2026-03', amount:'1616.8+5400',     notes:'3/6 and 3/27' },
+    { name:'Skin Riched',             period:'2026-03', amount:500,               notes:'3/1/26' },
+    { name:'Tazewell',                period:'2026-03', amount:1000,              notes:'3/1/26' },
+    { name:'Tennessee Valley',        period:'2026-03', amount:'2500+2500',        notes:'3/13 and 3/27' },
+    { name:'Viking',                  period:'2026-03', amount:'5208.50+375+5208.50+375', notes:'3/13 and 3/31' },
+    { name:'West Broad',              period:'2026-03', amount:1000,              notes:'3/1/26' },
+    { name:'WhiteFox Tattoo',         period:'2026-03', amount:400,               notes:'3/1/26' },
+    { name:'Zaghi',                   period:'2026-03', amount:10000,             notes:'3/25/26' },
+    { name:'Alpha Medical',           period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Archer Health',           period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Dove Med Spa',            period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Groups Recover',          period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Kestners',                period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Layton',                  period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Leslie Sullins',          period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Mindful Haven',           period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Montgomery',              period:'2026-03', amount:'CANCELLED',       notes:'3/1/26' },
+    { name:'Pelle Dolce Aesthetics',  period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'QuickMD',                 period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Roman Health',            period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Spero Health',            period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'The Erasure',             period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2026-03', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2026-03', amount:'CANCELLED',       notes:'' },
+    // ── April 2026 ─────────────────────────────────────────────────
+    { name:'DePasquale (Truist)',      period:'2026-04', amount:5053,              notes:'4/27/26' },
+    { name:'Doug Smith / Sharon Orso',period:'2026-04', amount:500,               notes:'4/6/26' },
+    { name:'Dr Scott Kirby',          period:'2026-04', amount:800,               notes:'4/1/26' },
+    { name:'Healthy Haus',            period:'2026-04', amount:11948.71,          notes:'4/1/26 (Jan balance)' },
+    { name:'Homewood',                period:'2026-04', amount:500,               notes:'4/1/26' },
+    { name:'Huntsville',              period:'2026-04', amount:500,               notes:'4/1/26' },
+    { name:'Laser Fresh Aesthetics',  period:'2026-04', amount:400,               notes:'4/1/26' },
+    { name:'Laser Skin Med',          period:'2026-04', amount:750,               notes:'4/15/26' },
+    { name:"Lolli's Pop",             period:'2026-04', amount:'VENMO',           notes:'' },
+    { name:'Nashville-NIS',           period:'2026-04', amount:1000,              notes:'4/1/26' },
+    { name:'New Jersey Birdi',        period:'2026-04', amount:3740,              notes:'4/23/26' },
+    { name:'Oak Street',              period:'2026-04', amount:'5907.34+5907.32', notes:'4/15 and 4/30' },
+    { name:'Olga Laser',              period:'2026-04', amount:400,               notes:'4/1/26' },
+    { name:'Premier Health',          period:'2026-04', amount:1000,              notes:'4/1/26' },
+    { name:'Rethink Tattoo',          period:'2026-04', amount:400,               notes:'4/1/26' },
+    { name:'Sev Medical',             period:'2026-04', amount:'1914.21+1914.21', notes:'4/10 and 4/24' },
+    { name:'Sevlaser',                period:'2026-04', amount:'750+750',         notes:'4/10 and 4/24' },
+    { name:'Skin Clique (Truist)',     period:'2026-04', amount:'972.88+60+5300',  notes:'4/3, 4/10, 4/24' },
+    { name:'Skin Riched',             period:'2026-04', amount:500,               notes:'4/1/26' },
+    { name:'Tazewell',                period:'2026-04', amount:1000,              notes:'4/1/26' },
+    { name:'Tennessee Valley',        period:'2026-04', amount:'2500+2500',        notes:'4/10 and 4/24' },
+    { name:'Viking',                  period:'2026-04', amount:'5208.20+375',      notes:'4/15/26' },
+    { name:'West Broad',              period:'2026-04', amount:1000,              notes:'4/1/26' },
+    { name:'WhiteFox Tattoo',         period:'2026-04', amount:400,               notes:'4/1/26' },
+    { name:'Zaghi',                   period:'2026-04', amount:10000,             notes:'4/24/26' },
+    { name:'All About Health',        period:'2026-04', amount:'pending',         notes:'' },
+    { name:'Alpha Medical',           period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Archer Health',           period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Blue Sage Wellness',      period:'2026-04', amount:'no_payment',      notes:'' },
+    { name:'Callondoc',               period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Care Validate',           period:'2026-04', amount:'pending',         notes:'Paid 5/4' },
+    { name:'Doctronic',               period:'2026-04', amount:'no_payment',      notes:'' },
+    { name:'Dove Med Spa',            period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Game Day',                period:'2026-04', amount:'no_payment',      notes:'' },
+    { name:'Groups Recover',          period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Healing Hands',           period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Kestners',                period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Layton',                  period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Leslie Sullins',          period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Mindful Haven',           period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Montgomery',              period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Mountain View',           period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Optimal Mens Health',     period:'2026-04', amount:'no_payment',      notes:'' },
+    { name:'Pelle Dolce Aesthetics',  period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'QuickMD',                 period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Regen MD (Devin)',         period:'2026-04', amount:'no_payment',      notes:'' },
+    { name:'Roman Health',            period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Spero Health',            period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'The Erasure',             period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2026-04', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2026-04', amount:'CANCELLED',       notes:'' },
+    // ── May 2026 ───────────────────────────────────────────────────
+    { name:'All About Health',        period:'2026-05', amount:500,               notes:'5/5/26' },
+    { name:'Care Validate',           period:'2026-05', amount:3643221,           notes:'5/4/26' },
+    { name:'Dr Scott Kirby',          period:'2026-05', amount:800,               notes:'5/1/26' },
+    { name:'Healthy Haus',            period:'2026-05', amount:11144.04,          notes:'5/1/26' },
+    { name:'Homewood',                period:'2026-05', amount:500,               notes:'5/1/26' },
+    { name:'Huntsville',              period:'2026-05', amount:500,               notes:'5/1/26' },
+    { name:'Laser Fresh Aesthetics',  period:'2026-05', amount:400,               notes:'5/1/26' },
+    { name:"Lolli's Pop",             period:'2026-05', amount:'VENMO',           notes:'' },
+    { name:'Nashville-NIS',           period:'2026-05', amount:1000,              notes:'5/26' },
+    { name:'Olga Laser',              period:'2026-05', amount:400,               notes:'5/1/26' },
+    { name:'Optimal Mens Health',     period:'2026-05', amount:2500,              notes:'5/6/26' },
+    { name:'Rethink Tattoo',          period:'2026-05', amount:400,               notes:'5/1/26' },
+    { name:'Skin Riched',             period:'2026-05', amount:500,               notes:'5/1/26' },
+    { name:'Tazewell',                period:'2026-05', amount:1000,              notes:'5/1/26' },
+    { name:'Viking',                  period:'2026-05', amount:'5208.50+375',      notes:'5/1/26' },
+    { name:'WhiteFox Tattoo',         period:'2026-05', amount:400,               notes:'5/1/26' },
+    { name:'Alpha Medical',           period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Archer Health',           period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Callondoc',               period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Doctronic',               period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Dove Med Spa',            period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Groups Recover',          period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Kestners',                period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Layton',                  period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Leslie Sullins',          period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Mindful Haven',           period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Montgomery',              period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Mountain View',           period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Pelle Dolce Aesthetics',  period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'QuickMD',                 period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Roman Health',            period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Spero Health',            period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'The Erasure',             period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Thrive Heal',             period:'2026-05', amount:'CANCELLED',       notes:'' },
+    { name:'Weekend Health',          period:'2026-05', amount:'CANCELLED',       notes:'' },
+  ]
+
+  let inserted = 0, skipped = 0
+  for (const r of rows) {
+    const cid = clientIdMap[r.name]
+    if (!cid) { skipped++; continue }
+    const status = parseStatus(r.amount)
+    const amount = status === 'paid' ? parseAmt(r.amount) : null
+    await db.prepare(
+      `INSERT OR IGNORE INTO cp_payment_entries (client_id, period_key, amount, status, notes)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(cid, r.period, amount, status, r.notes).run()
+    inserted++
+  }
+
+  return c.json({ ok: true, clients: clientNames.length, entries_inserted: inserted, skipped })
+})
+
 export default app

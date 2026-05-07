@@ -900,6 +900,7 @@ function buildNav() {
     { id: 'rates',       icon: 'fa-sliders-h',        label: 'Payment Rates' },
     { id: 'carevalidate',icon: 'fa-eye',              label: 'CareValidate View' },
     { id: 'users',       icon: 'fa-users-cog',        label: 'User Management' },
+    { id: 'payments',   icon: 'fa-credit-card',       label: 'Client Payments' },
   ]
   const cvNav = [
     { id: 'cv_dashboard', icon: 'fa-chart-bar', label: 'Summary' },
@@ -952,10 +953,10 @@ function navigate(page) {
   const navEl = $(`nav_${page}`)
   if (navEl) navEl.classList.add('active')
 
-  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', onboarding:'Onboarding', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View', users:'User Management' }
+  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', onboarding:'Onboarding', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View', users:'User Management', payments:'Client Payments' }
   $('pageTitle').textContent = titles[page] || page
 
-  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail, users: renderUserManagement }
+  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail, users: renderUserManagement, payments: renderClientPayments }
   if (pages[page]) pages[page]()
 
   // Auto-close sidebar on mobile after navigation
@@ -7468,6 +7469,627 @@ function inviteModalCopy() {
 
 // Legacy — kept so any remaining inline refs don't crash
 function umCopyInvite() { inviteModalCopy() }
+
+// ════════════════════════════════════════════════════════════════════
+// CLIENT PAYMENTS MODULE  (admin-only)
+// ════════════════════════════════════════════════════════════════════
+
+const cpState = {
+  clients: [],          // all clients from DB
+  entries: [],          // entries for current period
+  summary: null,        // { byPeriod, byClient }
+  currentPeriod: '',    // 'YYYY-MM'
+  view: 'monthly',      // 'monthly' | 'clients'
+  search: '',
+  seeded: false,
+}
+
+// ── helpers ──────────────────────────────────────────────────────────
+
+function cpFmt(amount) {
+  if (amount === null || amount === undefined) return '—'
+  return '$' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function cpStatusBadge(status, amount) {
+  const map = {
+    paid:       { cls: 'bg-emerald-100 text-emerald-800', label: 'Paid' },
+    cancelled:  { cls: 'bg-gray-100 text-gray-500',       label: 'Cancelled' },
+    past_due:   { cls: 'bg-red-100 text-red-700',         label: 'Past Due' },
+    venmo:      { cls: 'bg-purple-100 text-purple-700',   label: 'Venmo' },
+    pending:    { cls: 'bg-yellow-100 text-yellow-700',   label: 'Pending' },
+    no_payment: { cls: 'bg-slate-100 text-slate-500',     label: 'No Payment' },
+  }
+  const s = map[status] || { cls: 'bg-gray-100 text-gray-500', label: status || '—' }
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.cls}">${s.label}</span>`
+}
+
+function cpPeriodLabel(key) {
+  if (!key) return ''
+  const [y, m] = key.split('-')
+  const names = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return `${names[parseInt(m)]} ${y}`
+}
+
+function cpAvailablePeriods() {
+  if (!cpState.summary || !cpState.summary.byPeriod) return []
+  return cpState.summary.byPeriod.map(p => p.period_key)
+}
+
+// Generate list of months from Aug-2025 through current month
+function cpAllPeriods() {
+  const periods = []
+  const now = new Date()
+  const start = new Date(2025, 7, 1) // Aug 2025
+  let d = new Date(start)
+  while (d <= now) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    periods.push(`${y}-${m}`)
+    d.setMonth(d.getMonth() + 1)
+  }
+  return periods.reverse() // newest first
+}
+
+// ── main render ──────────────────────────────────────────────────────
+
+async function renderClientPayments() {
+  const mc = $('mainContent')
+  mc.innerHTML = `
+    <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="inline-flex rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm">
+          <button onclick="cpSetView('monthly')" id="cpViewMonthly"
+            class="px-4 py-2 text-sm font-medium flex items-center gap-2">
+            <i class="fas fa-calendar-alt"></i> Monthly View
+          </button>
+          <button onclick="cpSetView('clients')" id="cpViewClients"
+            class="px-4 py-2 text-sm font-medium flex items-center gap-2">
+            <i class="fas fa-list-ul"></i> Clients View
+          </button>
+        </div>
+        <div id="cpPeriodPickerWrap" class="flex items-center gap-2">
+          <select id="cpPeriodSelect" onchange="cpChangePeriod(this.value)"
+            class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </select>
+        </div>
+        <div id="cpSearchWrap" class="hidden">
+          <input id="cpSearch" type="text" placeholder="Search clients…"
+            oninput="cpState.search=this.value; cpRenderClientList()"
+            class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm w-52 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="cpExportXlsx()" title="Export to Excel"
+          class="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+          <i class="fas fa-file-excel"></i> Export XLSX
+        </button>
+        <button onclick="cpSeedData()" id="cpSeedBtn" title="Import all historical data from Excel"
+          class="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+          <i class="fas fa-database"></i> Seed Data
+        </button>
+        <button onclick="cpOpenAddClient()"
+          class="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+          <i class="fas fa-plus"></i> Add Client
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div id="cpStats" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5"></div>
+
+    <!-- Main content area -->
+    <div id="cpBody"></div>
+
+    <!-- Edit Entry Modal -->
+    <div id="cpEntryModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4" id="cpEntryModalTitle">Edit Payment</h3>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
+            <div id="cpEntryClientName" class="text-sm text-gray-900 font-semibold bg-gray-50 px-3 py-2 rounded-lg border border-gray-200"></div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Period</label>
+            <div id="cpEntryPeriodLabel" class="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200"></div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select id="cpEntryStatus" onchange="cpToggleAmountField()"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="paid">Paid</option>
+              <option value="pending">Pending</option>
+              <option value="past_due">Past Due</option>
+              <option value="venmo">Venmo</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="no_payment">No Payment</option>
+            </select>
+          </div>
+          <div id="cpAmountWrap">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Amount ($)</label>
+            <input id="cpEntryAmount" type="number" step="0.01" min="0" placeholder="0.00"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Notes <span class="text-gray-400 font-normal">(dates, breakdown…)</span></label>
+            <input id="cpEntryNotes" type="text" placeholder="e.g. 4/10 and 4/24"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button onclick="cpCloseEntryModal()"
+            class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition">Cancel</button>
+          <button onclick="cpSaveEntry()"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Client Modal -->
+    <div id="cpClientModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Client</h3>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
+            <input id="cpClientName" type="text" placeholder="e.g. Blue Sage Wellness"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <input id="cpClientNotes" type="text" placeholder="Optional notes"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button onclick="cpCloseClientModal()"
+            class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition">Cancel</button>
+          <button onclick="cpSaveClient()"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition">Save</button>
+        </div>
+      </div>
+    </div>
+  `
+
+  // load data
+  await cpLoadData()
+}
+
+async function cpLoadData() {
+  try {
+    const [clients, summary] = await Promise.all([
+      api('/api/client-payments/clients'),
+      api('/api/client-payments/summary'),
+    ])
+    cpState.clients = clients || []
+    cpState.summary = summary || { byPeriod: [], byClient: [] }
+
+    // default period = most recent with data, else current month
+    if (!cpState.currentPeriod) {
+      const periods = cpAllPeriods()
+      const withData = cpAvailablePeriods()
+      cpState.currentPeriod = withData[0] || periods[0] || ''
+    }
+
+    cpPopulatePeriodSelect()
+    cpRenderStats()
+    await cpLoadEntries()
+    cpSetView(cpState.view)
+  } catch(e) {
+    $('cpBody').innerHTML = `<div class="text-red-500 p-4">Error loading data: ${e.message}</div>`
+  }
+}
+
+function cpPopulatePeriodSelect() {
+  const sel = $('cpPeriodSelect')
+  if (!sel) return
+  const all = cpAllPeriods()
+  sel.innerHTML = all.map(p =>
+    `<option value="${p}" ${p === cpState.currentPeriod ? 'selected' : ''}>${cpPeriodLabel(p)}</option>`
+  ).join('')
+}
+
+function cpRenderStats() {
+  const el = $('cpStats')
+  if (!el || !cpState.summary) return
+  const bp = cpState.summary.byPeriod || []
+  const cur = bp.find(p => p.period_key === cpState.currentPeriod)
+  const totalClients = cpState.clients.length
+
+  // lifetime totals across all periods
+  const lifetimePaid = bp.reduce((s, p) => s + (p.total_amount || 0), 0)
+  const paidCount  = cur ? cur.paid_count : 0
+  const pendingCount = cur ? (cur.pending_count || 0) : 0
+  const pastDueCount = cur ? cur.past_due_count : 0
+  const curTotal   = cur ? cur.total_amount : 0
+
+  el.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div class="text-xs text-gray-500 font-medium mb-1">Total Clients</div>
+      <div class="text-2xl font-bold text-gray-900">${totalClients}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div class="text-xs text-gray-500 font-medium mb-1">${cpPeriodLabel(cpState.currentPeriod)} Revenue</div>
+      <div class="text-2xl font-bold text-emerald-600">${cpFmt(curTotal)}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div class="text-xs text-gray-500 font-medium mb-1">Paid This Month</div>
+      <div class="text-2xl font-bold text-blue-600">${paidCount}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div class="text-xs text-gray-500 font-medium mb-1">Past Due / Pending</div>
+      <div class="text-2xl font-bold text-red-500">${pastDueCount + pendingCount}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div class="text-xs text-gray-500 font-medium mb-1">All-Time Revenue</div>
+      <div class="text-2xl font-bold text-purple-600">${cpFmt(lifetimePaid)}</div>
+    </div>
+  `
+}
+
+async function cpLoadEntries() {
+  const entries = await api(`/api/client-payments/entries?period=${cpState.currentPeriod}`)
+  cpState.entries = entries || []
+}
+
+function cpSetView(v) {
+  cpState.view = v
+
+  // toggle view buttons
+  const btnM = $('cpViewMonthly'), btnC = $('cpViewClients')
+  if (btnM && btnC) {
+    const active   = 'bg-blue-600 text-white'
+    const inactive = 'text-gray-600 hover:bg-gray-50'
+    btnM.className = `px-4 py-2 text-sm font-medium flex items-center gap-2 ${v==='monthly' ? active : inactive}`
+    btnC.className = `px-4 py-2 text-sm font-medium flex items-center gap-2 ${v==='clients' ? active : inactive}`
+  }
+
+  const periodWrap = $('cpPeriodPickerWrap')
+  const searchWrap = $('cpSearchWrap')
+  if (periodWrap) periodWrap.classList.toggle('hidden', v !== 'monthly')
+  if (searchWrap) searchWrap.classList.toggle('hidden', v !== 'clients')
+
+  if (v === 'monthly') cpRenderMonthly()
+  else cpRenderClientList()
+}
+
+async function cpChangePeriod(val) {
+  cpState.currentPeriod = val
+  cpRenderStats()
+  await cpLoadEntries()
+  cpRenderMonthly()
+}
+
+// ── MONTHLY VIEW ─────────────────────────────────────────────────────
+
+function cpRenderMonthly() {
+  const body = $('cpBody')
+  if (!body) return
+
+  const entries = cpState.entries
+  const clients = cpState.clients
+
+  // Build a map: client_id → entry
+  const entryMap = {}
+  for (const e of entries) entryMap[e.client_id] = e
+
+  // Separate: paid, other (pending/past_due/venmo), cancelled, no_payment/missing
+  const paid = []
+  const attention = []
+  const cancelled = []
+  const missing = []
+
+  for (const cl of clients) {
+    const e = entryMap[cl.id]
+    if (!e) {
+      missing.push({ client: cl, entry: null })
+    } else if (e.status === 'paid') {
+      paid.push({ client: cl, entry: e })
+    } else if (e.status === 'cancelled') {
+      cancelled.push({ client: cl, entry: e })
+    } else if (e.status === 'no_payment') {
+      cancelled.push({ client: cl, entry: e }) // visually grouped with cancelled
+    } else {
+      attention.push({ client: cl, entry: e })
+    }
+  }
+
+  const totalPaid = paid.reduce((s, r) => s + (r.entry?.amount || 0), 0)
+  const totalAttention = attention.length
+
+  function row(item) {
+    const { client, entry } = item
+    const eid = entry?.id || ''
+    const amt = entry?.status === 'paid' ? cpFmt(entry.amount) : '—'
+    const badge = entry ? cpStatusBadge(entry.status, entry.amount) : cpStatusBadge('pending', null)
+    const notes = entry?.notes || ''
+    return `
+      <tr class="hover:bg-gray-50 transition group" onclick="cpOpenEntry(${client.id},'${client.name.replace(/'/g,"\\'")}','${eid}')">
+        <td class="py-3 pl-4 pr-2">
+          <div class="font-medium text-gray-900 text-sm">${client.name}</div>
+        </td>
+        <td class="py-3 px-2">${badge}</td>
+        <td class="py-3 px-2 text-sm font-semibold ${entry?.status==='paid' ? 'text-emerald-700' : 'text-gray-400'}">${amt}</td>
+        <td class="py-3 px-2 text-sm text-gray-500 max-w-xs truncate" title="${notes}">${notes}</td>
+        <td class="py-3 pl-2 pr-4 text-right">
+          <button class="opacity-0 group-hover:opacity-100 text-xs text-blue-600 hover:text-blue-800 transition px-2 py-1 rounded hover:bg-blue-50">
+            <i class="fas fa-edit mr-1"></i>Edit
+          </button>
+        </td>
+      </tr>`
+  }
+
+  function section(title, items, colorClass, icon, showTotal, total) {
+    if (items.length === 0) return ''
+    const rows = items.map(row).join('')
+    const totalRow = showTotal ? `
+      <tr class="bg-gray-50 border-t border-gray-200">
+        <td class="py-2 pl-4 text-xs font-semibold text-gray-500 uppercase tracking-wide" colspan="2">Total</td>
+        <td class="py-2 px-2 text-sm font-bold text-emerald-700">${cpFmt(total)}</td>
+        <td colspan="2"></td>
+      </tr>` : ''
+    return `
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-gray-100 ${colorClass}">
+          <i class="fas ${icon} text-sm"></i>
+          <span class="font-semibold text-sm">${title}</span>
+          <span class="ml-auto text-xs font-medium bg-white/60 px-2 py-0.5 rounded-full">${items.length}</span>
+          ${showTotal && total > 0 ? `<span class="text-xs font-bold">${cpFmt(total)}</span>` : ''}
+        </div>
+        <table class="w-full">
+          <thead>
+            <tr class="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">
+              <th class="py-2 pl-4 pr-2 text-left font-medium">Client</th>
+              <th class="py-2 px-2 text-left font-medium">Status</th>
+              <th class="py-2 px-2 text-left font-medium">Amount</th>
+              <th class="py-2 px-2 text-left font-medium">Notes / Dates</th>
+              <th class="py-2 pl-2 pr-4"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">${rows}${totalRow}</tbody>
+        </table>
+      </div>`
+  }
+
+  body.innerHTML = `
+    ${section('Paid', paid, 'bg-emerald-50 text-emerald-800', 'fa-check-circle', true, totalPaid)}
+    ${attention.length ? section('Needs Attention', attention, 'bg-amber-50 text-amber-800', 'fa-exclamation-triangle', false, 0) : ''}
+    ${cancelled.length ? section('Cancelled / No Payment', cancelled, 'bg-gray-50 text-gray-600', 'fa-ban', false, 0) : ''}
+    ${missing.length ? section('Not Recorded', missing, 'bg-slate-50 text-slate-500', 'fa-clock', false, 0) : ''}
+    ${paid.length === 0 && attention.length === 0 && cancelled.length === 0 && missing.length === 0
+      ? `<div class="text-center py-12 text-gray-400"><i class="fas fa-inbox text-3xl mb-3"></i><p>No data for ${cpPeriodLabel(cpState.currentPeriod)}. Select a period or seed historical data.</p></div>`
+      : ''}
+  `
+}
+
+// ── CLIENTS VIEW ─────────────────────────────────────────────────────
+
+function cpRenderClientList() {
+  const body = $('cpBody')
+  if (!body) return
+
+  const term = (cpState.search || '').toLowerCase()
+  const clients = cpState.clients.filter(c => !term || c.name.toLowerCase().includes(term))
+  const summary = (cpState.summary?.byClient || [])
+  const summaryMap = {}
+  for (const s of summary) summaryMap[s.id] = s
+
+  if (clients.length === 0) {
+    body.innerHTML = `<div class="text-center py-12 text-gray-400"><i class="fas fa-search text-3xl mb-3"></i><p>No clients found.</p></div>`
+    return
+  }
+
+  body.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <table class="w-full">
+        <thead>
+          <tr class="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">
+            <th class="py-3 pl-4 pr-2 text-left font-medium">Client</th>
+            <th class="py-3 px-2 text-right font-medium">Months Tracked</th>
+            <th class="py-3 px-2 text-right font-medium">Months Paid</th>
+            <th class="py-3 px-2 text-right font-medium">Lifetime Total</th>
+            <th class="py-3 pl-2 pr-4 text-right font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${clients.map(cl => {
+            const s = summaryMap[cl.id] || {}
+            const tracked = s.months_tracked || 0
+            const paid_months = s.months_paid || 0
+            const lifetime = s.lifetime_total || 0
+            const paidPct = tracked > 0 ? Math.round((paid_months / tracked) * 100) : 0
+            return `
+              <tr class="hover:bg-gray-50 transition">
+                <td class="py-3 pl-4 pr-2">
+                  <div class="font-medium text-gray-900 text-sm">${cl.name}</div>
+                  ${cl.notes ? `<div class="text-xs text-gray-400 mt-0.5">${cl.notes}</div>` : ''}
+                </td>
+                <td class="py-3 px-2 text-sm text-gray-500 text-right">${tracked}</td>
+                <td class="py-3 px-2 text-right">
+                  <div class="text-sm font-medium text-gray-700">${paid_months}</div>
+                  ${tracked > 0 ? `<div class="w-full bg-gray-200 rounded-full h-1 mt-1"><div class="bg-emerald-500 h-1 rounded-full" style="width:${paidPct}%"></div></div>` : ''}
+                </td>
+                <td class="py-3 px-2 text-sm font-semibold text-right ${lifetime > 0 ? 'text-emerald-700' : 'text-gray-400'}">${cpFmt(lifetime)}</td>
+                <td class="py-3 pl-2 pr-4 text-right">
+                  <button onclick="cpOpenAddEntry(${cl.id},'${cl.name.replace(/'/g,"\\'")}'); event.stopPropagation()"
+                    title="Add payment entry"
+                    class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 transition mr-1">
+                    <i class="fas fa-plus-circle mr-1"></i>Add Entry
+                  </button>
+                </td>
+              </tr>`
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `
+}
+
+// ── ENTRY MODAL ──────────────────────────────────────────────────────
+
+let cpEntryContext = null  // { clientId, clientName, entryId, period }
+
+function cpOpenEntry(clientId, clientName, entryId) {
+  // Find entry
+  const entry = entryId ? cpState.entries.find(e => e.id == entryId) : null
+  cpEntryContext = { clientId, clientName, entryId: entryId || null, period: cpState.currentPeriod }
+
+  $('cpEntryModalTitle').textContent = entry ? 'Edit Payment Entry' : 'Add Payment Entry'
+  $('cpEntryClientName').textContent = clientName
+  $('cpEntryPeriodLabel').textContent = cpPeriodLabel(cpState.currentPeriod)
+  $('cpEntryStatus').value = entry?.status || 'pending'
+  $('cpEntryAmount').value = entry?.amount != null ? entry.amount : ''
+  $('cpEntryNotes').value = entry?.notes || ''
+  cpToggleAmountField()
+  $('cpEntryModal').classList.remove('hidden')
+}
+
+function cpOpenAddEntry(clientId, clientName) {
+  cpEntryContext = { clientId, clientName, entryId: null, period: cpState.currentPeriod }
+  $('cpEntryModalTitle').textContent = 'Add Payment Entry'
+  $('cpEntryClientName').textContent = clientName
+  $('cpEntryPeriodLabel').textContent = cpPeriodLabel(cpState.currentPeriod)
+  $('cpEntryStatus').value = 'paid'
+  $('cpEntryAmount').value = ''
+  $('cpEntryNotes').value = ''
+  // Set period: if in clients view show period dropdown in modal
+  cpToggleAmountField()
+  $('cpEntryModal').classList.remove('hidden')
+}
+
+function cpCloseEntryModal() { $('cpEntryModal').classList.add('hidden') }
+
+function cpToggleAmountField() {
+  const status = $('cpEntryStatus')?.value
+  const wrap = $('cpAmountWrap')
+  if (!wrap) return
+  wrap.classList.toggle('hidden', status !== 'paid' && status !== 'venmo')
+}
+
+async function cpSaveEntry() {
+  if (!cpEntryContext) return
+  const status = $('cpEntryStatus').value
+  const amount = (status === 'paid' || status === 'venmo') ? parseFloat($('cpEntryAmount').value) || null : null
+  const notes  = $('cpEntryNotes').value.trim()
+  const { clientId, entryId, period } = cpEntryContext
+
+  try {
+    if (entryId) {
+      await api(`/api/client-payments/entries/${entryId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ amount, status, notes })
+      })
+    } else {
+      await api('/api/client-payments/entries', {
+        method: 'POST',
+        body: JSON.stringify({ client_id: clientId, period_key: period, amount, status, notes })
+      })
+    }
+    cpCloseEntryModal()
+    showToast('Payment entry saved', 'success')
+    // Reload
+    const [entries, summary] = await Promise.all([
+      api(`/api/client-payments/entries?period=${cpState.currentPeriod}`),
+      api('/api/client-payments/summary'),
+    ])
+    cpState.entries = entries || []
+    cpState.summary = summary || cpState.summary
+    cpRenderStats()
+    if (cpState.view === 'monthly') cpRenderMonthly()
+    else cpRenderClientList()
+  } catch(e) { showToast('Error: ' + e.message, 'error') }
+}
+
+// ── CLIENT MODAL ──────────────────────────────────────────────────────
+
+function cpOpenAddClient() {
+  $('cpClientName').value = ''
+  $('cpClientNotes').value = ''
+  $('cpClientModal').classList.remove('hidden')
+}
+function cpCloseClientModal() { $('cpClientModal').classList.add('hidden') }
+async function cpSaveClient() {
+  const name = $('cpClientName').value.trim()
+  if (!name) { showToast('Client name required', 'error'); return }
+  try {
+    await api('/api/client-payments/clients', { method: 'POST', body: JSON.stringify({ name, notes: $('cpClientNotes').value.trim() }) })
+    cpCloseClientModal()
+    showToast(`Client "${name}" added`, 'success')
+    const [clients, summary] = await Promise.all([
+      api('/api/client-payments/clients'),
+      api('/api/client-payments/summary'),
+    ])
+    cpState.clients = clients || []
+    cpState.summary = summary || cpState.summary
+    cpRenderStats()
+    if (cpState.view === 'monthly') cpRenderMonthly()
+    else cpRenderClientList()
+  } catch(e) { showToast('Error: ' + e.message, 'error') }
+}
+
+// ── SEED ──────────────────────────────────────────────────────────────
+
+async function cpSeedData() {
+  if (!confirm('Import all historical payment data (Aug 2025 – May 2026) from the Excel chart? This will not overwrite existing entries.')) return
+  const btn = $('cpSeedBtn')
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Seeding…' }
+  try {
+    const r = await api('/api/client-payments/seed', { method: 'POST', body: '{}' })
+    showToast(`✅ Seeded ${r.clients} clients, ${r.entries_inserted} entries`, 'success')
+    cpState.currentPeriod = ''
+    cpState.seeded = true
+    await cpLoadData()
+  } catch(e) {
+    showToast('Seed error: ' + e.message, 'error')
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-database mr-2"></i>Seed Data' }
+  }
+}
+
+// ── XLSX EXPORT ───────────────────────────────────────────────────────
+
+function cpExportXlsx() {
+  if (!window.XLSX) { showToast('XLSX library not loaded', 'error'); return }
+  const wb = XLSX.utils.book_new()
+  const date = new Date().toISOString().slice(0,10)
+
+  if (cpState.view === 'monthly') {
+    // Export current month — one sheet, all clients
+    const period = cpState.currentPeriod
+    const entryMap = {}
+    for (const e of cpState.entries) entryMap[e.client_id] = e
+    const rows = [['Client', 'Status', 'Amount', 'Notes']]
+    for (const cl of cpState.clients) {
+      const e = entryMap[cl.id]
+      rows.push([
+        cl.name,
+        e ? e.status : 'not recorded',
+        e?.amount ?? '',
+        e?.notes ?? '',
+      ])
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{wch:35},{wch:14},{wch:14},{wch:40}]
+    XLSX.utils.book_append_sheet(wb, ws, cpPeriodLabel(period))
+  } else {
+    // Export clients summary — one sheet
+    const bySummary = cpState.summary?.byClient || []
+    const summaryMap = {}
+    for (const s of bySummary) summaryMap[s.id] = s
+    const rows = [['Client', 'Months Tracked', 'Months Paid', 'Lifetime Total ($)']]
+    for (const cl of cpState.clients) {
+      const s = summaryMap[cl.id] || {}
+      rows.push([cl.name, s.months_tracked||0, s.months_paid||0, s.lifetime_total||0])
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{wch:35},{wch:16},{wch:14},{wch:20}]
+    XLSX.utils.book_append_sheet(wb, ws, 'Client Summary')
+  }
+
+  XLSX.writeFile(wb, `LionMD_ClientPayments_${date}.xlsx`)
+  showToast(`Exported ${cpState.view === 'monthly' ? cpPeriodLabel(cpState.currentPeriod) : 'client summary'} to XLSX`, 'success')
+}
 
 // ════════════════════════════════════════════════════
 // APP INITIALIZATION
