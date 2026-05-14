@@ -73,6 +73,24 @@
       transition: color 0.15s, opacity 0.15s;
     }
     .drilldown-link:hover { opacity: 0.7; }
+
+    /* ── Global mobile utilities ───────────────────────────────── */
+    @media (max-width: 767px) {
+      /* Tables: bounded horizontal scroll */
+      .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+      /* Rate grid rows adapt */
+      .rate-grid-row { grid-template-columns: 1fr 100px 60px !important; gap: 8px !important; }
+      /* UM table: hide secondary columns */
+      .um-hide-mobile { display: none !important; }
+      /* Kanban slightly narrower */
+      .kb-col { width: 232px !important; }
+      /* Dashboard header buttons: icon-only */
+      .dash-btn-label { display: none !important; }
+    }
+    @media (max-width: 479px) {
+      .rate-grid-row { grid-template-columns: 1fr 88px 52px !important; }
+    }
+
     /* Active filter chips above consults table */
     .drilldown-chip {
       display: inline-flex; align-items: center;
@@ -541,7 +559,7 @@
     </style>
 
     <!-- ── LEFT PANEL: Brand + Hero ── -->
-    <div class="landing-left lg:w-[52%] flex flex-col justify-between px-10 py-12 lg:px-16 lg:py-14 relative z-10">
+    <div class="landing-left lg:w-[52%] flex flex-col justify-between px-5 py-8 sm:px-8 sm:py-10 lg:px-16 lg:py-14 relative z-10">
       <!-- Decorative layers -->
       <div class="landing-left-dots"></div>
       <div class="landing-ring"></div>
@@ -559,19 +577,19 @@
       </div>
 
       <!-- Hero copy -->
-      <div class="flex-1 flex flex-col justify-center py-10 lg:py-0 relative z-10">
+      <div class="flex-1 flex flex-col justify-center py-6 lg:py-0 relative z-10">
         <div class="landing-gold-bar"></div>
-        <h1 class="text-[2.6rem] lg:text-[3.2rem] font-extrabold text-white leading-[1.12] mb-5" style="letter-spacing:-0.025em;">
+        <h1 class="font-extrabold text-white leading-[1.12] mb-4" style="font-size:clamp(1.55rem,5vw,3.2rem);letter-spacing:-0.025em;">
           Premier Virtual<br/>
           <span style="color:#C9A84C;">Healthcare</span><br/>
           Staffing Solutions
         </h1>
-        <p class="text-blue-200/65 text-[15px] lg:text-base font-light leading-relaxed max-w-[420px] mb-8">
+        <p class="text-blue-200/65 text-[13px] lg:text-base font-light leading-relaxed mb-5 md:mb-8" style="max-width:min(420px,100%)">
           Connecting exceptional medical providers with patients across the nation — streamlined payroll, compliance, and contractor management in one secure platform.
         </p>
 
         <!-- Feature pills -->
-        <div class="flex flex-wrap gap-2 mb-8">
+        <div class="flex flex-wrap gap-1.5 mb-4 md:mb-7">
           <span class="feature-pill"><i class="fas fa-shield-alt"></i> HIPAA Compliant</span>
           <span class="feature-pill"><i class="fas fa-bolt"></i> Real-time Payroll</span>
           <span class="feature-pill"><i class="fas fa-sitemap"></i> Multi-org Support</span>
@@ -581,7 +599,7 @@
         <div class="landing-divider"></div>
 
         <!-- Stats row -->
-        <div class="flex gap-7">
+        <div class="flex flex-wrap gap-4 md:gap-7">
           <div class="landing-stat-item">
             <div class="text-[1.6rem] font-extrabold text-white leading-none">50+</div>
             <div class="text-blue-300/50 text-[11px] mt-1 font-medium uppercase tracking-wide">Active Providers</div>
@@ -604,7 +622,7 @@
     </div>
 
     <!-- ── RIGHT PANEL: Actions ── -->
-    <div class="landing-right lg:w-[48%] flex flex-col justify-center px-8 py-12 lg:px-14">
+    <div class="landing-right lg:w-[48%] flex flex-col justify-center px-4 py-8 sm:px-8 sm:py-10 lg:px-14">
 
       <!-- Section header -->
       <div class="mb-8 max-w-md">
@@ -949,8 +967,8 @@
     <div class="apply-step-indicator pending" id="applyInd4">4</div>
   </div>
   <!-- Step labels -->
-  <div class="flex justify-between text-[11px] font-semibold text-gray-400 -mt-5 mb-7 px-1">
-    <span>Personal</span><span style="margin-left:-12px">Credentials</span><span style="margin-right:-8px">Licenses</span><span>Documents</span>
+  <div class="grid grid-cols-4 text-[10px] sm:text-[11px] font-semibold text-gray-400 -mt-4 mb-6 text-center">
+    <span>Personal</span><span>Credentials</span><span>Licenses</span><span>Documents</span>
   </div>
 
   <!-- ── STEP 1: Personal Info ── -->
@@ -2218,9 +2236,9 @@ async function renderDashboard() {
             <i class="fas fa-table text-blue-500"></i> Payroll Summary by Doctor
             ${s.flaggedCount > 0 ? '<span class="status-badge badge-flagged"><i class="fas fa-flag mr-1"></i>' + s.flaggedCount + ' Flagged</span>' : ''}
           </h3>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <div class="relative">
-              <button id="dashColBtn" onclick="toggleDashColPanel()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" title="Show/hide columns" ${DASH_COLS.filter(c=>!dashColVisibility[c.key]).length > 0 ? 'style="border-color:#f59e0b;color:#d97706"' : ''}>
+              <button id="dashColBtn" onclick="toggleDashColPanel()" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium" title="Show/hide columns" ${DASH_COLS.filter(c=>!dashColVisibility[c.key]).length > 0 ? 'style="border-color:#f59e0b;color:#d97706"' : ''}>
                 <i class="fas fa-columns mr-2"></i>Columns${DASH_COLS.filter(c=>!dashColVisibility[c.key]).length > 0 ? '<span class="col-badge">' + DASH_COLS.filter(c=>!dashColVisibility[c.key]).length + ' hidden</span>' : ''}
               </button>
               <div id="dashColPanel" class="hidden">
@@ -2236,17 +2254,17 @@ async function renderDashboard() {
                 <div class="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400 text-center">Hidden columns are excluded from PDF export</div>
               </div>
             </div>
-            <button onclick="navigate('payroll')" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium">
-              <i class="fas fa-file-invoice-dollar mr-2"></i>View Payroll
+            <button onclick="navigate('payroll')" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium" title="View Payroll">
+              <i class="fas fa-file-invoice-dollar"></i><span class="dash-btn-label ml-2">Payroll</span>
             </button>
-            <button onclick="exportDashboardPDF()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" style="border-color:#ef4444;color:#ef4444">
-              <i class="fas fa-file-pdf mr-2"></i>Export PDF
+            <button onclick="exportDashboardPDF()" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium" style="border-color:#ef4444;color:#ef4444" title="Export PDF">
+              <i class="fas fa-file-pdf"></i><span class="dash-btn-label ml-2">PDF</span>
             </button>
-            <button onclick="exportDashboardExcel()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" style="border-color:#16a34a;color:#16a34a">
-              <i class="fas fa-file-excel mr-2"></i>Export Excel
+            <button onclick="exportDashboardExcel()" class="btn-outline px-3 py-2 rounded-xl text-sm font-medium" style="border-color:#16a34a;color:#16a34a" title="Export Excel">
+              <i class="fas fa-file-excel"></i><span class="dash-btn-label ml-2">Excel</span>
             </button>
-            <button onclick="exportGusto()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
-              <i class="fas fa-file-csv mr-2"></i>Export Gusto CSV
+            <button onclick="exportGusto()" class="btn-primary px-3 py-2 rounded-xl text-sm font-medium" title="Export Gusto CSV">
+              <i class="fas fa-file-csv"></i><span class="dash-btn-label ml-2">Gusto</span>
             </button>
           </div>
         </div>
@@ -2941,34 +2959,38 @@ async function renderConsults() {
         <button onclick="clearAllDrillFilters()" class="text-xs text-red-400 hover:text-red-600 ml-1 font-medium">Clear all</button>
       </div>` : ''}
       <!-- Filters -->
-      <div class="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-center">
-        <input type="text" id="searchInput" placeholder="Search patient, case ID, org..." class="flex-1 min-w-[200px]" value="${consultsState.search}" oninput="debounceSearch(this.value)"/>
-        <select id="doctorFilter" onchange="filterConsults()" class="min-w-[160px]">
-          <option value="">All Doctors</option>
-        </select>
-        <select id="vtFilter" onchange="filterConsults()" class="min-w-[160px]">
-          ${vtOptions.map(o => `<option value="${o.v}" ${consultsState.visitType === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
-        </select>
-        <select id="orderlyFilter" onchange="filterConsults()" class="min-w-[150px]">
-          <option value="" ${consultsState.isOrderly===''?'selected':''}>All Consult Types</option>
-          <option value="1" ${consultsState.isOrderly==='1'?'selected':''}>OrderlyMeds Only</option>
-          <option value="0" ${consultsState.isOrderly==='0'?'selected':''}>Non-OrderlyMeds</option>
-        </select>
-        <select id="flagFilter" onchange="filterConsults()" class="min-w-[140px]">
-          <option value="" ${consultsState.isFlagged===''?'selected':''}>All Flag Status</option>
-          <option value="1" ${consultsState.isFlagged==='1'?'selected':''}>🚩 Flagged Only</option>
-          <option value="0" ${consultsState.isFlagged==='0'?'selected':''}>Not Flagged</option>
-        </select>
-        <select id="statusFilter" onchange="filterConsults()" class="min-w-[140px]">
-          <option value="" ${consultsState.decisionStatus===''?'selected':''}>All Statuses</option>
-          <option value="Approved" ${consultsState.decisionStatus==='Approved'?'selected':''}>Approved</option>
-          <option value="Denied" ${consultsState.decisionStatus==='Denied'?'selected':''}>Denied</option>
-          <option value="Pending" ${consultsState.decisionStatus==='Pending'?'selected':''}>Pending</option>
-        </select>
-        <select id="orgFilter" onchange="filterConsults()" class="min-w-[180px]">
-          <option value="">All Organizations</option>
-        </select>
-        <span id="countLabel" class="text-sm text-gray-500"></span>
+      <div class="p-3 md:p-4 border-b border-gray-100">
+        <div class="flex flex-col gap-2">
+          <input type="text" id="searchInput" placeholder="Search patient, case ID, org..." class="w-full" value="${consultsState.search}" oninput="debounceSearch(this.value)"/>
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            <select id="doctorFilter" onchange="filterConsults()" class="w-full text-sm">
+              <option value="">All Doctors</option>
+            </select>
+            <select id="vtFilter" onchange="filterConsults()" class="w-full text-sm">
+              ${vtOptions.map(o => `<option value="${o.v}" ${consultsState.visitType === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
+            </select>
+            <select id="orderlyFilter" onchange="filterConsults()" class="w-full text-sm">
+              <option value="" ${consultsState.isOrderly===''?'selected':''}>All Types</option>
+              <option value="1" ${consultsState.isOrderly==='1'?'selected':''}>OrderlyMeds</option>
+              <option value="0" ${consultsState.isOrderly==='0'?'selected':''}>Non-Orderly</option>
+            </select>
+            <select id="flagFilter" onchange="filterConsults()" class="w-full text-sm">
+              <option value="" ${consultsState.isFlagged===''?'selected':''}>All Flags</option>
+              <option value="1" ${consultsState.isFlagged==='1'?'selected':''}>🚩 Flagged</option>
+              <option value="0" ${consultsState.isFlagged==='0'?'selected':''}>Not Flagged</option>
+            </select>
+            <select id="statusFilter" onchange="filterConsults()" class="w-full text-sm">
+              <option value="" ${consultsState.decisionStatus===''?'selected':''}>All Statuses</option>
+              <option value="Approved" ${consultsState.decisionStatus==='Approved'?'selected':''}>Approved</option>
+              <option value="Denied" ${consultsState.decisionStatus==='Denied'?'selected':''}>Denied</option>
+              <option value="Pending" ${consultsState.decisionStatus==='Pending'?'selected':''}>Pending</option>
+            </select>
+            <select id="orgFilter" onchange="filterConsults()" class="w-full text-sm">
+              <option value="">All Orgs</option>
+            </select>
+          </div>
+          <span id="countLabel" class="text-xs text-gray-400"></span>
+        </div>
       </div>
       <!-- Table -->
       <div class="overflow-x-auto">
@@ -4832,13 +4854,13 @@ function renderRates() {
             <p class="text-xs text-gray-400 mt-0.5">What CareValidate pays Lion MD per case type</p>
           </div>
         </div>
-        <div class="grid px-5 py-2 bg-gray-50 border-b border-gray-100" style="grid-template-columns:1fr 140px 80px;gap:12px;">
+        <div class="rate-grid-row grid px-4 md:px-5 py-2 bg-gray-50 border-b border-gray-100" style="grid-template-columns:1fr 140px 80px;gap:12px;">
           <span class="text-xs font-semibold text-gray-400 uppercase">Visit Type</span>
           <span class="text-xs font-semibold text-gray-400 uppercase">CV Pays Us</span>
           <span></span>
         </div>
         ${state.rates.map(r => `
-          <div class="grid items-center px-5 py-3 border-b border-gray-50 hover:bg-gray-50" id="rate_${r.id}" style="grid-template-columns:1fr 140px 80px;gap:12px;">
+          <div class="rate-grid-row grid items-center px-4 md:px-5 py-3 border-b border-gray-50 hover:bg-gray-50" id="rate_${r.id}" style="grid-template-columns:1fr 140px 80px;gap:12px;">
             <div>
               <div class="font-semibold text-gray-800 text-sm">${r.label || visitTypeLabel(r.visit_type)}</div>
               <div class="text-xs text-gray-400 font-mono">${r.visit_type}</div>
@@ -8818,14 +8840,76 @@ function umDrawPage() {
   const users = umState.users
   $('mainContent').innerHTML = `
     <div class="max-w-4xl">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
           <h2 class="text-xl font-bold text-gray-800">User Management</h2>
           <p class="text-sm text-gray-500 mt-0.5">Create users and assign portal access roles</p>
         </div>
-        <button onclick="umOpenAdd()" class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
-          <i class="fas fa-user-plus"></i> Add User
-        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="umBulkOpen()" class="px-3 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 border border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors">
+            <i class="fas fa-users-cog"></i><span class="hidden xs:inline sm:inline"> Bulk Portal Setup</span>
+          </button>
+          <button onclick="umOpenAdd()" class="btn-primary px-3 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5">
+            <i class="fas fa-user-plus"></i><span class="hidden xs:inline sm:inline"> Add User</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Bulk Portal Setup Panel -->
+      <div id="umBulkPanel" class="hidden card p-5 mb-6 border-2 border-purple-200 bg-purple-50">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center flex-shrink-0">
+              <i class="fas fa-users-cog text-white"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-gray-800 text-sm">Bulk Portal Setup</h3>
+              <p class="text-xs text-gray-500">Create provider portal accounts for all active contractors at once</p>
+            </div>
+          </div>
+          <button onclick="umBulkClose()" class="p-1.5 rounded-lg hover:bg-purple-100 text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <!-- Loading state -->
+        <div id="umBulkLoading" class="hidden py-6 flex items-center justify-center gap-2 text-gray-400 text-sm">
+          <div class="spinner"></div> Loading contractors…
+        </div>
+
+        <!-- Contractor list -->
+        <div id="umBulkList" class="hidden">
+          <div class="flex items-center justify-between mb-3">
+            <p id="umBulkSubtitle" class="text-xs text-gray-500"></p>
+            <div class="flex items-center gap-2 text-xs">
+              <button onclick="umBulkSelectAll(true)" class="text-purple-600 hover:underline font-semibold">Select All</button>
+              <span class="text-gray-300">|</span>
+              <button onclick="umBulkSelectAll(false)" class="text-gray-500 hover:underline">Deselect All</button>
+            </div>
+          </div>
+          <div id="umBulkItems" class="max-h-64 overflow-y-auto space-y-1 bg-white rounded-xl border border-purple-100 p-2"></div>
+          <div id="umBulkError" class="hidden mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs"></div>
+          <div class="flex items-center gap-3 mt-4">
+            <button onclick="umBulkSubmit()" id="umBulkSubmitBtn"
+              class="btn-primary px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+              <i class="fas fa-rocket"></i> Create Portal Accounts
+            </button>
+            <span id="umBulkSelectedCount" class="text-xs text-gray-500"></span>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="umBulkEmpty" class="hidden py-6 text-center text-gray-400 text-sm">
+          <i class="fas fa-check-circle text-green-400 text-2xl mb-2 block"></i>
+          All active contractors already have portal accounts.
+        </div>
+
+        <!-- Results -->
+        <div id="umBulkResults" class="hidden">
+          <p class="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">Results</p>
+          <div id="umBulkResultItems" class="space-y-2 max-h-72 overflow-y-auto"></div>
+          <button onclick="umBulkClose()" class="mt-4 px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Done</button>
+        </div>
       </div>
 
       <!-- Add/Edit form (hidden by default) -->
@@ -8875,33 +8959,34 @@ function umDrawPage() {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-gray-100 text-left">
-                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
-                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                <th class="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                <th class="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider um-hide-mobile">Email</th>
+                <th class="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                <th class="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider um-hide-mobile">Status</th>
+                <th class="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider um-hide-mobile">Last Login</th>
+                <th class="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               ${users.length === 0 ? `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No users yet. Add one above.</td></tr>` :
                 users.map(u => `
                 <tr class="border-b border-gray-50 table-row">
-                  <td class="px-4 py-3 font-medium text-gray-800">
-                    <div>${escHtml(u.name)}
+                  <td class="px-3 py-3 font-medium text-gray-800">
+                    <div class="truncate max-w-[150px] sm:max-w-xs">${escHtml(u.name)}
                     ${u.id === state.user?.id ? '<span class="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-semibold">You</span>' : ''}</div>
-                    ${u.role === 'provider' && u.contractor_name ? `<div class="text-xs text-purple-500 mt-0.5"><i class="fas fa-link mr-1"></i>${escHtml(u.contractor_name)}</div>` : ''}
-                    ${u.role === 'provider' && !u.contractor_name ? `<div class="text-xs text-orange-400 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>No contractor linked</div>` : ''}
+                    ${u.role === 'provider' && u.contractor_name ? `<div class="text-xs text-purple-500 mt-0.5 truncate"><i class="fas fa-link mr-1"></i>${escHtml(u.contractor_name)}</div>` : ''}
+                    ${u.role === 'provider' && !u.contractor_name ? `<div class="text-xs text-orange-400 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>No link</div>` : ''}
+                    <div class="text-xs text-gray-400 mt-0.5 truncate um-hide-mobile">${escHtml(u.email)}</div>
                   </td>
-                  <td class="px-4 py-3 text-gray-600">${escHtml(u.email)}</td>
-                  <td class="px-4 py-3">${umRoleBadge(u.role)}</td>
-                  <td class="px-4 py-3">
+                  <td class="px-3 py-3 text-gray-600 text-xs um-hide-mobile">${escHtml(u.email)}</td>
+                  <td class="px-3 py-3">${umRoleBadge(u.role)}</td>
+                  <td class="px-3 py-3 um-hide-mobile">
                     ${u.is_active
                       ? '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Active</span>'
                       : '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">Inactive</span>'}
-                    ${u.must_set_password ? '<span class="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Pending Setup</span>' : ''}
+                    ${u.must_set_password ? '<span class="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Pending</span>' : ''}
                   </td>
-                  <td class="px-4 py-3 text-gray-500 text-xs">${u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never'}</td>
+                  <td class="px-3 py-3 text-gray-500 text-xs um-hide-mobile">${u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never'}</td>
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-1">
                       <button onclick="umOpenEdit(${u.id})" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 tooltip" data-tip="Edit">
@@ -8946,6 +9031,242 @@ function umDrawPage() {
       </div>
     </div>`
 }
+
+// ── Bulk Portal Setup ──────────────────────────────────────────────
+let umBulkState = {
+  contractors: [],   // contractors without portal access yet
+  selected: new Set(),
+  submitting: false,
+}
+
+async function umBulkOpen() {
+  // Show panel, hide sub-sections while loading
+  const panel = $('umBulkPanel')
+  panel.classList.remove('hidden')
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+
+  $('umBulkLoading').classList.remove('hidden')
+  $('umBulkList').classList.add('hidden')
+  $('umBulkEmpty').classList.add('hidden')
+  $('umBulkResults').classList.add('hidden')
+
+  // Ensure contractors are loaded
+  await umLoadContractors()
+
+  // Build set of contractor_ids that already have a portal user
+  const provisionedIds = new Set(
+    umState.users
+      .filter(u => u.contractor_id != null)
+      .map(u => u.contractor_id)
+  )
+
+  // Also check by email: contractors whose email matches an existing portal_users email
+  const provisionedEmails = new Set(
+    umState.users.map(u => (u.email || '').toLowerCase().trim())
+  )
+
+  // Contractors without portal access = not in provisionedIds AND email not already taken
+  umBulkState.contractors = umState.contractors.filter(c => {
+    if (provisionedIds.has(c.id)) return false
+    if (c.email && provisionedEmails.has(c.email.toLowerCase().trim())) return false
+    return true
+  })
+
+  umBulkState.selected = new Set(
+    umBulkState.contractors
+      .filter(c => c.email)  // pre-select only those with email
+      .map(c => c.id)
+  )
+
+  $('umBulkLoading').classList.add('hidden')
+
+  if (umBulkState.contractors.length === 0) {
+    $('umBulkEmpty').classList.remove('hidden')
+    return
+  }
+
+  const noEmail = umBulkState.contractors.filter(c => !c.email).length
+  $('umBulkSubtitle').textContent =
+    `${umBulkState.contractors.length} contractor${umBulkState.contractors.length !== 1 ? 's' : ''} without portal access` +
+    (noEmail ? ` (${noEmail} missing email — cannot be invited)` : '')
+
+  umBulkRenderList()
+  $('umBulkList').classList.remove('hidden')
+}
+
+function umBulkClose() {
+  $('umBulkPanel').classList.add('hidden')
+  umBulkState = { contractors: [], selected: new Set(), submitting: false }
+}
+
+function umBulkRenderList() {
+  const items = $('umBulkItems')
+  if (!items) return
+  items.innerHTML = umBulkState.contractors.map(c => {
+    const hasEmail = !!c.email
+    const checked = umBulkState.selected.has(c.id) ? 'checked' : ''
+    const disabledAttr = hasEmail ? '' : 'disabled'
+    const rowOpacity = hasEmail ? '' : 'opacity-50'
+    return `
+      <label class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-purple-50 cursor-pointer ${rowOpacity} ${disabledAttr ? 'cursor-not-allowed' : ''}">
+        <input type="checkbox" class="umBulkCb rounded border-gray-300 text-purple-600"
+          data-id="${c.id}" ${checked} ${disabledAttr}
+          onchange="umBulkToggle(${c.id}, this.checked)">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-gray-800 truncate">${escHtml(c.name || '—')}</div>
+          ${hasEmail
+            ? `<div class="text-xs text-gray-400 truncate">${escHtml(c.email)}</div>`
+            : `<div class="text-xs text-orange-400 font-semibold"><i class="fas fa-exclamation-triangle mr-1"></i>No email on file — cannot invite</div>`}
+        </div>
+        ${hasEmail ? `<span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 font-semibold flex-shrink-0">Will be invited</span>` : ''}
+      </label>`
+  }).join('')
+  umBulkUpdateCount()
+}
+
+function umBulkToggle(id, checked) {
+  if (checked) umBulkState.selected.add(id)
+  else umBulkState.selected.delete(id)
+  umBulkUpdateCount()
+}
+
+function umBulkSelectAll(on) {
+  umBulkState.contractors
+    .filter(c => c.email)
+    .forEach(c => {
+      if (on) umBulkState.selected.add(c.id)
+      else umBulkState.selected.delete(c.id)
+    })
+  // Sync checkboxes
+  document.querySelectorAll('.umBulkCb').forEach(cb => {
+    const id = parseInt(cb.dataset.id)
+    if (!cb.disabled) cb.checked = umBulkState.selected.has(id)
+  })
+  umBulkUpdateCount()
+}
+
+function umBulkUpdateCount() {
+  const n = umBulkState.selected.size
+  const btn = $('umBulkSubmitBtn')
+  const countEl = $('umBulkSelectedCount')
+  if (countEl) countEl.textContent = n === 0 ? 'No contractors selected' : `${n} contractor${n !== 1 ? 's' : ''} selected`
+  if (btn) btn.disabled = n === 0 || umBulkState.submitting
+}
+
+async function umBulkSubmit() {
+  if (umBulkState.submitting) return
+  const selected = umBulkState.contractors.filter(c => umBulkState.selected.has(c.id))
+  if (!selected.length) return
+
+  const errEl = $('umBulkError')
+  errEl.classList.add('hidden')
+
+  umBulkState.submitting = true
+  const btn = $('umBulkSubmitBtn')
+  btn.disabled = true
+  btn.innerHTML = '<div class="spinner !w-4 !h-4 !border-2"></div> Creating…'
+
+  try {
+    const payload = selected.map(c => ({
+      contractor_id: c.id,
+      name: c.name,
+      email: c.email,
+    }))
+    const res = await api('/api/admin/users/bulk-portal-setup', {
+      method: 'POST',
+      body: JSON.stringify({ contractors: payload }),
+    })
+
+    // Refresh user list in state
+    umState.users = await api('/api/admin/users')
+
+    umBulkShowResults(res.results || [])
+  } catch(e) {
+    errEl.textContent = 'Error: ' + e.message
+    errEl.classList.remove('hidden')
+    btn.disabled = false
+    btn.innerHTML = '<i class="fas fa-rocket"></i> Create Portal Accounts'
+    umBulkState.submitting = false
+  }
+}
+
+function umBulkShowResults(results) {
+  $('umBulkList').classList.add('hidden')
+  const created   = results.filter(r => r.status === 'created')
+  const existing  = results.filter(r => r.status === 'already_exists')
+  const skipped   = results.filter(r => r.status === 'skipped_no_email')
+
+  const origin = window.location.origin
+  const itemsEl = $('umBulkResultItems')
+  itemsEl.innerHTML = [
+    ...created.map(r => {
+      const link = origin + '/?token=' + r.invite_token
+      return `
+        <div class="flex items-start gap-3 p-3 bg-white rounded-xl border border-green-200">
+          <div class="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i class="fas fa-check text-green-600 text-xs"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold text-gray-800">${escHtml(r.name)}</div>
+            <div class="text-xs text-gray-400 truncate">${escHtml(r.email)}</div>
+            <div class="flex items-center gap-2 mt-2">
+              <input type="text" readonly value="${escHtml(link)}"
+                onclick="this.select()"
+                class="flex-1 text-xs font-mono bg-gray-50 text-gray-600 border border-gray-200 rounded-lg px-2 py-1 cursor-pointer min-w-0"/>
+              <button onclick="umBulkCopyLink(this,'${escHtml(link)}')"
+                class="flex-shrink-0 px-3 py-1 rounded-lg bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 transition-colors">
+                <i class="fas fa-copy mr-1"></i>Copy
+              </button>
+            </div>
+          </div>
+          <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full flex-shrink-0">Created</span>
+        </div>`
+    }),
+    ...existing.map(r => `
+      <div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-blue-100">
+        <div class="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-info text-blue-500 text-xs"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold text-gray-800">${escHtml(r.name)}</div>
+          <div class="text-xs text-gray-400">${escHtml(r.email)}</div>
+        </div>
+        <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">Already exists</span>
+      </div>`),
+    ...skipped.map(r => `
+      <div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-orange-100">
+        <div class="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-exclamation text-orange-500 text-xs"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold text-gray-800">${escHtml(r.name || '—')}</div>
+          <div class="text-xs text-orange-400">No email on file</div>
+        </div>
+        <span class="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full flex-shrink-0">Skipped</span>
+      </div>`),
+  ].join('')
+
+  $('umBulkResults').classList.remove('hidden')
+
+  // Summary toast
+  if (created.length) showToast(`${created.length} portal account${created.length !== 1 ? 's' : ''} created successfully!`, 'success')
+  else showToast('No new accounts created.', 'info')
+}
+
+function umBulkCopyLink(btn, link) {
+  navigator.clipboard.writeText(link).then(() => {
+    const orig = btn.innerHTML
+    btn.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!'
+    btn.classList.replace('bg-purple-600', 'bg-green-600')
+    btn.classList.replace('hover:bg-purple-700', 'hover:bg-green-700')
+    setTimeout(() => {
+      btn.innerHTML = orig
+      btn.classList.replace('bg-green-600', 'bg-purple-600')
+      btn.classList.replace('hover:bg-green-700', 'hover:bg-purple-700')
+    }, 2000)
+  }).catch(() => showToast('Copy failed — please copy manually', 'error'))
+}
+// ── End Bulk Portal Setup ──────────────────────────────────────────
 
 function umRoleBadge(role) {
   if (role === 'admin') return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">👑 Admin</span>'

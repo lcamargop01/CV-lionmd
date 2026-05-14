@@ -2520,6 +2520,53 @@ app.delete('/api/admin/users/:id', requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
+// ── POST /api/admin/users/bulk-portal-setup ─────────────────────
+// Creates provider portal accounts for multiple contractors at once.
+// Body: { contractors: [{ contractor_id, name, email }] }
+// Skips any contractor whose email already has a portal_user record.
+app.post('/api/admin/users/bulk-portal-setup', requireAdmin, async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  await ensureProviderSchema(c.env.DB)
+  const body = await c.req.json() as any
+  const list: { contractor_id: number; name: string; email: string }[] = body.contractors || []
+  if (!list.length) return c.json({ error: 'No contractors provided' }, 400)
+
+  const creator = c.get('user')
+  const results: { contractor_id: number; name: string; email: string; status: string; invite_token?: string; user_id?: number }[] = []
+
+  for (const item of list) {
+    if (!item.name || !item.email) {
+      results.push({ ...item, status: 'skipped_no_email' })
+      continue
+    }
+    const emailKey = item.email.toLowerCase().trim()
+    // Check if a user already exists for this email
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM portal_users WHERE LOWER(email)=?'
+    ).bind(emailKey).first() as any
+
+    if (existing) {
+      // Already has an account — just ensure contractor_id is linked
+      await c.env.DB.prepare(
+        'UPDATE portal_users SET contractor_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(item.contractor_id, existing.id).run()
+      results.push({ ...item, status: 'already_exists', user_id: existing.id })
+      continue
+    }
+
+    // Create new provider user with invite token
+    const inviteToken = generateInviteToken()
+    const r = await c.env.DB.prepare(
+      `INSERT INTO portal_users (name, email, role, is_active, must_set_password, invite_token, contractor_id, created_by)
+       VALUES (?,?,?,1,1,?,?,?)`
+    ).bind(item.name, emailKey, 'provider', inviteToken, item.contractor_id, creator?.id ?? null).run()
+
+    results.push({ ...item, status: 'created', user_id: r.meta.last_row_id as number, invite_token: inviteToken })
+  }
+
+  return c.json({ ok: true, results })
+})
+
 // ── POST /api/admin/users/:id/reset-invite ───────────────────────
 // Re-generate an invite token so admin can resend the setup link
 app.post('/api/admin/users/:id/reset-invite', requireAdmin, async (c) => {
