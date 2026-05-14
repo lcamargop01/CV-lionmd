@@ -630,7 +630,7 @@
         </button>
 
         <!-- Apply / Join Network -->
-        <a href="https://forms.gle/your-onboarding-form" target="_blank" class="cta-card">
+        <button onclick="showApplyForm()" class="cta-card">
           <div class="cta-icon" style="background:#eff2ff;">
             <i class="fas fa-file-medical-alt" style="color:#4f46e5;font-size:17px;"></i>
           </div>
@@ -639,7 +639,7 @@
             <div class="text-gray-400 text-xs mt-0.5" style="white-space:normal;">Start your provider onboarding application</div>
           </div>
           <div class="cta-arrow"><i class="fas fa-arrow-right text-gray-400 text-[11px]"></i></div>
-        </a>
+        </button>
 
         <!-- Contact Us -->
         <a href="mailto:contact@lion.md" class="cta-card">
@@ -816,6 +816,309 @@
 
 <!-- END #loginScreen -->
 </div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PROVIDER APPLICATION SCREEN  (shown when Apply is clicked)
+══════════════════════════════════════════════════════════ -->
+<div id="applyScreen" class="hidden fixed inset-0 z-50 overflow-y-auto" style="background:#f6f7fb;">
+
+<style>
+  /* ── Apply screen styles ── */
+  #applyScreen input, #applyScreen select, #applyScreen textarea {
+    width: 100%;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 14px;
+    color: #1f2937;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+  }
+  #applyScreen input:focus, #applyScreen select:focus, #applyScreen textarea:focus {
+    border-color: #C9A84C;
+    box-shadow: 0 0 0 3px rgba(201,168,76,0.10);
+  }
+  #applyScreen input.field-error, #applyScreen select.field-error {
+    border-color: #ef4444;
+  }
+  .apply-step { display: none; }
+  .apply-step.active { display: block; }
+  .apply-step-indicator {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+    transition: background 0.2s, color 0.2s;
+  }
+  .apply-step-indicator.done    { background: #C9A84C; color: #fff; }
+  .apply-step-indicator.active  { background: #1a1a2e; color: #C9A84C; border: 2px solid #C9A84C; }
+  .apply-step-indicator.pending { background: #f3f4f6; color: #9ca3af; }
+  .apply-connector { flex: 1; height: 2px; background: #e5e7eb; margin: 0 4px; }
+  .apply-connector.done { background: #C9A84C; }
+  .state-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 999px; padding: 3px 10px;
+    font-size: 12px; color: #1d4ed8; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .state-chip:hover { background: #dbeafe; }
+  .state-chip .chip-x { color: #93c5fd; font-size: 10px; margin-left: 2px; }
+  .upload-zone {
+    border: 2px dashed #d1d5db;
+    border-radius: 14px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: #C9A84C;
+    background: rgba(201,168,76,0.04);
+  }
+  .upload-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    border: none; border-radius: 0; padding: 0;
+  }
+  .photo-preview {
+    width: 96px; height: 96px; border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #C9A84C;
+    display: block; margin: 0 auto 12px;
+  }
+  .apply-section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
+    color: #9ca3af; text-transform: uppercase;
+    margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .apply-card {
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 24px;
+  }
+  .apply-nav-btn {
+    padding: 11px 28px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+  }
+  .apply-nav-btn.primary {
+    background: linear-gradient(135deg, #1a1a2e, #0f3460);
+    color: #fff;
+  }
+  .apply-nav-btn.primary:hover { opacity: 0.92; transform: translateY(-1px); }
+  .apply-nav-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .apply-nav-btn.secondary {
+    background: #f3f4f6; color: #374151;
+  }
+  .apply-nav-btn.secondary:hover { background: #e5e7eb; }
+</style>
+
+<div class="max-w-2xl mx-auto px-4 py-8 pb-16">
+
+  <!-- Header -->
+  <div class="flex items-center gap-4 mb-6">
+    <button onclick="hideApplyForm()" class="w-9 h-9 rounded-xl flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-gray-800 hover:border-gray-300 transition-all flex-shrink-0">
+      <i class="fas fa-arrow-left text-sm"></i>
+    </button>
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#1a1a2e,#C9A84C);">
+        <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover rounded-xl"/>
+      </div>
+      <div>
+        <div class="font-bold text-gray-900 text-base leading-tight">Lion MD Provider Application</div>
+        <div class="text-xs text-gray-400">All information is encrypted and HIPAA secure</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step progress bar -->
+  <div class="flex items-center mb-8" id="applyStepBar">
+    <div class="apply-step-indicator active" id="applyInd1">1</div>
+    <div class="apply-connector" id="applyConn1"></div>
+    <div class="apply-step-indicator pending" id="applyInd2">2</div>
+    <div class="apply-connector" id="applyConn2"></div>
+    <div class="apply-step-indicator pending" id="applyInd3">3</div>
+    <div class="apply-connector" id="applyConn3"></div>
+    <div class="apply-step-indicator pending" id="applyInd4">4</div>
+  </div>
+  <!-- Step labels -->
+  <div class="flex justify-between text-[11px] font-semibold text-gray-400 -mt-5 mb-7 px-1">
+    <span>Personal</span><span style="margin-left:-12px">Credentials</span><span style="margin-right:-8px">Licenses</span><span>Documents</span>
+  </div>
+
+  <!-- ── STEP 1: Personal Info ── -->
+  <div class="apply-step active" id="applyStep1">
+    <div class="apply-card">
+      <div class="apply-section-title"><i class="fas fa-user mr-2 text-amber-400"></i>Personal Information</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Full Legal Name <span class="text-red-400">*</span></label>
+          <input type="text" id="applyName" placeholder="Dr. Jane Smith" autocomplete="name">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Email Address <span class="text-red-400">*</span></label>
+          <input type="email" id="applyEmail" placeholder="jane@example.com" autocomplete="email">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Phone Number <span class="text-red-400">*</span></label>
+          <input type="tel" id="applyPhone" placeholder="(555) 123-4567" autocomplete="tel">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Practice / Company Name</label>
+          <input type="text" id="applyCompany" placeholder="Smith Medical PLLC" autocomplete="organization">
+        </div>
+
+        <!-- Photo upload -->
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Professional Photo <span class="text-gray-400 font-normal">(headshot)</span></label>
+          <div class="upload-zone" id="photoZone" onclick="$('applyPhotoInput').click()" ondragover="applyDragOver(event,'photoZone')" ondragleave="applyDragLeave('photoZone')" ondrop="applyDropPhoto(event)">
+            <input type="file" id="applyPhotoInput" accept="image/*" style="display:none" onchange="applyHandlePhoto(this.files[0])">
+            <div id="photoPlaceholder">
+              <i class="fas fa-camera text-3xl text-gray-300 mb-2"></i>
+              <div class="text-sm font-semibold text-gray-500">Upload your professional headshot</div>
+              <div class="text-xs text-gray-400 mt-1">JPG, PNG — max 5 MB</div>
+            </div>
+            <div id="photoPreviewWrap" class="hidden">
+              <img id="photoPreviewImg" class="photo-preview" src="" alt="Photo preview">
+              <div class="text-sm text-gray-600 font-medium" id="photoPreviewName"></div>
+              <div class="text-xs text-gray-400 mt-1">Click to change</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-end mt-5">
+      <button class="apply-nav-btn primary" onclick="applyGoStep(2)"><i class="fas fa-arrow-right mr-2"></i>Next: Credentials</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Credentials ── -->
+  <div class="apply-step" id="applyStep2">
+    <div class="apply-card">
+      <div class="apply-section-title"><i class="fas fa-id-badge mr-2 text-blue-400"></i>Credentials &amp; Identity</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Provider Type <span class="text-red-400">*</span></label>
+          <select id="applyRoleGroup">
+            <option value="">— Select type —</option>
+            <option value="Physician">Physician (MD / DO)</option>
+            <option value="NP">NP / ARNP / PA</option>
+            <option value="Contractor">Other Contractor</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Specialty / Focus Area</label>
+          <input type="text" id="applySpecialty" placeholder="Internal Medicine, Psychiatry…">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Last 4 of SSN <span class="text-red-400">*</span></label>
+          <input type="text" id="applySSN" placeholder="1234" maxlength="4" pattern="[0-9]{4}"
+            oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)">
+          <div class="text-xs text-gray-400 mt-1"><i class="fas fa-lock mr-1"></i>Stored encrypted — used for payroll identification only</div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">EIN <span class="text-gray-400 font-normal">(if incorporated)</span></label>
+          <input type="text" id="applyEIN" placeholder="XX-XXXXXXX">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">NPI Number</label>
+          <input type="text" id="applyNPI" placeholder="1234567890" maxlength="10"
+            oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)">
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-between mt-5">
+      <button class="apply-nav-btn secondary" onclick="applyGoStep(1)"><i class="fas fa-arrow-left mr-2"></i>Back</button>
+      <button class="apply-nav-btn primary" onclick="applyGoStep(3)">Next: Licenses <i class="fas fa-arrow-right ml-2"></i></button>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: State Licenses ── -->
+  <div class="apply-step" id="applyStep3">
+    <div class="apply-card">
+      <div class="apply-section-title"><i class="fas fa-map-marker-alt mr-2 text-emerald-400"></i>State Licenses</div>
+      <p class="text-sm text-gray-500 mb-4">Select every state where you hold an active medical license.</p>
+
+      <!-- State search + chip display -->
+      <div class="mb-3">
+        <input type="text" id="stateSearch" placeholder="Search state…" oninput="applyFilterStates(this.value)"
+          style="max-width:260px;">
+      </div>
+      <div id="stateChipsSelected" class="flex flex-wrap gap-2 mb-4 min-h-[32px]"></div>
+
+      <!-- Full US state grid -->
+      <div id="stateGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto pr-1">
+      </div>
+    </div>
+    <div class="flex justify-between mt-5">
+      <button class="apply-nav-btn secondary" onclick="applyGoStep(2)"><i class="fas fa-arrow-left mr-2"></i>Back</button>
+      <button class="apply-nav-btn primary" onclick="applyGoStep(4)">Next: Documents <i class="fas fa-arrow-right ml-2"></i></button>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Documents + Submit ── -->
+  <div class="apply-step" id="applyStep4">
+    <div class="apply-card mb-4">
+      <div class="apply-section-title"><i class="fas fa-file-alt mr-2 text-purple-400"></i>Resume / CV <span class="text-red-400">*</span></div>
+      <div class="upload-zone" id="cvZone" ondragover="applyDragOver(event,'cvZone')" ondragleave="applyDragLeave('cvZone')" ondrop="applyDropCV(event)">
+        <input type="file" id="applyCVInput" accept=".pdf,.doc,.docx" onchange="applyHandleCV(this.files[0])">
+        <div id="cvPlaceholder">
+          <i class="fas fa-cloud-upload-alt text-3xl text-gray-300 mb-2"></i>
+          <div class="text-sm font-semibold text-gray-500">Drag &amp; drop your CV / Resume here</div>
+          <div class="text-xs text-gray-400 mt-1">PDF, DOC, DOCX — max 10 MB</div>
+        </div>
+        <div id="cvFileInfo" class="hidden">
+          <i class="fas fa-file-pdf text-3xl text-red-400 mb-2"></i>
+          <div class="text-sm font-semibold text-gray-700" id="cvFileName"></div>
+          <div class="text-xs text-gray-400 mt-1">Click to change</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="apply-card mb-4">
+      <div class="apply-section-title"><i class="fas fa-sticky-note mr-2 text-amber-400"></i>Additional Notes <span class="text-gray-400 font-normal text-[11px] normal-case font-medium tracking-normal">(optional)</span></div>
+      <textarea id="applyNotes" rows="3" placeholder="Anything else you'd like us to know — availability, preferences, questions…"></textarea>
+    </div>
+
+    <!-- Review summary -->
+    <div class="apply-card mb-5" id="applySummaryCard">
+      <div class="apply-section-title"><i class="fas fa-check-circle mr-2 text-green-400"></i>Review Your Application</div>
+      <div id="applySummaryBody" class="text-sm text-gray-600 space-y-1.5"></div>
+    </div>
+
+    <!-- Error message -->
+    <div id="applyError" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600"></div>
+
+    <div class="flex justify-between">
+      <button class="apply-nav-btn secondary" onclick="applyGoStep(3)"><i class="fas fa-arrow-left mr-2"></i>Back</button>
+      <button class="apply-nav-btn primary" id="applySubmitBtn" onclick="applySubmit()">
+        <i class="fas fa-paper-plane mr-2"></i>Submit Application
+      </button>
+    </div>
+  </div>
+
+  <!-- ── SUCCESS screen ── -->
+  <div class="apply-step" id="applyStepDone">
+    <div class="apply-card text-center py-10">
+      <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style="background:rgba(201,168,76,0.12);">
+        <i class="fas fa-check-circle text-3xl" style="color:#C9A84C;"></i>
+      </div>
+      <h2 class="text-xl font-bold text-gray-800 mb-2">Application Submitted!</h2>
+      <p class="text-gray-500 text-sm max-w-sm mx-auto">Thank you for applying to Lion MD. Our team will review your application and reach out within 2–3 business days.</p>
+      <button onclick="hideApplyForm()" class="apply-nav-btn primary mt-6 mx-auto block">Back to Home</button>
+    </div>
+  </div>
+
+</div>
+</div><!-- end #applyScreen -->
 
 <!-- Mobile sidebar overlay -->
 <div id="mobileOverlay" onclick="closeMobileSidebar()"></div>
@@ -1110,6 +1413,273 @@ function showLoginForm() {
 function showLandingPage() {
   $('loginPanel').classList.add('hidden')
   $('landingPage').classList.remove('hidden')
+}
+
+// ════════════════════════════════════════════════════
+// PROVIDER APPLICATION FORM
+// ════════════════════════════════════════════════════
+
+let applyState = {
+  currentStep: 1,
+  photoB64: '', photoMime: '', photoName: '',
+  cvB64: '', cvMime: '', cvName: '', cvSize: 0,
+  selectedStates: new Set(),
+}
+
+function showApplyForm() {
+  // Reset state
+  applyState = { currentStep: 1, photoB64:'', photoMime:'', photoName:'', cvB64:'', cvMime:'', cvName:'', cvSize:0, selectedStates: new Set() }
+  // Hide login screen, show apply screen
+  $('loginScreen').classList.add('hidden')
+  $('applyScreen').classList.remove('hidden')
+  // Reset to step 1
+  document.querySelectorAll('.apply-step').forEach(s => s.classList.remove('active'))
+  $('applyStep1').classList.add('active')
+  // Reset indicators
+  for (let i=1;i<=4;i++) {
+    const ind = $('applyInd'+i)
+    if (ind) { ind.className = 'apply-step-indicator ' + (i===1?'active':'pending'); ind.textContent = i }
+    const conn = $('applyConn'+i)
+    if (conn) conn.className = 'apply-connector'
+  }
+  // Render state grid
+  applyRenderStateGrid('')
+  // Clear fields
+  ;['applyName','applyEmail','applyPhone','applyCompany','applySSN','applyEIN','applyNPI','applyNotes'].forEach(id => { const el=$(id); if(el) el.value='' })
+  const rg = $('applyRoleGroup'); if(rg) rg.value = ''
+  $('photoPlaceholder').classList.remove('hidden'); $('photoPreviewWrap').classList.add('hidden')
+  $('cvPlaceholder').classList.remove('hidden'); $('cvFileInfo').classList.add('hidden')
+  $('applyError').classList.add('hidden')
+  $('stateChipsSelected').innerHTML = ''
+  window.scrollTo(0,0)
+}
+
+function hideApplyForm() {
+  $('applyScreen').classList.add('hidden')
+  $('loginScreen').classList.remove('hidden')
+}
+
+function applyGoStep(n) {
+  // Validate current step before advancing
+  if (n > applyState.currentStep) {
+    const err = applyValidateStep(applyState.currentStep)
+    if (err) { applyShowError(err); return }
+  }
+  applyShowError('')
+  const prev = applyState.currentStep
+  applyState.currentStep = n
+
+  // Update step visibility
+  document.querySelectorAll('.apply-step').forEach(s => s.classList.remove('active'))
+  const stepEl = $('applyStep' + n) || $('applyStepDone')
+  if (stepEl) stepEl.classList.add('active')
+
+  // Update indicators
+  for (let i=1;i<=4;i++) {
+    const ind = $('applyInd'+i)
+    if (!ind) continue
+    if (i < n)      { ind.className='apply-step-indicator done';    ind.innerHTML='<i class="fas fa-check" style="font-size:11px;"></i>' }
+    else if (i===n) { ind.className='apply-step-indicator active';  ind.textContent=i }
+    else            { ind.className='apply-step-indicator pending';  ind.textContent=i }
+    const conn = $('applyConn'+i)
+    if (conn) conn.className = 'apply-connector' + (i < n ? ' done' : '')
+  }
+
+  // Build review summary on step 4
+  if (n === 4) applyBuildSummary()
+  window.scrollTo(0,0)
+}
+
+function applyValidateStep(step) {
+  if (step === 1) {
+    if (!($('applyName')?.value||'').trim()) return 'Please enter your full name.'
+    if (!($('applyEmail')?.value||'').trim()) return 'Please enter your email address.'
+    if (!($('applyPhone')?.value||'').trim()) return 'Please enter your phone number.'
+  }
+  if (step === 2) {
+    if (!($('applyRoleGroup')?.value||'').trim()) return 'Please select your provider type.'
+    const ssn = ($('applySSN')?.value||'').trim()
+    if (!ssn || ssn.length !== 4) return 'Please enter the last 4 digits of your SSN.'
+  }
+  if (step === 4) {
+    if (!applyState.cvB64) return 'Please upload your CV / Resume.'
+  }
+  return ''
+}
+
+function applyShowError(msg) {
+  const el = $('applyError')
+  if (!el) return
+  if (!msg) { el.classList.add('hidden'); return }
+  el.textContent = msg
+  el.classList.remove('hidden')
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' })
+}
+
+function applyBuildSummary() {
+  const lines = [
+    ['fa-user',         'Name',           ($('applyName')?.value||'').trim()],
+    ['fa-envelope',     'Email',          ($('applyEmail')?.value||'').trim()],
+    ['fa-phone',        'Phone',          ($('applyPhone')?.value||'').trim()],
+    ['fa-building',     'Company',        ($('applyCompany')?.value||'').trim() || '—'],
+    ['fa-id-badge',     'Provider Type',  ($('applyRoleGroup')?.value||'')],
+    ['fa-stethoscope',  'Specialty',      ($('applySpecialty')?.value||'').trim() || '—'],
+    ['fa-lock',         'SSN last 4',     ($('applySSN')?.value||'').trim() ? '•••• '+($('applySSN')?.value||'') : '—'],
+    ['fa-map-marker-alt','Licensed States', applyState.selectedStates.size ? [...applyState.selectedStates].sort().join(', ') : '—'],
+    ['fa-file-alt',     'CV / Resume',    applyState.cvName || '—'],
+    ['fa-camera',       'Photo',          applyState.photoName || 'Not provided'],
+  ]
+  $('applySummaryBody').innerHTML = lines.map(([icon,label,val]) => `
+    <div class="flex gap-2 py-1 border-b border-gray-50 last:border-0">
+      <i class="fas ${icon} w-4 text-center text-gray-300 mt-0.5 flex-shrink-0"></i>
+      <span class="text-gray-400 w-28 flex-shrink-0">${label}</span>
+      <span class="text-gray-700 font-medium break-all">${val}</span>
+    </div>
+  `).join('')
+}
+
+// ── State license selector ───────────────────────────────────────
+function applyRenderStateGrid(filter) {
+  const grid = $('stateGrid')
+  if (!grid) return
+  const q = (filter||'').toUpperCase().trim()
+  const visible = q ? US_STATES.filter(s => s.startsWith(q)) : US_STATES
+  grid.innerHTML = visible.map(s => {
+    const sel = applyState.selectedStates.has(s)
+    return `<button type="button" onclick="applyToggleState('${s}')"
+      class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all text-left
+             ${sel ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}">${s}</button>`
+  }).join('')
+}
+
+function applyToggleState(s) {
+  if (applyState.selectedStates.has(s)) applyState.selectedStates.delete(s)
+  else applyState.selectedStates.add(s)
+  applyRenderStateGrid($('stateSearch')?.value||'')
+  applyRenderStateChips()
+}
+
+function applyRenderStateChips() {
+  const el = $('stateChipsSelected')
+  if (!el) return
+  el.innerHTML = [...applyState.selectedStates].sort().map(s => `
+    <span class="state-chip" onclick="applyToggleState('${s}')">
+      ${s}<span class="chip-x"><i class="fas fa-times"></i></span>
+    </span>`).join('')
+}
+
+function applyFilterStates(q) {
+  applyRenderStateGrid(q)
+}
+
+// ── File handling ────────────────────────────────────────────────
+function applyReadFileB64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader()
+    r.onload = e => res(e.target.result.split(',')[1])
+    r.onerror = rej
+    r.readAsDataURL(file)
+  })
+}
+
+async function applyHandlePhoto(file) {
+  if (!file) return
+  if (file.size > 5*1024*1024) { applyShowError('Photo must be under 5 MB.'); return }
+  applyState.photoB64 = await applyReadFileB64(file)
+  applyState.photoMime = file.type
+  applyState.photoName = file.name
+  $('photoPreviewImg').src = 'data:' + file.type + ';base64,' + applyState.photoB64
+  $('photoPreviewName').textContent = file.name
+  $('photoPlaceholder').classList.add('hidden')
+  $('photoPreviewWrap').classList.remove('hidden')
+}
+
+async function applyHandleCV(file) {
+  if (!file) return
+  if (file.size > 10*1024*1024) { applyShowError('CV must be under 10 MB.'); return }
+  applyState.cvB64 = await applyReadFileB64(file)
+  applyState.cvMime = file.type
+  applyState.cvName = file.name
+  applyState.cvSize = file.size
+  $('cvFileName').textContent = file.name
+  $('cvPlaceholder').classList.add('hidden')
+  $('cvFileInfo').classList.remove('hidden')
+}
+
+// Drag and drop helpers
+function applyDragOver(e, zoneId) {
+  e.preventDefault(); $( zoneId).classList.add('drag-over')
+}
+function applyDragLeave(zoneId) { $(zoneId).classList.remove('drag-over') }
+function applyDropPhoto(e) {
+  e.preventDefault(); $('photoZone').classList.remove('drag-over')
+  const f = e.dataTransfer.files[0]; if(f) applyHandlePhoto(f)
+}
+function applyDropCV(e) {
+  e.preventDefault(); $('cvZone').classList.remove('drag-over')
+  const f = e.dataTransfer.files[0]; if(f) applyHandleCV(f)
+}
+
+// ── Submit ───────────────────────────────────────────────────────
+async function applySubmit() {
+  const err = applyValidateStep(4)
+  if (err) { applyShowError(err); return }
+
+  const btn = $('applySubmitBtn')
+  btn.disabled = true
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting…'
+  applyShowError('')
+
+  // Build ein_ssn: prefer EIN if provided, otherwise store last-4 SSN
+  const ein = ($('applyEIN')?.value||'').trim()
+  const ssn4 = ($('applySSN')?.value||'').trim()
+  const ein_ssn = ein || (ssn4 ? '•••-••-'+ssn4 : '')
+
+  // Build notes — append NPI if provided
+  const npi = ($('applyNPI')?.value||'').trim()
+  let notes = ($('applyNotes')?.value||'').trim()
+  if (npi) notes = (notes ? notes + '\n' : '') + 'NPI: ' + npi
+
+  const body = {
+    full_name:       ($('applyName')?.value||'').trim(),
+    email:           ($('applyEmail')?.value||'').trim(),
+    phone:           ($('applyPhone')?.value||'').trim(),
+    company_name:    ($('applyCompany')?.value||'').trim(),
+    role_group:      $('applyRoleGroup')?.value || '',
+    specialty:       ($('applySpecialty')?.value||'').trim(),
+    ein_ssn,
+    states_licensed: [...applyState.selectedStates].sort().join(', '),
+    notes,
+    photo_data:      applyState.photoB64,
+    photo_mime:      applyState.photoMime,
+    cv_data:         applyState.cvB64,
+    cv_name:         applyState.cvName,
+    cv_mime:         applyState.cvMime,
+    cv_size:         applyState.cvSize,
+  }
+
+  try {
+    const res = await fetch('/api/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Submission failed')
+    // Show success
+    document.querySelectorAll('.apply-step').forEach(s => s.classList.remove('active'))
+    $('applyStepDone').classList.add('active')
+    // Mark all indicators done
+    for(let i=1;i<=4;i++){
+      const ind=$('applyInd'+i); if(ind){ind.className='apply-step-indicator done';ind.innerHTML='<i class="fas fa-check" style="font-size:11px;"></i>'}
+      const conn=$('applyConn'+i); if(conn) conn.className='apply-connector done'
+    }
+    window.scrollTo(0,0)
+  } catch(e) {
+    applyShowError(e.message || 'Something went wrong. Please try again.')
+    btn.disabled = false
+    btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit Application'
+  }
 }
 
 function applyRoleUI(role, name) {
@@ -6641,13 +7211,18 @@ function obOverviewTab(c) {
     <div class="card p-5">
       <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2"><i class="fas fa-id-card text-blue-400"></i> Contact Info</h3>
       <div class="space-y-3 text-sm">
+        ${c.photo_data ? `
+        <div class="flex justify-center mb-4">
+          <img src="data:${c.photo_mime||'image/jpeg'};base64,${c.photo_data}" alt="${escHtml(c.full_name)}" class="w-20 h-20 rounded-full object-cover border-2" style="border-color:#C9A84C;">
+        </div>` : ''}
         ${obInfoRow('fa-envelope', 'Email', c.email || '—')}
         ${obInfoRow('fa-phone', 'Phone', c.phone || '—')}
         ${obInfoRow('fa-building', 'Company', c.company_name || '—')}
-        ${obInfoRow('fa-id-badge', 'EIN / SSN', c.ein_ssn ? '•••••' + c.ein_ssn.slice(-4) : '—')}
+        ${obInfoRow('fa-id-badge', 'EIN / SSN (last 4)', c.ein_ssn ? '•••• ' + c.ein_ssn.replace(/^.*(.{4})$/, '$1') : '—')}
         ${obInfoRow('fa-stethoscope', 'Specialty', c.specialty || '—')}
         ${obInfoRow('fa-users', 'Provider Group', c.role_group ? (c.role_group === 'NP' ? 'NP / ARNP / PA' : c.role_group === 'Physician' ? 'Physician (MD / DO)' : c.role_group) : '—')}
         ${obInfoRow('fa-user-tag', 'Type', c.contractor_type === 'owner' ? 'Owner' : 'Regular Contractor')}
+        ${c.states_licensed ? obInfoRow('fa-map-marker-alt', 'Licensed States', c.states_licensed) : ''}
         ${obInfoRow('fa-tag', 'Source', c.source || '—')}
       </div>
       <button onclick="obOpenEditModal()" class="mt-4 w-full btn-outline py-2 rounded-xl text-sm font-medium">
@@ -7285,6 +7860,10 @@ function obOpenEditModal() {
           <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Source</label>
           <input type="text" id="obEditSource" value="${escHtml(c.source||'')}" class="w-full text-sm">
         </div>
+        <div class="col-span-2">
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Licensed States</label>
+          <input type="text" id="obEditStates" value="${escHtml(c.states_licensed||'')}" placeholder="FL, TX, NY…" class="w-full text-sm">
+        </div>
       </div>
       <div class="flex gap-3 mt-5">
         <button onclick="obSaveEdit(${c.id})" class="btn-primary px-5 py-2.5 rounded-xl text-sm font-medium">Save Changes</button>
@@ -7469,6 +8048,7 @@ async function obSaveEdit(id) {
       contractor_type: $('obEditType')?.value || 'regular',
       role_group: $('obEditRoleGroup')?.value || '',
       source: $('obEditSource')?.value || '',
+      states_licensed: $('obEditStates')?.value || '',
     }
     await api(`/api/onboarding/candidates/${id}`, { method: 'PUT', body: JSON.stringify(body) })
     obCloseEditModal()

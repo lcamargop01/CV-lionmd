@@ -51,6 +51,33 @@ function isDeniedPaid(pk: string | null | undefined): boolean {
   return pk >= DENIED_PAID_FROM
 }
 
+// ──────────────────────────────────────────────
+// April 2026 mid-month CV rate change — ASYNC_TEXT_EMAIL only:
+//   Apr  1–15: CV pays $20  (first half, old rate)
+//   Apr 16–30: CV pays $15  (second half — same as rate table; no override needed)
+// Contractor fee is NEVER touched — always comes from the rate table.
+// Orderly and all other types always use the rate table as-is.
+// decision_date stored as "2026-04-09" or "Apr 9, 2026" etc.
+// ──────────────────────────────────────────────
+function aprilAsyncCvFee(
+  periodKey: string | null | undefined,
+  decisionDate: string | null | undefined,
+  defaultCvFee: number
+): number {
+  if ((periodKey || '') !== '2026-04') return defaultCvFee
+  if (!decisionDate) return defaultCvFee
+  // Parse day robustly from ISO (2026-04-09) or long form (Apr 9, 2026)
+  const isoMatch  = decisionDate.match(/-(\d{1,2})(?:T|\s|$)/)
+  const slashMatch = decisionDate.match(/\/(\d{1,2})\//)
+  const longMatch = decisionDate.match(/(\d{1,2}),?\s*202/)
+  const day = isoMatch   ? parseInt(isoMatch[1])
+            : slashMatch ? parseInt(slashMatch[1])
+            : longMatch  ? parseInt(longMatch[1])
+            : NaN
+  if (isNaN(day)) return defaultCvFee
+  return day < 15 ? 20 : defaultCvFee  // before Apr 15 (exclusive)=$20; Apr 15 onward=rate table
+}
+
 const app = new Hono<{ Bindings: Bindings }>()
 app.use('/api/*', cors())
 
@@ -196,7 +223,7 @@ app.post('/api/recalculate', async (c) => {
 
   while (true) {
     const rows = await c.env.DB.prepare(
-      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.doctor_name, c.session_id, c.decision_status, s.period_key as period_key
+      `SELECT c.id, c.visit_type, c.is_orderly, c.contractor_id, c.doctor_name, c.session_id, c.decision_status, c.decision_date, s.period_key as period_key
        FROM consults c ${whereClause} LIMIT ${PAGE_SIZE} OFFSET ${offset}`
     ).bind(...params).all()
 
@@ -216,19 +243,19 @@ app.post('/api/recalculate', async (c) => {
       }
 
       const ctype: string = (contractorId ? contractorTypeMap[contractorId] : null) || 'regular'
+      const rowPeriodKey = (row.period_key || period_key || '') as string
 
-      // CV fee: orderly always $17, else lookup by visit_type
-      let cvFee = 0
-      if (isOrderly) {
-        cvFee = ratesMap['ORDERLY']?.cv ?? 17
-      } else {
-        cvFee = ratesMap[vt.toUpperCase()]?.cv ?? 0
+      // CV fee: always from rate table; April ASYNC first-half override to $20
+      const vtKey2 = isOrderly ? 'ORDERLY' : vt.toUpperCase()
+      let cvFee = ratesMap[vtKey2]?.cv ?? 0
+      if (isOrderly || vt.toUpperCase() === 'ASYNC_TEXT_EMAIL') {
+        cvFee = aprilAsyncCvFee(rowPeriodKey, row.decision_date, cvFee)
       }
 
-      // CT fee: orderly always $10 (flat rate regardless of visit type), else normal contractor-type rate
+      // CT fee: always from rate table — never overridden
       let ctFee = 0
       if (isOrderly) {
-        ctFee = ctRatesMap[ctype]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 10
+        ctFee = ctRatesMap[ctype]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 0
       } else {
         ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
       }
@@ -236,7 +263,6 @@ app.post('/api/recalculate', async (c) => {
       // Denied and No Decision: zero out fees UNLESS the period is 2026-03+
       // (from March 2026 onward, denied cases are paid at normal rates)
       const decisionStatus = (row.decision_status || '').trim()
-      const rowPeriodKey = (row.period_key || period_key || '') as string
       if (decisionStatus === 'No Decision' ||
           (decisionStatus === 'Denied' && !isDeniedPaid(rowPeriodKey))) {
         cvFee = 0
@@ -361,6 +387,125 @@ app.delete('/api/contractors/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// ──────────────────────────────────────────────────────────────────
+// DOCTOR MATCH / QUICK-ADD  (unmatched doctors on dashboard)
+// ──────────────────────────────────────────────────────────────────
+
+// POST /api/doctors/match
+// Body: { doctor_name, contractor_id, period_key }
+// Assigns all consults with that doctor_name to the given contractor,
+// then re-runs fee calculation for those consults.
+app.post('/api/doctors/match', requireAdmin, async (c) => {
+  const { doctor_name, contractor_id, period_key } = await c.req.json() as any
+  if (!doctor_name || !contractor_id) return c.json({ error: 'doctor_name and contractor_id required' }, 400)
+
+  const db = c.env.DB
+
+  // 1. Reassign contractor_id on all matching consults (optionally scoped to period)
+  if (period_key) {
+    await db.prepare(`
+      UPDATE consults SET contractor_id=?
+      WHERE LOWER(TRIM(doctor_name))=LOWER(TRIM(?))
+        AND session_id IN (SELECT id FROM upload_sessions WHERE period_key=?)
+    `).bind(contractor_id, doctor_name, period_key).run()
+  } else {
+    await db.prepare(`
+      UPDATE consults SET contractor_id=? WHERE LOWER(TRIM(doctor_name))=LOWER(TRIM(?))
+    `).bind(contractor_id, doctor_name).run()
+  }
+
+  // 2. Re-run fee calculation for the affected consults
+  const ratesResult = await db.prepare('SELECT * FROM payment_rates').all()
+  const ratesMap: Record<string, { cv: number; ct: number }> = {}
+  for (const r of ratesResult.results as any[]) {
+    ratesMap[(r as any).visit_type] = { cv: (r as any).carevalidate_rate, ct: (r as any).contractor_rate }
+  }
+  const ctRatesResult = await db.prepare('SELECT * FROM contractor_type_rates').all()
+  const ctRatesMap: Record<string, Record<string, number>> = {}
+  for (const r of ctRatesResult.results as any[]) {
+    if (!ctRatesMap[(r as any).contractor_type]) ctRatesMap[(r as any).contractor_type] = {}
+    ctRatesMap[(r as any).contractor_type][(r as any).visit_type] = (r as any).contractor_rate
+  }
+  const ct = await db.prepare('SELECT contractor_type FROM contractors WHERE id=?').bind(contractor_id).first() as any
+  const ctype = ct?.contractor_type || 'regular'
+
+  const affected = await db.prepare(`
+    SELECT c.id, c.visit_type, c.is_orderly, c.decision_status, c.decision_date, s.period_key as period_key
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id=s.id
+    WHERE c.contractor_id=? AND LOWER(TRIM(c.doctor_name))=LOWER(TRIM(?))
+      ${period_key ? 'AND s.period_key=?' : ''}
+  `).bind(...(period_key ? [contractor_id, doctor_name, period_key] : [contractor_id, doctor_name])).all()
+
+  const stmts = []
+  for (const row of affected.results as any[]) {
+    const vt: string = row.visit_type || ''
+    const isOrd: boolean = row.is_orderly === 1
+    // CV fee: always from rate table; April ASYNC first-half override to $20
+    const vtKey2 = isOrd ? 'ORDERLY' : vt.toUpperCase()
+    let cvFee = ratesMap[vtKey2]?.cv ?? 0
+    if (isOrd || vt.toUpperCase() === 'ASYNC_TEXT_EMAIL') {
+      cvFee = aprilAsyncCvFee(row.period_key, row.decision_date, cvFee)
+    }
+    // CT fee: always from rate table — never overridden
+    let ctFee = 0
+    if (isOrd) {
+      ctFee = ctRatesMap[ctype]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 0
+    } else {
+      ctFee = ctRatesMap[ctype]?.[vt.toUpperCase()] ?? ratesMap[vt.toUpperCase()]?.ct ?? 0
+    }
+    const isDenied = row.decision_status === 'Denied'
+    if (isDenied && !isDeniedPaid(row.period_key || '')) ctFee = 0
+    stmts.push(db.prepare('UPDATE consults SET carevalidate_fee=?, contractor_fee=? WHERE id=? AND is_override=0')
+      .bind(cvFee, ctFee, row.id))
+  }
+
+  if (stmts.length > 0) {
+    for (let i = 0; i < stmts.length; i += 50) {
+      await db.batch(stmts.slice(i, i + 50))
+    }
+  }
+
+  return c.json({ ok: true, updated: affected.results.length })
+})
+
+// POST /api/doctors/quick-add
+// Body: { doctor_name, role_group, period_key }
+// Creates a new contractor from the doctor name, then calls /match logic inline
+app.post('/api/doctors/quick-add', requireAdmin, async (c) => {
+  const { doctor_name, role_group, period_key } = await c.req.json() as any
+  if (!doctor_name) return c.json({ error: 'doctor_name required' }, 400)
+
+  const db = c.env.DB
+
+  // Parse first/last from full name
+  const parts = doctor_name.trim().split(/\s+/)
+  const first = parts[0] || ''
+  const last  = parts.slice(1).join(' ') || ''
+
+  // Create contractor
+  const r = await db.prepare(
+    `INSERT INTO contractors (name, first_name, last_name, contractor_type, gusto_type, role_group, is_active)
+     VALUES (?,?,?,'regular','Individual',?,1)`
+  ).bind(doctor_name.trim(), first, last, role_group || '').run()
+  const contractor_id = r.meta.last_row_id
+
+  // Re-use the match logic by calling the same inner logic inline
+  if (period_key) {
+    await db.prepare(`
+      UPDATE consults SET contractor_id=?
+      WHERE LOWER(TRIM(doctor_name))=LOWER(TRIM(?))
+        AND session_id IN (SELECT id FROM upload_sessions WHERE period_key=?)
+    `).bind(contractor_id, doctor_name, period_key).run()
+  } else {
+    await db.prepare(`
+      UPDATE consults SET contractor_id=? WHERE LOWER(TRIM(doctor_name))=LOWER(TRIM(?))
+    `).bind(contractor_id, doctor_name).run()
+  }
+
+  return c.json({ ok: true, contractor_id, name: doctor_name.trim() })
+})
+
 // PATCH /api/contractors/:id/toggle-active — flip is_active 0↔1
 app.patch('/api/contractors/:id/toggle-active', async (c) => {
   const id = c.req.param('id')
@@ -409,7 +554,7 @@ app.post('/api/contractors/merge', async (c) => {
 
     while (true) {
       const rows = await c.env.DB.prepare(
-        `SELECT id, visit_type, is_orderly, decision_status, session_id FROM consults
+        `SELECT id, visit_type, is_orderly, decision_status, decision_date, session_id FROM consults
          WHERE contractor_id=? AND (is_override IS NULL OR is_override=0)
          LIMIT ${PAGE_SIZE} OFFSET ${offset}`
       ).bind(mergeId).all()
@@ -422,13 +567,17 @@ app.post('/api/contractors/merge', async (c) => {
         const isOrderly: boolean = row.is_orderly === 1
         const rowPk: string = sessionPkMap[row.session_id] || ''
 
-        // CV fee (same regardless of contractor type)
-        let cvFee = isOrderly ? (ratesMap['ORDERLY']?.cv ?? 17) : (ratesMap[vt]?.cv ?? 0)
+        // CV fee: always from rate table; April ASYNC first-half override to $20
+        const vtKey2 = isOrderly ? 'ORDERLY' : vt
+        let cvFee = ratesMap[vtKey2]?.cv ?? 0
+        if (isOrderly || vt === 'ASYNC_TEXT_EMAIL') {
+          cvFee = aprilAsyncCvFee(rowPk, row.decision_date, cvFee)
+        }
 
-        // CT fee using the KEEPER's contractor type
+        // CT fee: always from rate table — never overridden
         let ctFee: number
         if (isOrderly) {
-          ctFee = ctRatesMap[keeperType]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 10
+          ctFee = ctRatesMap[keeperType]?.['ORDERLY'] ?? ratesMap['ORDERLY']?.ct ?? 0
         } else {
           ctFee = ctRatesMap[keeperType]?.[vt] ?? ratesMap[vt]?.ct ?? 0
         }
@@ -735,6 +884,10 @@ async function insertRows(
       const vtKey = orderly ? 'ORDERLY' : (row.visit_type || '').toUpperCase()
       let cvFee = fees.cv
       let ctFee = (ctRatesMap[ctype]?.[vtKey] !== undefined) ? ctRatesMap[ctype][vtKey] : fees.ct
+      // April ASYNC first-half CV override to $20 (CT fee never touched)
+      if (orderly || (row.visit_type || '').toUpperCase() === 'ASYNC_TEXT_EMAIL') {
+        cvFee = aprilAsyncCvFee(periodKeyForDenied, row.decision_date, cvFee)
+      }
       // No Decision always $0; Denied is $0 only for periods before 2026-03
       const status = (row.decision_status || '').trim()
       if (status === 'No Decision' ||
@@ -917,6 +1070,22 @@ app.get('/api/consults', async (c) => {
   ).bind(...params, parseInt(limit), offset).all()
 
   return c.json({ total: countResult?.total || 0, page: parseInt(page), limit: parseInt(limit), data: rows.results })
+})
+
+// Distinct doctor names for the filter dropdown (scoped to current period)
+app.get('/api/consults/doctors', async (c) => {
+  const period_key = c.req.query('period_key')
+  let where = 'WHERE c.doctor_name IS NOT NULL AND c.doctor_name != \'\''
+  const params: any[] = []
+  if (period_key) { where += ' AND s.period_key=?'; params.push(period_key) }
+  const rows = await c.env.DB.prepare(
+    `SELECT DISTINCT c.doctor_name
+     FROM consults c
+     LEFT JOIN upload_sessions s ON c.session_id = s.id
+     ${where}
+     ORDER BY c.doctor_name ASC`
+  ).bind(...params).all()
+  return c.json((rows.results as any[]).map(r => r.doctor_name))
 })
 
 // Distinct organizations for the filter dropdown (scoped to current period)
@@ -1214,18 +1383,17 @@ app.get('/api/paystub/:session_id/:contractor_id', async (c) => {
 //   Commission = 25% × (total CV pays us − total we pay contractors)
 //
 // Special adjustment for Ana Lisa Carr:
-//   Before computing her net contribution, subtract
-//   (count of Ringside Health consults × $20) from her CV total.
+//   Subtract the total CV fees paid for Ringside Health consults
+//   from her net before applying the 25% commission rate.
 //
 // Christopher Garcia himself is excluded from the base calculation.
 // ──────────────────────────────────────────────
-const COMMISSION_RATE          = 0.25   // 25% of net (CV − contractor pay)
-const RINGSIDE_DEDUCTION_RATE  = 20     // $20 per Ringside Health consult
+const COMMISSION_RATE = 0.25   // 25% of net (CV − contractor pay)
 
 async function calcCommission(db: D1Database, pk: string) {
-  // 1. Count Ringside Health consults assigned to Ana Lisa Carr
+  // 1. Sum CV fees for Ringside Health consults assigned to Ana Lisa Carr
   const ringsideRow = await db.prepare(`
-    SELECT COUNT(*) as ringside_count
+    SELECT COUNT(*) as ringside_count, SUM(c.carevalidate_fee) as ringside_cv
     FROM consults c
     LEFT JOIN upload_sessions s  ON c.session_id = s.id
     LEFT JOIN contractors     ct ON c.contractor_id = ct.id
@@ -1237,7 +1405,7 @@ async function calcCommission(db: D1Database, pk: string) {
   `).bind(pk).first() as any
 
   const ringside_count     = ringsideRow?.ringside_count || 0
-  const ringside_deduction = ringside_count * RINGSIDE_DEDUCTION_RATE
+  const ringside_deduction = ringsideRow?.ringside_cv    || 0
 
   // 2. Per-contractor breakdown — all contractors except Garcia
   const rows = await db.prepare(`
@@ -1268,10 +1436,10 @@ async function calcCommission(db: D1Database, pk: string) {
     const isAnaLisa = (r.contractor_name || '').toLowerCase().includes('ana lisa carr')
     const cv  = r.cv_total         || 0
     const pay = r.contractor_total || 0
-    // Formula for every contractor: (cv - pay) * 25%
-    // Ana Lisa only: subtract (ringside_count * $20) AFTER applying 25%
-    const net        = cv - pay
-    const commission = net * COMMISSION_RATE - (isAnaLisa ? ringside_deduction : 0)
+    // Formula: (cv - pay) * 25%
+    // Ana Lisa only: subtract total Ringside CV fees from net BEFORE applying 25%
+    const net        = cv - pay - (isAnaLisa ? ringside_deduction : 0)
+    const commission = net * COMMISSION_RATE
     return {
       contractor_id:      r.contractor_id,
       contractor_name:    r.contractor_name,
@@ -1563,6 +1731,7 @@ async function ensureOnboardingSchema(db: D1Database) {
       phone TEXT,
       ein_ssn TEXT,
       contractor_type TEXT DEFAULT 'regular',
+      role_group TEXT DEFAULT '',
       specialty TEXT,
       status TEXT DEFAULT 'new',
       source TEXT,
@@ -1645,6 +1814,13 @@ async function ensureOnboardingSchema(db: D1Database) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `).run().catch(() => {})
+
+  // Add role_group column to existing onboarding_candidates tables (migration)
+  await db.prepare(`ALTER TABLE onboarding_candidates ADD COLUMN role_group TEXT DEFAULT ''`).run().catch(() => {})
+  // Add states_licensed + photo columns (migration)
+  await db.prepare(`ALTER TABLE onboarding_candidates ADD COLUMN states_licensed TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE onboarding_candidates ADD COLUMN photo_data TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE onboarding_candidates ADD COLUMN photo_mime TEXT DEFAULT ''`).run().catch(() => {})
 
   // seed a default contract template if none exists
   const tmplCount = await db.prepare('SELECT COUNT(*) as c FROM contract_templates').first() as any
@@ -1735,12 +1911,14 @@ app.post('/api/onboarding/candidates', async (c) => {
   const body = await c.req.json() as any
   const r = await c.env.DB.prepare(`
     INSERT INTO onboarding_candidates
-      (full_name, company_name, email, phone, ein_ssn, contractor_type, specialty, status, source, notes)
-    VALUES (?,?,?,?,?,?,?,?,?,?)
+      (full_name, company_name, email, phone, ein_ssn, contractor_type, role_group, specialty, status, source, notes, states_licensed, photo_data, photo_mime)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).bind(
     body.full_name || '', body.company_name || '', body.email || '',
     body.phone || '', body.ein_ssn || '', body.contractor_type || 'regular',
-    body.specialty || '', body.status || 'new', body.source || '', body.notes || ''
+    body.role_group || '',
+    body.specialty || '', body.status || 'new', body.source || '', body.notes || '',
+    body.states_licensed || '', body.photo_data || '', body.photo_mime || ''
   ).run()
   return c.json({ ok: true, id: r.meta.last_row_id })
 })
@@ -1750,11 +1928,12 @@ app.put('/api/onboarding/candidates/:id', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json() as any
   // Build update dynamically for any fields passed
-  const allowed = ['full_name','company_name','email','phone','ein_ssn','contractor_type','specialty',
+  const allowed = ['full_name','company_name','email','phone','ein_ssn','contractor_type','role_group','specialty',
     'status','source','notes','payroll_sent','payroll_sent_at','contract_sent','contract_sent_at',
     'contract_signed','contract_signed_at','training_scheduled','training_scheduled_at',
     'training_completed','training_completed_at','docs_received','docs_received_at',
-    'resume_summary','resume_key_points','resume_text','converted_contractor_id','converted_at']
+    'resume_summary','resume_key_points','resume_text','converted_contractor_id','converted_at',
+    'states_licensed','photo_data','photo_mime']
   const sets: string[] = []
   const vals: any[] = []
   for (const k of allowed) {
@@ -1765,6 +1944,35 @@ app.put('/api/onboarding/candidates/:id', async (c) => {
   vals.push(id)
   await c.env.DB.prepare(`UPDATE onboarding_candidates SET ${sets.join(',')} WHERE id=?`).bind(...vals).run()
   return c.json({ ok: true })
+})
+
+// ── Public Application (no auth required) ───────────────────────
+app.post('/api/apply', async (c) => {
+  await ensureOnboardingSchema(c.env.DB)
+  const body = await c.req.json() as any
+  if (!body.full_name || !body.email) return c.json({ error: 'Name and email are required' }, 400)
+  // Create the candidate record with status 'new' and source 'Public Application'
+  const r = await c.env.DB.prepare(`
+    INSERT INTO onboarding_candidates
+      (full_name, company_name, email, phone, ein_ssn, role_group, specialty,
+       status, source, notes, states_licensed, photo_data, photo_mime)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    body.full_name || '', body.company_name || '', body.email || '',
+    body.phone || '', body.ein_ssn || '', body.role_group || '',
+    body.specialty || '', 'new', 'Public Application', body.notes || '',
+    body.states_licensed || '', body.photo_data || '', body.photo_mime || ''
+  ).run()
+  const candidateId = r.meta.last_row_id
+  // Attach CV/resume document if provided
+  if (body.cv_data && body.cv_name) {
+    await c.env.DB.prepare(`
+      INSERT INTO onboarding_documents (candidate_id, doc_type, file_name, file_data, file_size, mime_type)
+      VALUES (?,?,?,?,?,?)
+    `).bind(candidateId, 'resume', body.cv_name, body.cv_data,
+            body.cv_size || 0, body.cv_mime || 'application/pdf').run()
+  }
+  return c.json({ ok: true, id: candidateId })
 })
 
 app.delete('/api/onboarding/candidates/:id', async (c) => {
@@ -2242,9 +2450,15 @@ app.get('/api/auth/invite/:token', async (c) => {
 // ── GET /api/admin/users ─────────────────────────────────────────
 app.get('/api/admin/users', requireAdmin, async (c) => {
   await ensureAuthSchema(c.env.DB)
-  const rows = await c.env.DB.prepare(
-    'SELECT id, name, email, role, is_active, must_set_password, last_login, created_at FROM portal_users ORDER BY created_at DESC'
-  ).all()
+  await ensureProviderSchema(c.env.DB)
+  const rows = await c.env.DB.prepare(`
+    SELECT pu.id, pu.name, pu.email, pu.role, pu.is_active, pu.must_set_password,
+           pu.last_login, pu.created_at, pu.contractor_id,
+           ct.name AS contractor_name
+    FROM portal_users pu
+    LEFT JOIN contractors ct ON ct.id = pu.contractor_id
+    ORDER BY pu.created_at DESC
+  `).all()
   return c.json(rows.results)
 })
 
@@ -2255,7 +2469,7 @@ app.post('/api/admin/users', requireAdmin, async (c) => {
   const body = await c.req.json() as any
   const { name, email, role } = body
   if (!name || !email || !role) return c.json({ error: 'name, email, and role required' }, 400)
-  const validRoles = ['admin', 'carevalidate', 'onboarding']
+  const validRoles = ['admin', 'carevalidate', 'onboarding', 'provider']
   if (!validRoles.includes(role)) return c.json({ error: 'Invalid role' }, 400)
 
   // Check duplicate
@@ -2276,7 +2490,7 @@ app.post('/api/admin/users', requireAdmin, async (c) => {
 app.put('/api/admin/users/:id', requireAdmin, async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json() as any
-  const validRoles = ['admin', 'carevalidate', 'onboarding']
+  const validRoles = ['admin', 'carevalidate', 'onboarding', 'provider']
   if (body.role && !validRoles.includes(body.role)) return c.json({ error: 'Invalid role' }, 400)
 
   const sets: string[] = []
@@ -2314,6 +2528,294 @@ app.post('/api/admin/users/:id/reset-invite', requireAdmin, async (c) => {
     `UPDATE portal_users SET invite_token=?, must_set_password=1, password_hash=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
   ).bind(inviteToken, c.req.param('id')).run()
   return c.json({ ok: true, invite_token: inviteToken })
+})
+
+// ════════════════════════════════════════════════════════════════════
+// PROVIDER MODULE
+// Tables: provider_licenses  (contractor profile + state licensing)
+// portal_users gets: contractor_id column (links a provider user → contractor row)
+// ════════════════════════════════════════════════════════════════════
+
+async function ensureProviderSchema(db: D1Database) {
+  // Link portal_users → contractors
+  await db.prepare(`ALTER TABLE portal_users ADD COLUMN contractor_id INTEGER`).run().catch(() => {})
+  // Link portal_users → phone / bio
+  await db.prepare(`ALTER TABLE portal_users ADD COLUMN phone TEXT DEFAULT ''`).run().catch(() => {})
+  // State license table
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS provider_licenses (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      contractor_id INTEGER NOT NULL,
+      state         TEXT    NOT NULL,
+      license_number TEXT   DEFAULT '',
+      license_type  TEXT    DEFAULT '',
+      expiry_date   TEXT    DEFAULT '',   -- 'YYYY-MM-DD'
+      status        TEXT    DEFAULT 'active', -- active|expired|pending
+      notes         TEXT    DEFAULT '',
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (contractor_id) REFERENCES contractors(id)
+    )
+  `).run().catch(() => {})
+  // CV / document uploads  (base64 stored as blob ref URL)
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN cv_url TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN cv_filename TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN cv_updated_at DATETIME`).run().catch(() => {})
+  // Extra profile fields
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN phone TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN bio TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN address TEXT DEFAULT ''`).run().catch(() => {})
+}
+
+// ── requireProvider: auth middleware — admin OR provider role ─────
+async function requireProvider(c: any, next: any) {
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
+  const payload = await verifyToken(token)
+  if (!payload) return c.json({ error: 'Invalid or expired token' }, 401)
+  if (payload.role !== 'admin' && payload.role !== 'provider') return c.json({ error: 'Access denied' }, 403)
+  c.set('user', payload)
+  return next()
+}
+
+// ── GET /api/provider/profile ─────────────────────────────────────
+// Provider fetches their own linked contractor profile
+app.get('/api/provider/profile', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  // Find contractor linked to this user
+  const pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
+  const contractor = await c.env.DB.prepare(`SELECT * FROM contractors WHERE id=?`).bind(pu.contractor_id).first() as any
+  if (!contractor) return c.json({ error: 'Contractor record not found' }, 404)
+  const licenses = await c.env.DB.prepare(
+    `SELECT * FROM provider_licenses WHERE contractor_id=? ORDER BY state ASC`
+  ).bind(pu.contractor_id).all()
+  return c.json({ contractor, licenses: licenses.results, portal_user: { id: pu.id, name: pu.name, email: pu.email, phone: pu.phone || '' } })
+})
+
+// ── PUT /api/provider/profile ─────────────────────────────────────
+// Provider updates their own contact info — writes through to the contractors table
+// so admin sees the same data immediately.
+app.put('/api/provider/profile', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
+  const { phone, bio, address, email } = await c.req.json() as any
+
+  // 1. Write all editable fields to the contractors row (what admin sees)
+  const sets: string[] = ['phone=?', 'bio=?', 'address=?']
+  const vals: any[] = [phone || '', bio || '', address || '']
+  if (email) { sets.push('email=?'); vals.push(email) }
+  vals.push(pu.contractor_id)
+  await c.env.DB.prepare(`UPDATE contractors SET ${sets.join(', ')} WHERE id=?`).bind(...vals).run()
+
+  // 2. Mirror phone (and email if changed) to portal_users so login email stays current
+  if (email) {
+    await c.env.DB.prepare(
+      `UPDATE portal_users SET phone=?, email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(phone || '', email, u.id).run()
+  } else {
+    await c.env.DB.prepare(
+      `UPDATE portal_users SET phone=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(phone || '', u.id).run()
+  }
+  return c.json({ ok: true })
+})
+
+// ── POST /api/provider/cv ─────────────────────────────────────────
+// Provider uploads their CV (base64 encoded, stored as data URL)
+app.post('/api/provider/cv', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
+  const { filename, data_url } = await c.req.json() as any
+  if (!data_url || !filename) return c.json({ error: 'filename and data_url required' }, 400)
+  await c.env.DB.prepare(
+    `UPDATE contractors SET cv_url=?, cv_filename=?, cv_updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(data_url, filename, pu.contractor_id).run()
+  return c.json({ ok: true })
+})
+
+// ── GET /api/provider/licenses ────────────────────────────────────
+app.get('/api/provider/licenses', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT contractor_id FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json([])
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM provider_licenses WHERE contractor_id=? ORDER BY state ASC`
+  ).bind(pu.contractor_id).all()
+  return c.json(rows.results)
+})
+
+// ── POST /api/provider/licenses ───────────────────────────────────
+app.post('/api/provider/licenses', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT contractor_id FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
+  const { state, license_number, license_type, expiry_date, status, notes } = await c.req.json() as any
+  if (!state) return c.json({ error: 'state required' }, 400)
+  const r = await c.env.DB.prepare(
+    `INSERT INTO provider_licenses (contractor_id, state, license_number, license_type, expiry_date, status, notes) VALUES (?,?,?,?,?,?,?)`
+  ).bind(pu.contractor_id, state, license_number||'', license_type||'', expiry_date||'', status||'active', notes||'').run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+// ── PUT /api/provider/licenses/:id ───────────────────────────────
+app.put('/api/provider/licenses/:id', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const id = c.req.param('id')
+  const { state, license_number, license_type, expiry_date, status, notes } = await c.req.json() as any
+  await c.env.DB.prepare(
+    `UPDATE provider_licenses SET state=?, license_number=?, license_type=?, expiry_date=?, status=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(state, license_number||'', license_type||'', expiry_date||'', status||'active', notes||'', id).run()
+  return c.json({ ok: true })
+})
+
+// ── DELETE /api/provider/licenses/:id ────────────────────────────
+app.delete('/api/provider/licenses/:id', requireProvider, async (c) => {
+  await c.env.DB.prepare(`DELETE FROM provider_licenses WHERE id=?`).bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// ── GET /api/provider/payroll ─────────────────────────────────────
+// Provider fetches their own payroll history (periods + lifetime totals)
+app.get('/api/provider/payroll', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT contractor_id FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
+  const cid = pu.contractor_id
+
+  const periods = await c.env.DB.prepare(`
+    SELECT
+      s.period_key,
+      s.period_label,
+      s.period_month,
+      s.period_year,
+      COUNT(c.id)               AS total_cases,
+      SUM(c.contractor_fee)     AS total_pay,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type='ASYNC_TEXT_EMAIL' THEN 1 ELSE 0 END) AS async_count,
+      SUM(CASE WHEN c.is_orderly=0 AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON') THEN 1 ELSE 0 END) AS sync_count,
+      SUM(CASE WHEN c.is_orderly=1 THEN 1 ELSE 0 END) AS orderly_count,
+      SUM(CASE WHEN c.decision_status='Approved' THEN 1 ELSE 0 END) AS approved_count,
+      SUM(CASE WHEN c.decision_status='Denied'   THEN 1 ELSE 0 END) AS denied_count
+    FROM consults c
+    LEFT JOIN upload_sessions s ON c.session_id = s.id
+    WHERE c.contractor_id = ?
+      AND c.decision_status != 'No Decision'
+    GROUP BY s.period_key, s.period_label, s.period_month, s.period_year
+    ORDER BY s.period_year DESC, s.period_month DESC
+  `).bind(cid).all()
+
+  const totals = await c.env.DB.prepare(`
+    SELECT
+      COUNT(c.id)           AS total_cases,
+      SUM(c.contractor_fee) AS total_pay,
+      SUM(CASE WHEN c.decision_status='Approved' THEN 1 ELSE 0 END) AS approved_count,
+      SUM(CASE WHEN c.decision_status='Denied'   THEN 1 ELSE 0 END) AS denied_count
+    FROM consults c
+    WHERE c.contractor_id = ?
+      AND c.decision_status != 'No Decision'
+  `).bind(cid).first() as any
+
+  return c.json({ periods: periods.results, totals })
+})
+
+// ── GET /api/provider/consults ────────────────────────────────────
+// Provider fetches their own consult records (paginated, filterable by period)
+app.get('/api/provider/consults', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT contractor_id FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
+  const cid = pu.contractor_id
+
+  const period_key = c.req.query('period_key')
+  const page       = parseInt(c.req.query('page')  || '1')
+  const limit      = parseInt(c.req.query('limit') || '50')
+  const search     = c.req.query('search')
+  const offset     = (page - 1) * limit
+
+  let where = `WHERE c.contractor_id = ? AND c.decision_status != 'No Decision'`
+  const params: any[] = [cid]
+
+  if (period_key) { where += ' AND s.period_key=?'; params.push(period_key) }
+  if (search) {
+    where += ' AND (c.patient_name LIKE ? OR c.case_id_short LIKE ? OR c.organization_name LIKE ?)'
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`)
+  }
+
+  const countResult = await c.env.DB.prepare(
+    `SELECT COUNT(*) as total FROM consults c
+     LEFT JOIN upload_sessions s ON c.session_id = s.id ${where}`
+  ).bind(...params).first() as any
+
+  const rows = await c.env.DB.prepare(
+    `SELECT c.decision_date, c.patient_name, c.organization_name, c.visit_type,
+            c.decision_status, c.contractor_fee, c.is_orderly, c.case_id_short,
+            s.period_key, s.period_label
+     FROM consults c
+     LEFT JOIN upload_sessions s ON c.session_id = s.id
+     ${where}
+     ORDER BY c.decision_date DESC, c.id DESC
+     LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all()
+
+  return c.json({ total: countResult?.total || 0, page, limit, data: rows.results })
+})
+
+// ── Admin: GET /api/admin/contractors/:id/licenses ────────────────
+app.get('/api/admin/contractors/:id/licenses', requireAdmin, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM provider_licenses WHERE contractor_id=? ORDER BY state ASC`
+  ).bind(c.req.param('id')).all()
+  return c.json(rows.results)
+})
+
+// ── Admin: POST /api/admin/contractors/:id/licenses ───────────────
+app.post('/api/admin/contractors/:id/licenses', requireAdmin, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const cid = c.req.param('id')
+  const { state, license_number, license_type, expiry_date, status, notes } = await c.req.json() as any
+  if (!state) return c.json({ error: 'state required' }, 400)
+  const r = await c.env.DB.prepare(
+    `INSERT INTO provider_licenses (contractor_id, state, license_number, license_type, expiry_date, status, notes) VALUES (?,?,?,?,?,?,?)`
+  ).bind(cid, state, license_number||'', license_type||'', expiry_date||'', status||'active', notes||'').run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+// ── Admin: PUT /api/admin/licenses/:id ───────────────────────────
+app.put('/api/admin/licenses/:id', requireAdmin, async (c) => {
+  const id = c.req.param('id')
+  const { state, license_number, license_type, expiry_date, status, notes } = await c.req.json() as any
+  await c.env.DB.prepare(
+    `UPDATE provider_licenses SET state=?, license_number=?, license_type=?, expiry_date=?, status=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(state, license_number||'', license_type||'', expiry_date||'', status||'active', notes||'', id).run()
+  return c.json({ ok: true })
+})
+
+// ── Admin: DELETE /api/admin/licenses/:id ────────────────────────
+app.delete('/api/admin/licenses/:id', requireAdmin, async (c) => {
+  await c.env.DB.prepare(`DELETE FROM provider_licenses WHERE id=?`).bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// ── Admin: PUT /api/admin/users/:id/link-contractor ──────────────
+// Links a portal_user to a contractor record (for provider role)
+app.put('/api/admin/users/:id/link-contractor', requireAdmin, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const { contractor_id } = await c.req.json() as any
+  await c.env.DB.prepare(
+    `UPDATE portal_users SET contractor_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(contractor_id || null, c.req.param('id')).run()
+  return c.json({ ok: true })
 })
 
 // ── GET /api/auth/check-bootstrap ───────────────────────────────
@@ -2392,24 +2894,44 @@ app.post('/api/onboarding/candidates/:id/convert', async (c) => {
     return c.json({ ok: true, contractor_id: candidate.converted_contractor_id, already_converted: true })
   }
 
-  // Create contractor record
+  // Ensure first_name / last_name / role_group columns exist on contractors
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN first_name TEXT DEFAULT ''`).run().catch(() => {})
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN last_name TEXT DEFAULT ''`).run().catch(() => {})
+  await c.env.DB.prepare(`ALTER TABLE contractors ADD COLUMN role_group TEXT DEFAULT ''`).run().catch(() => {})
+
+  // Parse first / last from full_name
+  const nameParts = (candidate.full_name || '').trim().split(/\s+/)
+  const firstName = nameParts[0] || ''
+  const lastName  = nameParts.slice(1).join(' ') || ''
+
+  // Create contractor record — carry role_group from the onboarding candidate
   const r = await c.env.DB.prepare(`
-    INSERT INTO contractors (name, company, ein_ssn, email, contractor_type, is_active)
-    VALUES (?,?,?,?,?,1)
+    INSERT INTO contractors (name, first_name, last_name, company, ein_ssn, email, contractor_type, role_group, is_active)
+    VALUES (?,?,?,?,?,?,?,?,1)
   `).bind(
     candidate.full_name,
+    firstName,
+    lastName,
     candidate.company_name || '',
     candidate.ein_ssn || '',
     candidate.email || '',
-    candidate.contractor_type || 'regular'
+    candidate.contractor_type || 'regular',
+    candidate.role_group || ''
   ).run()
 
   const contractorId = r.meta.last_row_id
 
-  // Mark candidate as converted
+  // Mark candidate as hired/converted
   await c.env.DB.prepare(
     `UPDATE onboarding_candidates SET converted_contractor_id=?, converted_at=CURRENT_TIMESTAMP, status='hired', updated_at=CURRENT_TIMESTAMP WHERE id=?`
   ).bind(contractorId, id).run()
+
+  // If a portal_user was invited for this candidate's email, activate them now
+  if (candidate.email) {
+    await c.env.DB.prepare(
+      `UPDATE portal_users SET is_active=1, contractor_id=? WHERE email=? AND is_active=0`
+    ).bind(contractorId, candidate.email).run().catch(() => {})
+  }
 
   return c.json({ ok: true, contractor_id: contractorId })
 })
