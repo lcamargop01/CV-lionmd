@@ -349,8 +349,334 @@
 </div>
 
 <!-- Login Screen -->
-<div id="loginScreen" class="fixed inset-0 z-50 flex items-center justify-center" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);">
+<div id="loginScreen" class="fixed inset-0 z-50 flex items-center justify-center" style="background:#ffffff;">
+
+  <!-- ══════════════════════════════════════════
+       LANDING PAGE (shown first)
+  ══════════════════════════════════════════ -->
+  <div id="landingPage" class="w-full min-h-screen flex flex-col lg:flex-row">
+
+    <style>
+      /* Landing page styles */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+      #landingPage { font-family: 'Inter', sans-serif; }
+
+      /* ── Left panel ── */
+      .landing-left {
+        background: linear-gradient(155deg, #0b1120 0%, #1a1a2e 45%, #0f2d5a 100%);
+        position: relative;
+        overflow: hidden;
+      }
+      /* Glow orbs */
+      .landing-left::before {
+        content: '';
+        position: absolute;
+        top: -140px; right: -100px;
+        width: 520px; height: 520px;
+        background: radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 68%);
+        pointer-events: none;
+      }
+      .landing-left::after {
+        content: '';
+        position: absolute;
+        bottom: -100px; left: -60px;
+        width: 360px; height: 360px;
+        background: radial-gradient(circle, rgba(15,45,90,0.8) 0%, transparent 70%);
+        pointer-events: none;
+      }
+      /* Dot-grid texture overlay */
+      .landing-left-dots {
+        position: absolute; inset: 0;
+        background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+        background-size: 28px 28px;
+        pointer-events: none;
+      }
+      /* Decorative ring */
+      .landing-ring {
+        position: absolute;
+        bottom: -180px; right: -180px;
+        width: 480px; height: 480px;
+        border-radius: 50%;
+        border: 1px solid rgba(201,168,76,0.12);
+        pointer-events: none;
+      }
+      .landing-ring-2 {
+        position: absolute;
+        bottom: -240px; right: -240px;
+        width: 620px; height: 620px;
+        border-radius: 50%;
+        border: 1px solid rgba(201,168,76,0.06);
+        pointer-events: none;
+      }
+
+      .landing-gold-bar {
+        width: 44px; height: 3px;
+        background: linear-gradient(90deg, #C9A84C, #f6c84a);
+        border-radius: 2px;
+        margin-bottom: 22px;
+      }
+
+      .feature-pill {
+        display: inline-flex; align-items: center; gap: 7px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 999px;
+        padding: 5px 13px;
+        font-size: 11.5px; color: rgba(255,255,255,0.68);
+        letter-spacing: 0.01em;
+        transition: background 0.18s, border-color 0.18s;
+      }
+      .feature-pill:hover {
+        background: rgba(201,168,76,0.12);
+        border-color: rgba(201,168,76,0.3);
+        color: rgba(255,255,255,0.9);
+      }
+      .feature-pill i { color: #C9A84C; font-size: 10px; }
+
+      .landing-divider {
+        width: 100%; height: 1px;
+        background: rgba(255,255,255,0.07);
+        margin: 24px 0;
+      }
+
+      .landing-stat-item {
+        padding-left: 14px;
+        border-left: 2px solid rgba(201,168,76,0.35);
+      }
+
+      /* ── Right panel ── */
+      .landing-right {
+        background: #f6f7fb;
+      }
+
+      .cta-card {
+        background: #ffffff;
+        border: 1.5px solid #e5e8f0;
+        border-radius: 14px;
+        padding: 18px 20px;
+        display: flex; align-items: center; gap: 14px;
+        cursor: pointer;
+        transition: border-color 0.2s, box-shadow 0.2s, transform 0.18s;
+        text-decoration: none;
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        text-align: left;
+      }
+      .cta-card:hover {
+        border-color: #C9A84C;
+        box-shadow: 0 6px 28px rgba(201,168,76,0.13), 0 1px 6px rgba(0,0,0,0.05);
+        transform: translateY(-2px);
+      }
+
+      /* Primary (dark) card */
+      .cta-card.cta-primary {
+        background: linear-gradient(135deg, #141b2d 0%, #0f3460 100%);
+        border-color: rgba(255,255,255,0.07);
+        box-shadow: 0 4px 20px rgba(10,20,50,0.25);
+      }
+      .cta-card.cta-primary:hover {
+        border-color: #C9A84C;
+        box-shadow: 0 10px 36px rgba(10,30,80,0.4);
+        transform: translateY(-2px);
+      }
+      /* Shine sweep on hover */
+      .cta-card.cta-primary::after {
+        content: '';
+        position: absolute; top: 0; left: -70%;
+        width: 50%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+        transform: skewX(-18deg);
+        transition: left 0.5s;
+        pointer-events: none;
+      }
+      .cta-card.cta-primary:hover::after { left: 130%; }
+
+      .cta-icon {
+        width: 46px; height: 46px;
+        border-radius: 11px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        font-size: 17px;
+        transition: transform 0.2s;
+      }
+      .cta-card:hover .cta-icon { transform: scale(1.07); }
+
+      .cta-arrow {
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        margin-left: auto;
+        background: rgba(0,0,0,0.04);
+        transition: background 0.18s, transform 0.18s;
+      }
+      .cta-card:hover .cta-arrow { background: #C9A84C; transform: translateX(2px); }
+      .cta-card:hover .cta-arrow i { color: #fff !important; }
+      .cta-card.cta-primary .cta-arrow { background: rgba(255,255,255,0.08); }
+      .cta-card.cta-primary:hover .cta-arrow { background: #C9A84C; }
+
+      /* Trust bar */
+      .trust-bar {
+        border-top: 1px solid #eaecf3;
+        padding-top: 20px;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 10px;
+      }
+      .trust-item {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 11.5px; color: #9ca3af; font-weight: 500;
+      }
+
+      /* Mobile adaptations */
+      @media (max-width: 1023px) {
+        .landing-left { min-height: auto; padding: 36px 24px 32px; }
+        .landing-left h1 { font-size: 2rem !important; }
+        .landing-right { padding: 32px 20px 40px; }
+      }
+      @media (min-width: 1024px) {
+        .landing-left { min-height: 100vh; }
+        .landing-right { min-height: 100vh; }
+      }
+    </style>
+
+    <!-- ── LEFT PANEL: Brand + Hero ── -->
+    <div class="landing-left lg:w-[52%] flex flex-col justify-between px-10 py-12 lg:px-16 lg:py-14 relative z-10">
+      <!-- Decorative layers -->
+      <div class="landing-left-dots"></div>
+      <div class="landing-ring"></div>
+      <div class="landing-ring-2"></div>
+
+      <!-- Navbar row -->
+      <div class="flex items-center gap-3 relative z-10">
+        <div class="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 shadow-lg" style="background:linear-gradient(135deg,#C9A84C 0%,#f6b93b 100%);">
+          <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
+        </div>
+        <div>
+          <div class="text-white font-semibold text-[15px] leading-tight">Lion MD's, PLLC</div>
+          <div class="text-blue-300/60 text-[10px] font-semibold tracking-widest uppercase">Provider Portal</div>
+        </div>
+      </div>
+
+      <!-- Hero copy -->
+      <div class="flex-1 flex flex-col justify-center py-10 lg:py-0 relative z-10">
+        <div class="landing-gold-bar"></div>
+        <h1 class="text-[2.6rem] lg:text-[3.2rem] font-extrabold text-white leading-[1.12] mb-5" style="letter-spacing:-0.025em;">
+          Premier Virtual<br/>
+          <span style="color:#C9A84C;">Healthcare</span><br/>
+          Staffing Solutions
+        </h1>
+        <p class="text-blue-200/65 text-[15px] lg:text-base font-light leading-relaxed max-w-[420px] mb-8">
+          Connecting exceptional medical providers with patients across the nation — streamlined payroll, compliance, and contractor management in one secure platform.
+        </p>
+
+        <!-- Feature pills -->
+        <div class="flex flex-wrap gap-2 mb-8">
+          <span class="feature-pill"><i class="fas fa-shield-alt"></i> HIPAA Compliant</span>
+          <span class="feature-pill"><i class="fas fa-bolt"></i> Real-time Payroll</span>
+          <span class="feature-pill"><i class="fas fa-sitemap"></i> Multi-org Support</span>
+          <span class="feature-pill"><i class="fas fa-chart-line"></i> Analytics</span>
+        </div>
+
+        <div class="landing-divider"></div>
+
+        <!-- Stats row -->
+        <div class="flex gap-7">
+          <div class="landing-stat-item">
+            <div class="text-[1.6rem] font-extrabold text-white leading-none">50+</div>
+            <div class="text-blue-300/50 text-[11px] mt-1 font-medium uppercase tracking-wide">Active Providers</div>
+          </div>
+          <div class="landing-stat-item">
+            <div class="text-[1.6rem] font-extrabold text-white leading-none">3</div>
+            <div class="text-blue-300/50 text-[11px] mt-1 font-medium uppercase tracking-wide">Partner Networks</div>
+          </div>
+          <div class="landing-stat-item">
+            <div class="text-[1.6rem] font-extrabold text-white leading-none">100%</div>
+            <div class="text-blue-300/50 text-[11px] mt-1 font-medium uppercase tracking-wide">Secure &amp; Encrypted</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer row -->
+      <div class="text-blue-300/25 text-[10px] tracking-widest uppercase relative z-10">
+        &copy; 2025 Lion MD's, PLLC &nbsp;·&nbsp; Confidential
+      </div>
+    </div>
+
+    <!-- ── RIGHT PANEL: Actions ── -->
+    <div class="landing-right lg:w-[48%] flex flex-col justify-center px-8 py-12 lg:px-14">
+
+      <!-- Section header -->
+      <div class="mb-8 max-w-md">
+        <p class="text-[10.5px] font-bold tracking-widest text-gray-400 uppercase mb-2.5">Get Started</p>
+        <h2 class="text-[1.9rem] font-extrabold text-gray-900 leading-tight" style="letter-spacing:-0.02em;">How can we<br/>help you today?</h2>
+        <p class="text-gray-400 text-[13.5px] mt-2.5 leading-relaxed">Choose an option below to continue.</p>
+      </div>
+
+      <!-- CTA Cards stack -->
+      <div class="flex flex-col gap-3 max-w-md">
+
+        <!-- PRIMARY: Provider Login -->
+        <button onclick="showLoginForm()" class="cta-card cta-primary">
+          <div class="cta-icon" style="background:linear-gradient(135deg,rgba(201,168,76,0.22),rgba(245,158,11,0.12));">
+            <i class="fas fa-user-shield text-yellow-400" style="font-size:17px;"></i>
+          </div>
+          <div class="flex-1" style="min-width:0;">
+            <div class="font-bold text-white text-[14.5px] leading-tight">Provider Login</div>
+            <div class="text-blue-300/60 text-xs mt-0.5" style="white-space:normal;">Sign in to access your payroll &amp; portal</div>
+          </div>
+          <div class="cta-arrow"><i class="fas fa-arrow-right text-blue-200/80 text-[11px]"></i></div>
+        </button>
+
+        <!-- Apply / Join Network -->
+        <a href="https://forms.gle/your-onboarding-form" target="_blank" class="cta-card">
+          <div class="cta-icon" style="background:#eff2ff;">
+            <i class="fas fa-file-medical-alt" style="color:#4f46e5;font-size:17px;"></i>
+          </div>
+          <div class="flex-1" style="min-width:0;">
+            <div class="font-bold text-gray-800 text-[14.5px] leading-tight">Apply / Join Network</div>
+            <div class="text-gray-400 text-xs mt-0.5" style="white-space:normal;">Start your provider onboarding application</div>
+          </div>
+          <div class="cta-arrow"><i class="fas fa-arrow-right text-gray-400 text-[11px]"></i></div>
+        </a>
+
+        <!-- Contact Us -->
+        <a href="mailto:contact@lion.md" class="cta-card">
+          <div class="cta-icon" style="background:#f0fdf4;">
+            <i class="fas fa-envelope-open-text" style="color:#16a34a;font-size:17px;"></i>
+          </div>
+          <div class="flex-1" style="min-width:0;">
+            <div class="font-bold text-gray-800 text-[14.5px] leading-tight">Contact Us</div>
+            <div class="text-gray-400 text-xs mt-0.5" style="white-space:normal;">Reach our team at contact@lion.md</div>
+          </div>
+          <div class="cta-arrow"><i class="fas fa-arrow-right text-gray-400 text-[11px]"></i></div>
+        </a>
+      </div>
+
+      <!-- Trust bar -->
+      <div class="mt-8 max-w-md">
+        <div class="trust-bar">
+          <div class="trust-item">
+            <i class="fas fa-lock" style="color:#d1d5db;font-size:11px;"></i>
+            All data encrypted &amp; HIPAA secure
+          </div>
+          <div class="trust-item">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,0.15);"></span>
+            System operational
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       LOGIN PANEL (hidden until Provider Login clicked)
+  ══════════════════════════════════════════ -->
+  <div id="loginPanel" class="hidden w-full min-h-screen flex items-center justify-center" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);">
   <div class="w-full max-w-sm mx-4">
+
     <!-- Logo -->
     <div class="text-center mb-8">
       <div class="w-20 h-20 rounded-2xl mx-auto mb-4 overflow-hidden shadow-2xl" style="background:linear-gradient(135deg,#C9A84C,#f59e0b);">
@@ -451,8 +777,11 @@
     </div>
 
     <p class="text-center text-blue-400/50 text-xs mt-6">Lion MD Portal · Confidential</p>
+    <button onclick="showLandingPage()" class="mt-3 w-full text-center text-blue-400/40 hover:text-blue-300 text-xs py-2 transition-colors">
+      <i class="fas fa-arrow-left mr-1"></i> Back to Home
+    </button>
   </div>
-</div>
+  </div>
 
 <!-- Invite Link Modal (fixed, outside mainContent so umDrawPage can't wipe it) -->
 <div id="inviteModal" class="hidden fixed inset-0 modal-backdrop z-50 flex items-center justify-center">
@@ -726,8 +1055,15 @@ function applySession(token, user) {
     $('loginCard').classList.add('hidden')
     $('setupCard').classList.add('hidden')
     $('viewPickerCard').classList.remove('hidden')
+    $('landingPage').classList.add('hidden')
+    $('loginPanel').classList.remove('hidden')
     const wl = $('vpWelcome')
     if (wl) wl.textContent = 'Welcome back, ' + user.name.split(' ')[0] + '!'
+  } else if (user.role === 'provider') {
+    $('loginScreen').classList.add('hidden')
+    $('app').classList.remove('hidden')
+    if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
+    renderProviderPortal()
   } else {
     $('loginScreen').classList.add('hidden')
     $('app').classList.remove('hidden')
@@ -756,6 +1092,23 @@ function showLoginCard() {
   $('loginCard').classList.remove('hidden')
 }
 
+// Show the login panel from the landing page
+function showLoginForm() {
+  $('landingPage').classList.add('hidden')
+  $('loginPanel').classList.remove('hidden')
+  // Ensure login card is the default visible card
+  $('loginCard').classList.remove('hidden')
+  $('setupCard').classList.add('hidden')
+  $('viewPickerCard').classList.add('hidden')
+  $('loginEmail').focus()
+}
+
+// Return to landing page from login panel
+function showLandingPage() {
+  $('loginPanel').classList.add('hidden')
+  $('landingPage').classList.remove('hidden')
+}
+
 function applyRoleUI(role, name) {
   const roleTag  = $('roleTag')
   const subtitle = $('sidebarSubtitle')
@@ -772,6 +1125,11 @@ function applyRoleUI(role, name) {
     roleTag.textContent = '🏥 CareValidate'
     roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-800 hidden md:block'
     if (subtitle) subtitle.textContent = 'CareValidate'
+    if (svBtn) svBtn.classList.add('hidden')
+  } else if (role === 'provider') {
+    roleTag.textContent = '🩺 Provider'
+    roleTag.className = 'text-xs font-semibold px-2 py-1 rounded-full bg-purple-100 text-purple-800 hidden md:block'
+    if (subtitle) subtitle.textContent = 'My Profile'
     if (svBtn) svBtn.classList.add('hidden')
   } else {
     roleTag.textContent = '🟢 Onboarding'
@@ -790,17 +1148,23 @@ function showViewPicker() {
   $('setupCard').classList.add('hidden')
   $('viewPickerCard').classList.remove('hidden')
   $('loginScreen').classList.remove('hidden')
+  // Always show loginPanel (dark bg), not landing page
+  $('landingPage').classList.add('hidden')
+  $('loginPanel').classList.remove('hidden')
 }
 
 function logout() {
   localStorage.removeItem('lmd_token')
   localStorage.removeItem('lmd_user')
   state = { role: null, user: null, token: null, periods: [], currentPeriod: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
+  // Return to landing page, not directly to login card
+  $('app').classList.add('hidden')
   $('loginScreen').classList.remove('hidden')
+  $('landingPage').classList.remove('hidden')
+  $('loginPanel').classList.add('hidden')
   $('loginCard').classList.remove('hidden')
   $('setupCard').classList.add('hidden')
   $('viewPickerCard').classList.add('hidden')
-  $('app').classList.add('hidden')
   $('loginEmail').value = ''
   $('loginPassword').value = ''
   $('loginError').classList.add('hidden')
@@ -826,8 +1190,15 @@ async function tryRestoreSession() {
       $('loginCard').classList.add('hidden')
       $('setupCard').classList.add('hidden')
       $('viewPickerCard').classList.remove('hidden')
+      $('landingPage').classList.add('hidden')
+      $('loginPanel').classList.remove('hidden')
       const wl = $('vpWelcome')
       if (wl) wl.textContent = 'Welcome back, ' + me.name.split(' ')[0] + '!'
+    } else if (me.role === 'provider') {
+      $('loginScreen').classList.add('hidden')
+      $('app').classList.remove('hidden')
+      if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
+      renderProviderPortal()
     } else {
       $('loginScreen').classList.add('hidden')
       $('app').classList.remove('hidden')
@@ -911,10 +1282,21 @@ function buildNav() {
     { id: 'contractors', icon: 'fa-user-check',  label: 'Contractors' },
     { id: 'calendar',    icon: 'fa-calendar-alt', label: 'Calendar' },
   ]
+  const providerNav = [
+    { id: 'provider_profile',   icon: 'fa-user-circle',    label: 'My Profile' },
+    { id: 'provider_payroll',   icon: 'fa-money-bill-wave', label: 'My Payroll' },
+    { id: 'provider_consults',  icon: 'fa-file-medical',   label: 'My Consults' },
+    { id: 'provider_licenses',  icon: 'fa-map-marker-alt', label: 'State Licenses' },
+    { id: 'provider_documents', icon: 'fa-file-alt',       label: 'Documents & CV' },
+  ]
 
   // Admin in onboarding view gets the same 3-item nav as the onboarding role
   const inObView = state.role === 'onboarding' || (state.role === 'admin' && state.adminView === 'onboarding')
-  const items = inObView ? obNav : (state.role === 'admin' ? adminNav : cvNav)
+  let items
+  if (state.role === 'provider') items = providerNav
+  else if (inObView) items = obNav
+  else if (state.role === 'admin') items = adminNav
+  else items = cvNav
   $('sidebarNav').innerHTML = items.map(item => `
     <button onclick="navigate('${item.id}')" id="nav_${item.id}"
       class="nav-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-gray-400 hover:text-white transition-all">
@@ -953,10 +1335,10 @@ function navigate(page) {
   const navEl = $(`nav_${page}`)
   if (navEl) navEl.classList.add('active')
 
-  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', onboarding:'Onboarding', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View', users:'User Management', payments:'Client Payments' }
+  const titles = { dashboard:'Dashboard', upload:'Upload Report', consults:'Consult Records', payroll:'Contractor Payroll', contractors:'Contractors', onboarding:'Onboarding', rates:'Payment Rates', carevalidate:'CareValidate View', cv_dashboard:'Summary', cv_detail:'Detail View', users:'User Management', payments:'Client Payments', provider_profile:'My Profile', provider_payroll:'My Payroll', provider_consults:'My Consults', provider_licenses:'State Licenses', provider_documents:'Documents & CV' }
   $('pageTitle').textContent = titles[page] || page
 
-  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail, users: renderUserManagement, payments: renderClientPayments }
+  const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail, users: renderUserManagement, payments: renderClientPayments, provider_profile: renderProviderProfile, provider_payroll: renderProviderPayroll, provider_consults: renderProviderConsults, provider_licenses: renderProviderLicenses, provider_documents: renderProviderDocuments }
   if (pages[page]) pages[page]()
 
   // Auto-close sidebar on mobile after navigation
@@ -1162,8 +1544,8 @@ function updateDashColBtn() {
 // ════════════════════════════════════════════════════
 // DASHBOARD PAGE
 // ════════════════════════════════════════════════════
-function renderDashboard() {
-  if (!state.currentPeriod || !state.currentSummary) {
+async function renderDashboard() {
+  if (!state.currentPeriod) {
     $('mainContent').innerHTML = `
       <div class="flex flex-col items-center justify-center h-64 text-center">
         <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style="background:#f0f2f5">
@@ -1177,6 +1559,10 @@ function renderDashboard() {
       </div>`
     return
   }
+  // Always re-fetch so recalculate/match changes reflect immediately
+  $('mainContent').innerHTML = '<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>'
+  try { state.currentSummary = await api(`/api/summary/period/${state.currentPeriod.period_key}`) }
+  catch(e) { $('mainContent').innerHTML = `<p class="text-red-500 p-4">${e.message}</p>`; return }
   const s = state.currentSummary
   const t = s.totals || {}
   const margin = (t.total_margin || 0)
@@ -1283,6 +1669,9 @@ function renderDashboard() {
             </button>
             <button onclick="exportDashboardPDF()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" style="border-color:#ef4444;color:#ef4444">
               <i class="fas fa-file-pdf mr-2"></i>Export PDF
+            </button>
+            <button onclick="exportDashboardExcel()" class="btn-outline px-4 py-2 rounded-xl text-sm font-medium" style="border-color:#16a34a;color:#16a34a">
+              <i class="fas fa-file-excel mr-2"></i>Export Excel
             </button>
             <button onclick="exportGusto()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
               <i class="fas fa-file-csv mr-2"></i>Export Gusto CSV
@@ -1984,7 +2373,6 @@ async function renderConsults() {
         <input type="text" id="searchInput" placeholder="Search patient, case ID, org..." class="flex-1 min-w-[200px]" value="${consultsState.search}" oninput="debounceSearch(this.value)"/>
         <select id="doctorFilter" onchange="filterConsults()" class="min-w-[160px]">
           <option value="">All Doctors</option>
-          ${state.contractors.map(c => `<option value="${c.name}" ${consultsState.doctor === c.name ? 'selected' : ''}>${c.name}</option>`).join('')}
         </select>
         <select id="vtFilter" onchange="filterConsults()" class="min-w-[160px]">
           ${vtOptions.map(o => `<option value="${o.v}" ${consultsState.visitType === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
@@ -2027,7 +2415,8 @@ async function renderConsults() {
 
   await Promise.all([
     loadConsultsPage(1),
-    loadOrgFilterOptions()
+    loadOrgFilterOptions(),
+    loadDoctorFilterOptions()
   ])
 }
 
@@ -2049,6 +2438,17 @@ function clearAllDrillFilters() {
   consultsState.organization   = ''
   consultsState.search         = ''
   renderConsults()
+}
+
+async function loadDoctorFilterOptions() {
+  const sel = $('doctorFilter')
+  if (!sel || !state.currentPeriod) return
+  try {
+    const doctors = await api(`/api/consults/doctors?period_key=${state.currentPeriod.period_key}`)
+    const current = consultsState.doctor
+    sel.innerHTML = '<option value="">All Doctors</option>' +
+      doctors.map(d => `<option value="${escHtml(d)}" ${current === d ? 'selected' : ''}>${escHtml(d)}</option>`).join('')
+  } catch(_) {}
 }
 
 async function loadOrgFilterOptions() {
@@ -2230,7 +2630,7 @@ function renderPayroll() {
             <div>
               <div class="font-bold text-gray-800">${chrisInfo ? chrisInfo.name : 'Christopher Garcia'}</div>
               <div class="text-xs text-gray-400 flex items-center gap-1 mt-0.5">Mgmt Fee Earner · ${contractorTypeBadge('chris_garcia')}</div>
-              <p class="text-xs text-blue-600 mt-1">25% of (Total CV Pays Us − Total We Pay Contractors) · Ringside Health deduction applied to Ana Lisa Carr</p>
+              <p class="text-xs text-blue-600 mt-1">25% of (CV Pays Us − We Pay − Ringside CV) · Ringside Health CV fees deducted from Ana Lisa Carr's net</p>
             </div>
           </div>
           <button onclick="${chrisInfo ? `openPaystubModal('${escHtml(pk)}', ${chrisInfo.id}, '${escHtml(chrisInfo.name || 'Christopher Garcia')}')` : "showToast('No Chris Garcia contractor found','error')"}"
@@ -2316,17 +2716,39 @@ function renderPayroll() {
       </div>
 
       ${(s.byDoctor || []).filter(d => !d.contractor_id).length > 0 ? `
-        <div class="card p-4">
-          <h4 class="text-sm font-semibold text-yellow-700 mb-3 flex items-center gap-2">
-            <i class="fas fa-exclamation-triangle text-yellow-500"></i>
-            Unmatched Doctors (${(s.byDoctor || []).filter(d => !d.contractor_id).length})
-          </h4>
-          <p class="text-xs text-gray-500 mb-3">These doctors are not in the contractors database. Add them in <a onclick="navigate('contractors')" class="text-blue-500 cursor-pointer underline">Contractors</a>.</p>
-          <div class="flex flex-wrap gap-2">
-            ${(s.byDoctor || []).filter(d => !d.contractor_id).map(d => `
-              <div class="px-3 py-2 bg-yellow-50 rounded-lg text-sm">
-                <span class="font-medium text-yellow-800">${d.doctor_name}</span>
-                <span class="text-yellow-600 ml-2">${fmtNum(d.case_count)} cases · ${fmt(d.total_contractor)}</span>
+        <div class="card p-4" id="unmatchedCard">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h4 class="text-sm font-semibold text-yellow-700 flex items-center gap-2">
+                <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+                Unmatched Doctors (${(s.byDoctor || []).filter(d => !d.contractor_id).length})
+              </h4>
+              <p class="text-xs text-gray-400 mt-0.5">Match to an existing contractor or add as new — fees recalculate automatically.</p>
+            </div>
+          </div>
+          <div class="space-y-2">
+            ${(s.byDoctor || []).filter(d => !d.contractor_id).map((d, i) => `
+              <div class="flex flex-col sm:flex-row sm:items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-xl" id="unmatchedRow_${i}">
+                <div class="flex-1 min-w-0">
+                  <span class="font-semibold text-yellow-900 text-sm">${escHtml(d.doctor_name)}</span>
+                  <span class="text-yellow-600 text-xs ml-2">${fmtNum(d.case_count)} cases &middot; ${fmt(d.total_contractor)}</span>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                  <select id="matchSel_${i}" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white" style="min-width:180px">
+                    <option value="">— match to existing —</option>
+                    ${(state.contractors || []).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(c =>
+                      `<option value="${c.id}">${escHtml(c.name)}</option>`
+                    ).join('')}
+                  </select>
+                  <button onclick="unmatchedDoMatch('${(d.doctor_name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', ${i}, '${escHtml(pk)}')"
+                    class="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-semibold whitespace-nowrap">
+                    <i class="fas fa-link mr-1"></i>Match
+                  </button>
+                  <button onclick="unmatchedDoQuickAdd('${(d.doctor_name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', ${i}, '${escHtml(pk)}')"
+                    class="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 font-semibold whitespace-nowrap">
+                    <i class="fas fa-user-plus mr-1"></i>Add New
+                  </button>
+                </div>
               </div>`).join('')}
           </div>
         </div>` : ''}
@@ -2340,7 +2762,7 @@ function renderPayroll() {
     set('chrisTotalCV',        fmt(comm.total_cv))
     set('chrisTotalPay',       fmt(comm.total_contractor))
     set('chrisRingside',       fmt(comm.ringside_deduction))
-    set('chrisRingsideCount',  `${comm.ringside_count || 0} consults × $20`)
+    set('chrisRingsideCount',  `${comm.ringside_count || 0} Ringside consults`)
   }).catch(() => { const el = $('chrisTotal'); if (el) el.textContent = 'Error' })
 }
 
@@ -2776,7 +3198,7 @@ function renderPaystubContent(data) {
         <div class="bg-blue-50 rounded-xl p-4">
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Total Mgmt Fee</div>
           <div class="text-3xl font-bold text-blue-600 mb-1">${fmt2(comm.commission_total)}</div>
-          <div class="text-xs text-gray-500">25% × (CV Pays Us − We Pay Contractor) per contractor${comm.ringside_deduction > 0 ? ' · Ana Lisa: − Ringside Deduction after ×25%' : ''}</div>
+          <div class="text-xs text-gray-500">25% × (CV Pays Us − We Pay Contractors − Ringside CV) per contractor</div>
         </div>
       </div>
 
@@ -2794,18 +3216,17 @@ function renderPaystubContent(data) {
           </div>
           ${(comm.ringside_deduction || 0) > 0 ? `
           <div class="flex justify-between">
-            <span class="text-gray-500">Ringside Health deduction (${comm.ringside_count} consults × $20 — Ana Lisa Carr)</span>
+            <span class="text-gray-500">Ringside Health CV fees (Ana Lisa Carr — ${comm.ringside_count} consults)</span>
             <span class="font-semibold text-amber-600">− ${fmt2(comm.ringside_deduction)}</span>
           </div>` : ''}
           <div class="flex justify-between border-t border-gray-200 pt-2">
-            <span class="text-gray-600 font-medium">Net (CV − Pay, mgmt fee earners only)</span>
-            <span class="font-bold text-gray-800">${fmt2(comm.net_base)}</span>
+            <span class="text-gray-600 font-medium">Net base (before 25%)</span>
+            <span class="font-bold text-gray-800">${fmt2(comm.net_base - (comm.ringside_deduction || 0))}</span>
           </div>
-          ${(comm.ringside_deduction || 0) > 0 ? `
           <div class="flex justify-between text-xs text-gray-500 italic">
-            <span>× 25% then − Ringside deduction (Ana Lisa only)</span>
+            <span>× 25%</span>
             <span></span>
-          </div>` : ''}
+          </div>
           <div class="flex justify-between bg-blue-50 rounded-lg px-3 py-2 border border-blue-100">
             <span class="text-blue-700 font-semibold">Total Mgmt Fee</span>
             <span class="font-bold text-blue-700">${fmt2(comm.commission_total)}</span>
@@ -2837,11 +3258,10 @@ function renderPaystubContent(data) {
                 // Build formula cell
                 let formulaHtml
                 if (rd > 0) {
-                  // Ana Lisa: show each step on its own line
+                  // Ana Lisa: show Ringside CV subtracted from net before ×25%
                   formulaHtml = `
-                    <div class="text-xs text-gray-500">(${fmt2(cv)} &minus; ${fmt2(pay)}) &times; 25%</div>
-                    <div class="text-xs text-gray-500">= ${fmt2(net * 0.25)}</div>
-                    <div class="text-xs text-amber-600">&minus; ${fmt2(rd)} (${row.ringside_count} Ringside cases &times; $20)</div>`
+                    <div class="text-xs text-gray-500">(${fmt2(cv)} &minus; ${fmt2(pay)} &minus; ${fmt2(rd)}) &times; 25%</div>
+                    <div class="text-xs text-amber-600">Ringside CV deducted from net first</div>`
                 } else {
                   formulaHtml = `<div class="text-xs text-gray-500">(${fmt2(cv)} &minus; ${fmt2(pay)}) &times; 25%</div>`
                 }
@@ -2866,8 +3286,8 @@ function renderPaystubContent(data) {
       </div>
 
       <div class="mt-6 pt-4 border-t text-xs text-gray-400 text-center">
-        Mgmt Fee = 25% × (CV Pays Us − We Pay Contractor) for every contractor. 
-        Ana Lisa Carr only: subtract (Ringside Health cases × $20) AFTER applying the 25% rate.
+        Mgmt Fee = 25% × (CV Pays Us − We Pay Contractor) for every contractor.
+        Ana Lisa Carr only: Ringside Health CV fees are subtracted from her net BEFORE applying the 25% rate.
         Period: ${session?.period_label || ''}.
       </div>
     </div>`
@@ -3961,6 +4381,57 @@ async function recalculatePeriods(periodKey) {
 
 
 // ════════════════════════════════════════════════════
+// UNMATCHED DOCTORS — MATCH / QUICK-ADD HANDLERS
+// ════════════════════════════════════════════════════
+async function unmatchedDoMatch(doctorName, rowIdx, periodKey) {
+  const sel = $('matchSel_' + rowIdx)
+  const contractorId = sel?.value
+  if (!contractorId) { showToast('Please select a contractor to match to', 'warning'); return }
+  const row = $('unmatchedRow_' + rowIdx)
+  if (row) row.style.opacity = '0.5'
+  try {
+    const res = await api('/api/doctors/match', {
+      method: 'POST',
+      body: JSON.stringify({ doctor_name: doctorName, contractor_id: parseInt(contractorId), period_key: periodKey })
+    })
+    showToast(`Matched! ${res.updated} consult(s) updated.`, 'success')
+    if (row) row.remove()
+    // Hide the whole card if no unmatched rows remain
+    const remaining = document.querySelectorAll('[id^="unmatchedRow_"]')
+    if (remaining.length === 0) { const card = $('unmatchedCard'); if (card) card.remove() }
+    await reloadContractors()
+    state.currentSummary = await api(`/api/summary/period/${periodKey}`)
+    renderDashboard()
+  } catch(e) {
+    if (row) row.style.opacity = '1'
+    showToast('Error: ' + e.message, 'error')
+  }
+}
+
+async function unmatchedDoQuickAdd(doctorName, rowIdx, periodKey) {
+  if (!confirm(`Add "${doctorName}" as a new contractor and assign all their consults?`)) return
+  const row = $('unmatchedRow_' + rowIdx)
+  if (row) row.style.opacity = '0.5'
+  try {
+    const res = await api('/api/doctors/quick-add', {
+      method: 'POST',
+      body: JSON.stringify({ doctor_name: doctorName, period_key: periodKey })
+    })
+    showToast(`Added ${res.name} as new contractor!`, 'success')
+    if (row) row.remove()
+    // Hide the whole card if no unmatched rows remain
+    const remaining = document.querySelectorAll('[id^="unmatchedRow_"]')
+    if (remaining.length === 0) { const card = $('unmatchedCard'); if (card) card.remove() }
+    await reloadContractors()
+    state.currentSummary = await api(`/api/summary/period/${periodKey}`)
+    renderDashboard()
+  } catch(e) {
+    if (row) row.style.opacity = '1'
+    showToast('Error: ' + e.message, 'error')
+  }
+}
+
+// ════════════════════════════════════════════════════
 // CAREVALIDATE VIEW (Admin sees this, CV sees it too)
 // ════════════════════════════════════════════════════
 function renderCVView() {
@@ -4350,6 +4821,254 @@ async function exportDashboardPDF() {
 }
 
 // ════════════════════════════════════════════════════
+// DASHBOARD EXCEL EXPORT
+// ════════════════════════════════════════════════════
+async function exportDashboardExcel() {
+  if (!state.currentPeriod || !state.currentSummary) {
+    showToast('Please select a period first', 'warning'); return
+  }
+  showLoading('Generating Excel file…')
+  try {
+    const XLSX = window.XLSX
+    const s = state.currentSummary
+    const t = s.totals || {}
+    const pk = state.currentPeriod.period_key
+    const periodLabel = state.currentPeriod.period_label || pk
+    const doctors = s.byDoctor || []
+
+    // ── Fetch commission data (same as PDF) ──
+    let commData = { commission_total: 0, by_contractor: [] }
+    try { commData = await api(`/api/commission/${pk}`) } catch(_) {}
+    const commTotal = commData.commission_total || 0
+    const commByC = {}
+    ;(commData.by_contractor || []).forEach(c => { commByC[c.contractor_id] = c.commission })
+
+    // ── Build same visible column list as PDF ──
+    const PDF_COL_DEFS = [
+      { key: 'cases',   label: 'Cases',          halign: 'right' },
+      { key: 'async',   label: 'Async',          halign: 'right' },
+      { key: 'sync',    label: 'Sync',           halign: 'right' },
+      { key: 'orderly', label: 'Orderly',        halign: 'right' },
+      { key: 'noshow',  label: 'No Show',        halign: 'right' },
+      { key: 'other',   label: 'Other',          halign: 'right' },
+      { key: 'cv',      label: 'CV Pays Us',     halign: 'right', money: true },
+      { key: 'pay',     label: 'We Pay',         halign: 'right', money: true },
+      { key: 'comm',    label: 'Chris Mgmt Fee', halign: 'right', money: true },
+      { key: 'margin',  label: 'Margin',         halign: 'right', money: true },
+    ]
+    const visibleCols = PDF_COL_DEFS.filter(c => dashColVisibility[c.key] !== false)
+
+    // Helpers — raw numbers for proper Excel cell types
+    const rawVal = (key, d, comm) => {
+      switch(key) {
+        case 'cases':   return d.case_count    || 0
+        case 'async':   return d.async_count   || 0
+        case 'sync':    return d.sync_count    || 0
+        case 'orderly': return d.orderly_count || 0
+        case 'noshow':  return d.no_show_count || 0
+        case 'other':   return d.other_count   || 0
+        case 'cv':      return d.total_carevalidate || 0
+        case 'pay':     return d.total_contractor   || 0
+        case 'comm':    return comm || 0
+        case 'margin':  return (d.total_carevalidate || 0) - (d.total_contractor || 0) - (comm || 0)
+        default:        return ''
+      }
+    }
+    const totalCV    = doctors.reduce((a, d) => a + (d.total_carevalidate || 0), 0)
+    const totalPay   = doctors.reduce((a, d) => a + (d.total_contractor   || 0), 0)
+    const totalCases = doctors.reduce((a, d) => a + (d.case_count        || 0), 0)
+    const totalAsync = doctors.reduce((a, d) => a + (d.async_count       || 0), 0)
+    const totalSync  = doctors.reduce((a, d) => a + (d.sync_count        || 0), 0)
+    const totalOrd   = doctors.reduce((a, d) => a + (d.orderly_count     || 0), 0)
+    const totalNoShow= doctors.reduce((a, d) => a + (d.no_show_count     || 0), 0)
+    const totalOther = doctors.reduce((a, d) => a + (d.other_count       || 0), 0)
+    const totalMargin= totalCV - totalPay - commTotal
+
+    const rawTotalVal = (key) => {
+      switch(key) {
+        case 'cases':   return totalCases
+        case 'async':   return totalAsync
+        case 'sync':    return totalSync
+        case 'orderly': return totalOrd
+        case 'noshow':  return totalNoShow
+        case 'other':   return totalOther
+        case 'cv':      return totalCV
+        case 'pay':     return totalPay
+        case 'comm':    return commTotal
+        case 'margin':  return totalMargin
+        default:        return ''
+      }
+    }
+
+    const wb = XLSX.utils.book_new()
+    const ws_data = []
+
+    // ── Row 1: Report title ──
+    ws_data.push([`Lion MD's, PLLC — Payroll Dashboard`])
+    // ── Row 2: Period + generated date ──
+    ws_data.push([`Period: ${periodLabel}`, '', '', '', '', '', '', '', '', '', `Generated: ${new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}`])
+    // ── Row 3: blank ──
+    ws_data.push([])
+
+    // ── KPI row (same 5 KPIs as PDF) ──
+    const adjMargin = (t.total_carevalidate || 0) - (t.total_contractor || 0) - commTotal
+    const adjPct = (t.total_carevalidate || 0) > 0 ? ((adjMargin / t.total_carevalidate) * 100).toFixed(1) : 0
+    ws_data.push(['KPI SUMMARY'])
+    ws_data.push(['Total Approved Cases', 'CV Owes Us', 'We Owe Contractors', 'Chris Mgmt Fee', `Net Margin (${adjPct}%)`])
+    ws_data.push([t.total_cases || 0, t.total_carevalidate || 0, t.total_contractor || 0, commTotal, adjMargin])
+    // ── Row blank ──
+    ws_data.push([])
+
+    // ── Section header ──
+    ws_data.push(['Payroll Summary by Doctor'])
+
+    // ── Column headers ──
+    ws_data.push(['Doctor / Contractor', ...visibleCols.map(c => c.label)])
+
+    // ── Data rows ──
+    const dataStartRow = ws_data.length + 1  // 1-indexed for Excel
+    for (const d of doctors) {
+      const comm = commByC[d.contractor_id] || 0
+      ws_data.push([d.doctor_name || 'Unmatched', ...visibleCols.map(c => rawVal(c.key, d, comm))])
+    }
+
+    // ── Totals row ──
+    const totalRowIdx = ws_data.length  // 0-indexed in ws_data, will be +1 in Excel
+    ws_data.push(['TOTAL', ...visibleCols.map(c => rawTotalVal(c.key))])
+
+    const ws = XLSX.utils.aoa_to_sheet(ws_data)
+
+    // ── Column widths ──
+    ws['!cols'] = [
+      { wch: 30 },  // Doctor name
+      ...visibleCols.map(c => ({ wch: c.money ? 16 : 10 }))
+    ]
+
+    // ── Cell styles via SheetJS (cell-level formatting) ──
+    // SheetJS CE supports number formats but not fill/font color natively.
+    // We set z (number format) for money and count columns, and bold for headers/totals.
+    const totalCols = 1 + visibleCols.length  // Doctor col + data cols
+
+    const R = (r, c) => XLSX.utils.encode_cell({ r, c })
+    const setStyle = (addr, patch) => {
+      if (!ws[addr]) return
+      ws[addr].s = { ...(ws[addr].s || {}), ...patch }
+    }
+
+    const boldFont        = { bold: true }
+    const headerFill      = { patternType: 'solid', fgColor: { rgb: '1A1A2E' } }
+    const headerFont      = { bold: true, color: { rgb: 'C9A84C' } }
+    const footerFill      = { patternType: 'solid', fgColor: { rgb: 'EBEBF5' } }
+    const footerFont      = { bold: true, color: { rgb: '282850' } }
+    const kpiHeaderFill   = { patternType: 'solid', fgColor: { rgb: 'F0F4FF' } }
+    const titleFont       = { bold: true, sz: 14, color: { rgb: '1A1A2E' } }
+    const sectionFont     = { bold: true, sz: 10, color: { rgb: '323232' } }
+    const moneyFmt        = '"$"#,##0.00'
+    const intFmt          = '#,##0'
+    const alignRight      = { horizontal: 'right' }
+    const alignLeft       = { horizontal: 'left' }
+
+    // Row 0: title
+    if (ws[R(0,0)]) ws[R(0,0)].s = { font: titleFont }
+
+    // Row 3 (index 3): "KPI SUMMARY" label
+    if (ws[R(3,0)]) ws[R(3,0)].s = { font: sectionFont }
+
+    // Row 4 (index 4): KPI column headers
+    for (let c = 0; c < 5; c++) {
+      const a = R(4, c)
+      if (ws[a]) ws[a].s = { font: boldFont, fill: kpiHeaderFill, alignment: alignRight }
+    }
+
+    // Row 5 (index 5): KPI values — col 0 is int, cols 1-4 are money
+    if (ws[R(5,0)]) { ws[R(5,0)].s = { numFmt: intFmt, alignment: alignRight }; ws[R(5,0)].z = intFmt }
+    for (let c = 1; c < 5; c++) {
+      const a = R(5, c)
+      if (ws[a]) { ws[a].z = moneyFmt; ws[a].s = { numFmt: moneyFmt, alignment: alignRight } }
+    }
+
+    // Row 7 (index 7): "Payroll Summary by Doctor"
+    if (ws[R(7,0)]) ws[R(7,0)].s = { font: sectionFont }
+
+    // Row 8 (index 8): column header row
+    const headerRowIdx = 8
+    for (let c = 0; c < totalCols; c++) {
+      const a = R(headerRowIdx, c)
+      if (ws[a]) ws[a].s = { font: headerFont, fill: headerFill, alignment: c === 0 ? alignLeft : alignRight }
+    }
+
+    // Data rows (index 9 … dataStartRow + doctors.length - 1)
+    for (let r = 0; r < doctors.length; r++) {
+      const rowIdx = headerRowIdx + 1 + r
+      // Doctor name col
+      const nameAddr = R(rowIdx, 0)
+      if (ws[nameAddr]) ws[nameAddr].s = { alignment: alignLeft }
+      // Data cols
+      visibleCols.forEach((col, ci) => {
+        const a = R(rowIdx, ci + 1)
+        if (!ws[a]) return
+        if (col.money) {
+          ws[a].z = moneyFmt
+          ws[a].s = { numFmt: moneyFmt, alignment: alignRight }
+          // Margin: color positive green, negative red
+          if (col.key === 'margin') {
+            const v = ws[a].v
+            const color = (typeof v === 'number' && v >= 0) ? '16A34A' : 'DC2626'
+            ws[a].s = { numFmt: moneyFmt, alignment: alignRight, font: { color: { rgb: color } } }
+          }
+        } else {
+          ws[a].z = intFmt
+          ws[a].s = { numFmt: intFmt, alignment: alignRight }
+        }
+      })
+    }
+
+    // Totals row
+    const totRowIdx = headerRowIdx + 1 + doctors.length
+    for (let c = 0; c < totalCols; c++) {
+      const a = R(totRowIdx, c)
+      if (!ws[a]) continue
+      const col = visibleCols[c - 1]
+      const isMoney = col?.money
+      const fmt2 = isMoney ? moneyFmt : (c > 0 ? intFmt : undefined)
+      const marginColor = (col?.key === 'margin')
+        ? ((ws[a].v || 0) >= 0 ? '16A34A' : 'DC2626')
+        : null
+      ws[a].s = {
+        font: marginColor
+          ? { bold: true, color: { rgb: marginColor } }
+          : { ...footerFont },
+        fill: footerFill,
+        alignment: c === 0 ? alignLeft : alignRight,
+        ...(fmt2 ? { numFmt: fmt2 } : {})
+      }
+      if (fmt2) ws[a].z = fmt2
+    }
+
+    // ── Freeze top rows through column header row ──
+    ws['!freeze'] = { xSplit: 1, ySplit: headerRowIdx + 1 }
+
+    // ── Merge title cell across all cols ──
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 4 } },
+      { s: { r: 7, c: 0 }, e: { r: 7, c: totalCols - 1 } },
+    ]
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Dashboard')
+
+    const safePeriod = periodLabel.replace(/\s+/g, '_')
+    XLSX.writeFile(wb, `LionMD_Dashboard_${safePeriod}.xlsx`)
+    hideLoading()
+    showToast('Excel file downloaded!', 'success')
+  } catch(e) {
+    hideLoading()
+    showToast('Excel export failed: ' + e.message, 'error')
+    console.error(e)
+  }
+}
+
+// ════════════════════════════════════════════════════
 // GUSTO EXPORT
 // ════════════════════════════════════════════════════
 async function exportGusto() {
@@ -4719,8 +5438,8 @@ function obOnboardedHTML() {
     docs_received:      'Docs Received',
   }
 
-  // Section 1: Hired candidates still completing onboarding checklist (not yet converted)
-  let pending = obState.candidates.filter(c => c.status === 'hired')
+  // Section 1: Hired candidates still completing onboarding checklist (not yet converted to payroll)
+  let pending = obState.candidates.filter(c => c.status === 'hired' && !c.converted_contractor_id)
   if (search) pending = pending.filter(c =>
     (c.full_name||'').toLowerCase().includes(search) ||
     (c.company_name||'').toLowerCase().includes(search) ||
@@ -4923,7 +5642,11 @@ function obContractorsSearch(val) {
 }
 
 // ── Contractor Detail Slide-Over Panel ───────────────────────────
+const ctDetailState = { tab: 'payroll', contractorId: null, licenses: [] }
+
 async function obOpenContractorDetail(contractorId) {
+  ctDetailState.contractorId = contractorId
+  ctDetailState.tab = 'payroll'
   // Create/show overlay
   let panel = $('ctDetailPanel')
   if (!panel) {
@@ -4953,7 +5676,11 @@ async function obOpenContractorDetail(contractorId) {
   $('ctDetailBody').innerHTML = '<div class="flex justify-center py-16"><div class="spinner"></div></div>'
 
   try {
-    const data = await api(`/api/contractors/${contractorId}/history`)
+    const [data, licenses] = await Promise.all([
+      api(`/api/contractors/${contractorId}/history`),
+      api(`/api/admin/contractors/${contractorId}/licenses`).catch(() => [])
+    ])
+    ctDetailState.licenses = licenses || []
     obRenderContractorDetail(data)
   } catch(e) {
     $('ctDetailBody').innerHTML = `<p class="text-red-500 text-sm text-center py-10">${e.message}</p>`
@@ -4967,17 +5694,43 @@ function obCloseContractorDetail() {
   if (overlay) overlay.classList.add('hidden')
 }
 
+function ctSwitchTab(tab) {
+  ctDetailState.tab = tab
+  const tabs = ['profile','payroll','licenses']
+  tabs.forEach(t => {
+    const btn = $('ctTab_' + t)
+    const pane = $('ctPane_' + t)
+    if (btn) btn.className = t === tab
+      ? 'px-4 py-2 text-sm font-semibold border-b-2 border-yellow-500 text-yellow-700'
+      : 'px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-700 border-b-2 border-transparent'
+    if (pane) pane.classList.toggle('hidden', t !== tab)
+  })
+}
+
 function obRenderContractorDetail(data) {
   const { contractor: ct, periods, totals, ob_candidate } = data
   if (!ct) return
   const fmt = n => n != null ? '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'
   const fmtN = n => n != null ? Number(n).toLocaleString() : '0'
+  const cid = ctDetailState.contractorId
+  const licenses = ctDetailState.licenses || []
 
   $('ctDetailName').textContent = ct.name || 'Contractor'
 
+  const licStatusBadge = s => {
+    const map = { active:'bg-green-100 text-green-700', expired:'bg-red-100 text-red-700', pending:'bg-yellow-100 text-yellow-700' }
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${map[s]||'bg-gray-100 text-gray-500'}">${(s||'').charAt(0).toUpperCase()+(s||'').slice(1)}</span>`
+  }
+
+  const isExpiringSoon = (dateStr) => {
+    if (!dateStr) return false
+    const d = new Date(dateStr); const now = new Date()
+    return d > now && d < new Date(now.getTime() + 60*24*60*60*1000)
+  }
+
   $('ctDetailBody').innerHTML = `
     <!-- Profile card -->
-    <div class="flex items-start gap-4 mb-5 p-4 bg-gray-50 rounded-2xl">
+    <div class="flex items-start gap-4 mb-4 p-4 bg-gray-50 rounded-2xl">
       <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-bold flex-shrink-0" style="background:var(--lion-gold)">
         ${(ct.name||'?')[0].toUpperCase()}
       </div>
@@ -4992,11 +5745,16 @@ function obRenderContractorDetail(data) {
     </div>
 
     <!-- Info rows -->
-    <div class="space-y-2 mb-5">
+    <div class="space-y-1.5 mb-4">
       ${ct.email ? `
       <div class="flex items-center gap-3 text-sm">
         <i class="fas fa-envelope w-4 text-gray-300 flex-shrink-0"></i>
         <a href="mailto:${escHtml(ct.email)}" class="text-blue-600 hover:underline truncate">${escHtml(ct.email)}</a>
+      </div>` : ''}
+      ${ct.phone ? `
+      <div class="flex items-center gap-3 text-sm">
+        <i class="fas fa-phone w-4 text-gray-300 flex-shrink-0"></i>
+        <span class="text-gray-600">${escHtml(ct.phone)}</span>
       </div>` : ''}
       ${ct.ein_ssn ? `
       <div class="flex items-center gap-3 text-sm">
@@ -5011,7 +5769,7 @@ function obRenderContractorDetail(data) {
 
     <!-- Onboarding link (if came through pipeline) -->
     ${ob_candidate ? `
-    <div class="mb-5 p-3 rounded-xl border border-green-200 bg-green-50 flex items-center gap-3">
+    <div class="mb-4 p-3 rounded-xl border border-green-200 bg-green-50 flex items-center gap-3">
       <i class="fas fa-check-circle text-green-500"></i>
       <div class="flex-1 min-w-0">
         <p class="text-xs font-semibold text-green-800">Onboarded through Pipeline</p>
@@ -5023,7 +5781,7 @@ function obRenderContractorDetail(data) {
     </div>` : ''}
 
     <!-- Lifetime earnings KPIs -->
-    <div class="grid grid-cols-2 gap-3 mb-5">
+    <div class="grid grid-cols-2 gap-3 mb-4">
       <div class="p-3 rounded-xl bg-yellow-50 border border-yellow-100">
         <p class="text-xs text-gray-500 mb-1">Lifetime Earnings</p>
         <p class="text-xl font-bold" style="color:var(--lion-gold)">${fmt(totals?.total_pay)}</p>
@@ -5034,9 +5792,92 @@ function obRenderContractorDetail(data) {
       </div>
     </div>
 
-    <!-- Payroll history table -->
-    <div>
-      <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Payroll History</h3>
+    <!-- Tab bar -->
+    <div class="flex border-b border-gray-200 mb-4 -mx-5 px-5 overflow-x-auto">
+      <button id="ctTab_profile" onclick="ctSwitchTab('profile')"
+        class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-700 border-b-2 border-transparent whitespace-nowrap">
+        <i class="fas fa-id-card mr-1.5"></i>Profile
+      </button>
+      <button id="ctTab_payroll" onclick="ctSwitchTab('payroll')"
+        class="px-4 py-2 text-sm font-semibold border-b-2 border-yellow-500 text-yellow-700 whitespace-nowrap">
+        <i class="fas fa-receipt mr-1.5"></i>Payroll
+      </button>
+      <button id="ctTab_licenses" onclick="ctSwitchTab('licenses')"
+        class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-700 border-b-2 border-transparent whitespace-nowrap">
+        <i class="fas fa-map-marker-alt mr-1.5"></i>Licenses
+        ${licenses.length > 0 ? `<span class="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">${licenses.length}</span>` : ''}
+      </button>
+    </div>
+
+    <!-- Profile Pane -->
+    <div id="ctPane_profile" class="hidden">
+      <div class="space-y-3">
+        <!-- Contact Info -->
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Contact Information</p>
+          <div class="space-y-2.5">
+            ${ct.email ? `
+            <div class="flex items-center gap-3 text-sm">
+              <i class="fas fa-envelope w-4 text-gray-300 flex-shrink-0"></i>
+              <a href="mailto:${escHtml(ct.email)}" class="text-blue-600 hover:underline truncate">${escHtml(ct.email)}</a>
+            </div>` : `<p class="text-xs text-gray-300 italic">No email on file</p>`}
+            ${ct.phone ? `
+            <div class="flex items-center gap-3 text-sm">
+              <i class="fas fa-phone w-4 text-gray-300 flex-shrink-0"></i>
+              <span class="text-gray-700">${escHtml(ct.phone)}</span>
+            </div>` : `<div class="flex items-center gap-3 text-sm text-gray-300"><i class="fas fa-phone w-4"></i><span class="italic">No phone on file</span></div>`}
+            ${ct.address ? `
+            <div class="flex items-start gap-3 text-sm">
+              <i class="fas fa-map-marker-alt w-4 text-gray-300 flex-shrink-0 mt-0.5"></i>
+              <span class="text-gray-700 leading-snug">${escHtml(ct.address)}</span>
+            </div>` : `<div class="flex items-center gap-3 text-sm text-gray-300"><i class="fas fa-map-marker-alt w-4"></i><span class="italic">No address on file</span></div>`}
+          </div>
+        </div>
+
+        ${ct.bio ? `
+        <!-- Bio -->
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Bio / Professional Summary</p>
+          <p class="text-sm text-gray-600 leading-relaxed">${escHtml(ct.bio)}</p>
+        </div>` : ''}
+
+        <!-- CV / Résumé -->
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">CV / Résumé</p>
+          ${ct.cv_filename ? `
+          <div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-green-200">
+            <i class="fas fa-file-alt text-green-500 text-lg flex-shrink-0"></i>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-gray-800 truncate">${escHtml(ct.cv_filename)}</p>
+              ${ct.cv_updated_at ? `<p class="text-xs text-gray-400">Updated by provider ${new Date(ct.cv_updated_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</p>` : ''}
+            </div>
+            ${ct.cv_url ? `<a href="${ct.cv_url}" download="${escHtml(ct.cv_filename)}" class="text-xs px-3 py-1.5 rounded-lg bg-white border border-green-300 text-green-700 hover:bg-green-100 flex-shrink-0 flex items-center gap-1">
+              <i class="fas fa-download"></i> Download
+            </a>` : ''}
+          </div>` : `
+          <p class="text-xs text-gray-400 italic">No CV uploaded yet — provider can upload from their portal.</p>`}
+        </div>
+
+        <!-- State Licenses summary -->
+        ${licenses.length > 0 ? `
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">State Licenses (${licenses.length})</p>
+            <button onclick="ctSwitchTab('licenses')" class="text-xs text-blue-500 hover:underline">Manage →</button>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            ${licenses.map(l => {
+              const cls = l.status === 'expired' ? 'bg-red-100 text-red-700' : l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+              const warn = isExpiringSoon(l.expiry_date) ? ' ring-1 ring-orange-400' : ''
+              return `<span class="px-2.5 py-1 rounded-full text-xs font-semibold ${cls}${warn}" title="${escHtml(l.license_type||'')}${l.expiry_date?' · Exp: '+l.expiry_date:''}">${escHtml(l.state)}</span>`
+            }).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Payroll Pane -->
+    <div id="ctPane_payroll">
       ${!periods || periods.length === 0 ? `
         <div class="text-center py-8 text-gray-300">
           <i class="fas fa-receipt text-3xl mb-2 block"></i>
@@ -5064,7 +5905,182 @@ function obRenderContractorDetail(data) {
         </div>
       `}
     </div>
+
+    <!-- State Licensing Pane -->
+    <div id="ctPane_licenses" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs text-gray-500">${licenses.length} state license${licenses.length !== 1 ? 's' : ''} on file</p>
+        <button onclick="ctOpenAddLicense(${cid})" class="text-xs px-3 py-1.5 rounded-lg btn-primary font-semibold flex items-center gap-1.5">
+          <i class="fas fa-plus"></i> Add License
+        </button>
+      </div>
+
+      <!-- Expiring soon alert -->
+      ${licenses.filter(l => isExpiringSoon(l.expiry_date)).length > 0 ? `
+      <div class="mb-3 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
+        <i class="fas fa-exclamation-triangle text-orange-500 mt-0.5 flex-shrink-0"></i>
+        <div>
+          <p class="text-xs font-semibold text-orange-800">Expiring within 60 days</p>
+          <p class="text-xs text-orange-600">${licenses.filter(l => isExpiringSoon(l.expiry_date)).map(l => l.state).join(', ')}</p>
+        </div>
+      </div>` : ''}
+
+      ${licenses.length === 0 ? `
+        <div class="text-center py-10">
+          <i class="fas fa-map-marked-alt text-4xl text-gray-200 mb-3 block"></i>
+          <p class="text-sm text-gray-400">No state licenses on file</p>
+          <p class="text-xs text-gray-300 mt-1">Click "Add License" to track where this provider is licensed</p>
+        </div>
+      ` : `
+        <div class="space-y-2" id="ctLicenseList">
+          ${licenses.map(lic => `
+          <div class="p-3 rounded-xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/20 transition-colors" id="ctLic_${lic.id}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-gray-800 text-sm">${escHtml(lic.state)}</span>
+                  ${licStatusBadge(lic.status)}
+                  ${isExpiringSoon(lic.expiry_date) ? '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Expiring Soon</span>' : ''}
+                </div>
+                ${lic.license_type ? `<p class="text-xs text-gray-500 mt-0.5">${escHtml(lic.license_type)}</p>` : ''}
+                <div class="flex items-center gap-3 mt-1 text-xs text-gray-400 flex-wrap">
+                  ${lic.license_number ? `<span><i class="fas fa-hashtag mr-0.5"></i>${escHtml(lic.license_number)}</span>` : ''}
+                  ${lic.expiry_date ? `<span><i class="fas fa-calendar mr-0.5"></i>Exp: ${lic.expiry_date}</span>` : ''}
+                </div>
+                ${lic.notes ? `<p class="text-xs text-gray-400 mt-1 italic">${escHtml(lic.notes)}</p>` : ''}
+              </div>
+              <div class="flex items-center gap-1 flex-shrink-0">
+                <button onclick="ctOpenEditLicense(${cid},${JSON.stringify(lic).replace(/"/g,'&quot;')})" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                  <i class="fas fa-pencil text-xs"></i>
+                </button>
+                <button onclick="ctDeleteLicense(${lic.id},${cid})" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500">
+                  <i class="fas fa-trash text-xs"></i>
+                </button>
+              </div>
+            </div>
+          </div>`).join('')}
+        </div>
+      `}
+    </div>
   `
+}
+
+// ── License CRUD (admin side) ─────────────────────────────────────
+function ctOpenAddLicense(contractorId) {
+  ctShowLicenseModal(contractorId, null)
+}
+function ctOpenEditLicense(contractorId, lic) {
+  ctShowLicenseModal(contractorId, lic)
+}
+
+const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']
+
+function ctShowLicenseModal(contractorId, lic) {
+  const isEdit = !!lic
+  let modal = $('ctLicenseModal')
+  if (!modal) {
+    modal = document.createElement('div')
+    modal.id = 'ctLicenseModal'
+    modal.className = 'fixed inset-0 modal-backdrop z-[60] flex items-center justify-center p-4'
+    document.body.appendChild(modal)
+  }
+  modal.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h3 class="font-bold text-gray-800">${isEdit ? 'Edit License' : 'Add State License'}</h3>
+        <button onclick="$('ctLicenseModal').classList.add('hidden')" class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">State *</label>
+            <select id="ctLicState" class="w-full text-sm">
+              <option value="">Select state…</option>
+              ${US_STATES.map(s => `<option value="${s}" ${lic?.state===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+            <select id="ctLicStatus" class="w-full text-sm">
+              <option value="active" ${(!lic||lic.status==='active')?'selected':''}>Active</option>
+              <option value="pending" ${lic?.status==='pending'?'selected':''}>Pending</option>
+              <option value="expired" ${lic?.status==='expired'?'selected':''}>Expired</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">License Type</label>
+          <input id="ctLicType" type="text" placeholder="e.g. ARNP, MD, DO, NP" value="${escHtml(lic?.license_type||'')}" class="w-full text-sm"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">License Number</label>
+          <input id="ctLicNum" type="text" placeholder="e.g. AP123456" value="${escHtml(lic?.license_number||'')}" class="w-full text-sm"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Expiration Date</label>
+          <input id="ctLicExpiry" type="date" value="${lic?.expiry_date||''}" class="w-full text-sm"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
+          <textarea id="ctLicNotes" rows="2" placeholder="Optional notes…" class="w-full text-sm resize-none">${escHtml(lic?.notes||'')}</textarea>
+        </div>
+        <div id="ctLicError" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+        <div class="flex gap-3 pt-1">
+          <button onclick="$('ctLicenseModal').classList.add('hidden')" class="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancel</button>
+          <button onclick="ctSaveLicense(${contractorId}, ${isEdit ? lic.id : 'null'})" class="flex-1 btn-primary px-4 py-2 rounded-xl text-sm font-semibold">
+            ${isEdit ? 'Save Changes' : 'Add License'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `
+  modal.classList.remove('hidden')
+}
+
+async function ctSaveLicense(contractorId, licId) {
+  const state   = $('ctLicState').value
+  const status  = $('ctLicStatus').value
+  const type    = ($('ctLicType').value||'').trim()
+  const num     = ($('ctLicNum').value||'').trim()
+  const expiry  = $('ctLicExpiry').value
+  const notes   = ($('ctLicNotes').value||'').trim()
+  const errEl   = $('ctLicError')
+  errEl.classList.add('hidden')
+  if (!state) { errEl.textContent = 'Please select a state.'; errEl.classList.remove('hidden'); return }
+  try {
+    if (licId) {
+      await api(`/api/admin/licenses/${licId}`, { method: 'PUT', body: JSON.stringify({ state, license_number: num, license_type: type, expiry_date: expiry, status, notes }) })
+    } else {
+      await api(`/api/admin/contractors/${contractorId}/licenses`, { method: 'POST', body: JSON.stringify({ state, license_number: num, license_type: type, expiry_date: expiry, status, notes }) })
+    }
+    $('ctLicenseModal').classList.add('hidden')
+    showToast(licId ? 'License updated!' : 'License added!', 'success')
+    // Reload
+    const [data, licenses] = await Promise.all([
+      api(`/api/contractors/${contractorId}/history`),
+      api(`/api/admin/contractors/${contractorId}/licenses`).catch(() => [])
+    ])
+    ctDetailState.licenses = licenses || []
+    obRenderContractorDetail(data)
+    ctSwitchTab('licenses')
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden') }
+}
+
+async function ctDeleteLicense(licId, contractorId) {
+  if (!confirm('Delete this license record?')) return
+  try {
+    await api(`/api/admin/licenses/${licId}`, { method: 'DELETE' })
+    showToast('License deleted.', 'success')
+    const [data, licenses] = await Promise.all([
+      api(`/api/contractors/${contractorId}/history`),
+      api(`/api/admin/contractors/${contractorId}/licenses`).catch(() => [])
+    ])
+    ctDetailState.licenses = licenses || []
+    obRenderContractorDetail(data)
+    ctSwitchTab('licenses')
+  } catch(e) { showToast(e.message, 'error') }
 }
 
 // ── Calendar & Deadlines Tab ──────────────────────────────────────
@@ -5403,6 +6419,7 @@ function obKanbanCard(c) {
              onclick="obOpenDetail(${c.id})">${escHtml(c.full_name)}</div>
         ${c.company_name ? `<div class="text-xs text-gray-400 truncate leading-tight">${escHtml(c.company_name)}</div>` : ''}
         ${c.specialty    ? `<div class="text-xs text-purple-500 truncate leading-tight">${escHtml(c.specialty)}</div>` : ''}
+        ${c.role_group  ? `<div class="mt-0.5">${roleGroupBadge(c.role_group)}</div>` : ''}
       </div>
       <div class="text-gray-200 text-xs flex-shrink-0 cursor-grab hover:text-gray-400 transition-colors mt-0.5" title="Drag to move">
         <i class="fas fa-grip-vertical"></i>
@@ -5554,8 +6571,9 @@ function obDetailHTML() {
       <div>
         <h2 class="text-xl font-bold text-gray-800">${escHtml(c.full_name)}</h2>
         ${c.company_name ? `<div class="text-sm text-gray-500">${escHtml(c.company_name)}</div>` : ''}
-        <div class="flex items-center gap-2 mt-1.5">
+        <div class="flex items-center gap-2 mt-1.5 flex-wrap">
           ${obStatusBadge(c.status)}
+          ${c.role_group ? roleGroupBadge(c.role_group) : ''}
           ${c.converted_contractor_id ? '<span class="status-badge bg-green-100 text-green-700"><i class="fas fa-check-circle mr-1"></i>Active Contractor</span>' : ''}
         </div>
       </div>
@@ -5625,6 +6643,7 @@ function obOverviewTab(c) {
         ${obInfoRow('fa-building', 'Company', c.company_name || '—')}
         ${obInfoRow('fa-id-badge', 'EIN / SSN', c.ein_ssn ? '•••••' + c.ein_ssn.slice(-4) : '—')}
         ${obInfoRow('fa-stethoscope', 'Specialty', c.specialty || '—')}
+        ${obInfoRow('fa-users', 'Provider Group', c.role_group ? (c.role_group === 'NP' ? 'NP / ARNP / PA' : c.role_group === 'Physician' ? 'Physician (MD / DO)' : c.role_group) : '—')}
         ${obInfoRow('fa-user-tag', 'Type', c.contractor_type === 'owner' ? 'Owner' : 'Regular Contractor')}
         ${obInfoRow('fa-tag', 'Source', c.source || '—')}
       </div>
@@ -6027,6 +7046,14 @@ function obAddFormHTML() {
           <input type="text" id="obAddEin" placeholder="XX-XXXXXXX" class="w-full text-sm">
         </div>
         <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Provider Group <span class="text-red-400">*</span></label>
+          <select id="obAddRoleGroup" class="w-full text-sm">
+            <option value="NP">NP / ARNP / PA</option>
+            <option value="Physician">Physician (MD / DO)</option>
+            <option value="Contractor">Contractor</option>
+          </select>
+        </div>
+        <div>
           <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Contractor Type</label>
           <select id="obAddType" class="w-full text-sm">
             <option value="regular">Regular Contractor</option>
@@ -6236,6 +7263,15 @@ function obOpenEditModal() {
           <input type="text" id="obEditEin" value="${escHtml(c.ein_ssn||'')}" class="w-full text-sm">
         </div>
         <div>
+          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Provider Group</label>
+          <select id="obEditRoleGroup" class="w-full text-sm">
+            <option value="NP" ${(c.role_group||'')==='NP'?'selected':''}>NP / ARNP / PA</option>
+            <option value="Physician" ${(c.role_group||'')==='Physician'?'selected':''}>Physician (MD / DO)</option>
+            <option value="Contractor" ${(c.role_group||'')==='Contractor'?'selected':''}>Contractor</option>
+            <option value="" ${!(c.role_group)?'selected':''}>— Unassigned —</option>
+          </select>
+        </div>
+        <div>
           <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">Type</label>
           <select id="obEditType" class="w-full text-sm">
             <option value="regular" ${c.contractor_type==='regular'?'selected':''}>Regular</option>
@@ -6407,6 +7443,7 @@ async function obSaveNewCandidate() {
       phone: $('obAddPhone')?.value || '',
       ein_ssn: $('obAddEin')?.value || '',
       contractor_type: $('obAddType')?.value || 'regular',
+      role_group: $('obAddRoleGroup')?.value || '',
       status: $('obAddStatus')?.value || 'new',
       source: $('obAddSource')?.value || '',
       notes: $('obAddNotes')?.value || '',
@@ -6427,6 +7464,7 @@ async function obSaveEdit(id) {
       phone: $('obEditPhone')?.value || '',
       ein_ssn: $('obEditEin')?.value || '',
       contractor_type: $('obEditType')?.value || 'regular',
+      role_group: $('obEditRoleGroup')?.value || '',
       source: $('obEditSource')?.value || '',
     }
     await api(`/api/onboarding/candidates/${id}`, { method: 'PUT', body: JSON.stringify(body) })
@@ -7190,7 +8228,7 @@ function noDataMsg() {
 // ════════════════════════════════════════════════════
 // USER MANAGEMENT (Admin only)
 // ════════════════════════════════════════════════════
-let umState = { users: [], editId: null }
+let umState = { users: [], editId: null, contractors: [] }
 
 async function renderUserManagement() {
   $('mainContent').innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
@@ -7229,16 +8267,25 @@ function umDrawPage() {
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Role *</label>
-            <select id="umRole" class="w-full">
+            <select id="umRole" class="w-full" onchange="umHandleRoleChange(this.value)">
               <option value="admin">👑 Admin — Full access</option>
               <option value="carevalidate">🏥 CareValidate — Summary &amp; Detail view only</option>
               <option value="onboarding">🟢 Onboarding — Onboarding pipeline only</option>
+              <option value="provider">🩺 Provider — Self-service profile portal</option>
             </select>
           </div>
           <div id="umPwField">
             <label class="block text-xs font-semibold text-gray-600 mb-1">Password <span id="umPwNote" class="text-gray-400 font-normal">(leave blank to send invite link)</span></label>
             <input id="umPassword" type="password" placeholder="Optional — or user sets via invite" class="w-full"/>
           </div>
+        </div>
+        <!-- Provider contractor link (shown only when role=provider) -->
+        <div id="umProviderField" class="hidden mt-4 p-4 bg-purple-50 rounded-xl border border-purple-200">
+          <label class="block text-xs font-semibold text-purple-700 mb-1"><i class="fas fa-link mr-1"></i>Link to Contractor Profile</label>
+          <p class="text-xs text-purple-500 mb-2">Select the contractor this provider maps to. They'll be able to edit their own profile and state licenses.</p>
+          <select id="umContractorId" class="w-full text-sm">
+            <option value="">— No link yet —</option>
+          </select>
         </div>
         <div class="flex gap-3 mt-4">
           <button onclick="umCloseForm()" class="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancel</button>
@@ -7265,10 +8312,12 @@ function umDrawPage() {
                 users.map(u => `
                 <tr class="border-b border-gray-50 table-row">
                   <td class="px-4 py-3 font-medium text-gray-800">
-                    ${u.name}
-                    ${u.id === state.user?.id ? '<span class="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-semibold">You</span>' : ''}
+                    <div>${escHtml(u.name)}
+                    ${u.id === state.user?.id ? '<span class="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-semibold">You</span>' : ''}</div>
+                    ${u.role === 'provider' && u.contractor_name ? `<div class="text-xs text-purple-500 mt-0.5"><i class="fas fa-link mr-1"></i>${escHtml(u.contractor_name)}</div>` : ''}
+                    ${u.role === 'provider' && !u.contractor_name ? `<div class="text-xs text-orange-400 mt-0.5"><i class="fas fa-exclamation-triangle mr-1"></i>No contractor linked</div>` : ''}
                   </td>
-                  <td class="px-4 py-3 text-gray-600">${u.email}</td>
+                  <td class="px-4 py-3 text-gray-600">${escHtml(u.email)}</td>
                   <td class="px-4 py-3">${umRoleBadge(u.role)}</td>
                   <td class="px-4 py-3">
                     ${u.is_active
@@ -7282,13 +8331,13 @@ function umDrawPage() {
                       <button onclick="umOpenEdit(${u.id})" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 tooltip" data-tip="Edit">
                         <i class="fas fa-pencil text-xs"></i>
                       </button>
-                      <button onclick="umResendInvite(${u.id},'${u.name}')" class="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600 tooltip" data-tip="Generate &amp; copy invite link">
+                      <button onclick="umResendInvite(${u.id},'${escHtml(u.name).replace(/'/g,"&#39;")}')" class="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600 tooltip" data-tip="Generate &amp; copy invite link">
                         <i class="fas fa-link text-xs"></i>
                       </button>
-                      <button onclick="umToggleActive(${u.id},${u.is_active},'${u.name}')" class="p-1.5 rounded-lg tooltip ${u.is_active ? 'hover:bg-red-50 text-red-400 hover:text-red-600' : 'hover:bg-green-50 text-green-400 hover:text-green-600'}" data-tip="${u.is_active ? 'Deactivate' : 'Activate'}">
+                      <button onclick="umToggleActive(${u.id},${u.is_active},'${escHtml(u.name).replace(/'/g,"&#39;")}')" class="p-1.5 rounded-lg tooltip ${u.is_active ? 'hover:bg-red-50 text-red-400 hover:text-red-600' : 'hover:bg-green-50 text-green-400 hover:text-green-600'}" data-tip="${u.is_active ? 'Deactivate' : 'Activate'}">
                         <i class="fas ${u.is_active ? 'fa-user-slash' : 'fa-user-check'} text-xs"></i>
                       </button>
-                      ${u.id !== state.user?.id ? `<button onclick="umDelete(${u.id},'${u.name}')" class="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 tooltip" data-tip="Delete"><i class="fas fa-trash text-xs"></i></button>` : ''}
+                      ${u.id !== state.user?.id ? `<button onclick="umDelete(${u.id},'${escHtml(u.name).replace(/'/g,"&#39;")}')" class="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 tooltip" data-tip="Delete"><i class="fas fa-trash text-xs"></i></button>` : ''}
                     </div>
                   </td>
                 </tr>`).join('')}
@@ -7325,7 +8374,34 @@ function umDrawPage() {
 function umRoleBadge(role) {
   if (role === 'admin') return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">👑 Admin</span>'
   if (role === 'carevalidate') return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">🏥 CareValidate</span>'
+  if (role === 'provider') return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">🩺 Provider</span>'
   return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">🟢 Onboarding</span>'
+}
+
+// Load contractor list into the provider link dropdown
+async function umLoadContractors() {
+  if (umState.contractors.length > 0) return
+  try {
+    const data = await api('/api/contractors')
+    umState.contractors = (data || []).filter(c => c.is_active !== 0)
+  } catch(_) {}
+}
+
+function umHandleRoleChange(role) {
+  const pf = $('umProviderField')
+  if (!pf) return
+  if (role === 'provider') {
+    pf.classList.remove('hidden')
+    umLoadContractors().then(() => {
+      const sel = $('umContractorId')
+      if (!sel) return
+      const cur = sel.value
+      sel.innerHTML = '<option value="">— No link yet —</option>' +
+        umState.contractors.map(c => `<option value="${c.id}" ${cur==c.id?'selected':''}>${escHtml(c.name)}</option>`).join('')
+    })
+  } else {
+    pf.classList.add('hidden')
+  }
 }
 
 function umOpenAdd() {
@@ -7337,11 +8413,13 @@ function umOpenAdd() {
   $('umEmail').disabled = false
   $('umFormError').classList.add('hidden')
   $('umInviteBox').classList.add('hidden')
+  $('umProviderField').classList.add('hidden')
+  $('umContractorId').value = ''
   $('umForm').classList.remove('hidden')
   $('umName').focus()
 }
 
-function umOpenEdit(id) {
+async function umOpenEdit(id) {
   const u = umState.users.find(x => x.id === id)
   if (!u) return
   umState.editId = id
@@ -7352,6 +8430,17 @@ function umOpenEdit(id) {
   $('umEmail').disabled = false
   $('umFormError').classList.add('hidden')
   $('umInviteBox').classList.add('hidden')
+  // Handle provider field
+  if (u.role === 'provider') {
+    $('umProviderField').classList.remove('hidden')
+    await umLoadContractors()
+    const sel = $('umContractorId')
+    sel.innerHTML = '<option value="">— No link yet —</option>' +
+      umState.contractors.map(c => `<option value="${c.id}" ${u.contractor_id==c.id?'selected':''}>${escHtml(c.name)}</option>`).join('')
+  } else {
+    $('umProviderField').classList.add('hidden')
+    $('umContractorId').value = ''
+  }
   $('umForm').classList.remove('hidden')
   $('umName').focus()
 }
@@ -7367,6 +8456,7 @@ async function umSave() {
   const role  = $('umRole').value
   const pw    = ($('umPassword').value || '').trim()
   const errEl = $('umFormError')
+  const contractorId = role === 'provider' ? ($('umContractorId').value || null) : null
   errEl.classList.add('hidden')
 
   if (!name || !email) { errEl.textContent = 'Name and email are required.'; errEl.classList.remove('hidden'); return }
@@ -7378,6 +8468,10 @@ async function umSave() {
       const body = { name, role }
       if (pw) body.password = pw
       await api(`/api/admin/users/${umState.editId}`, { method: 'PUT', body: JSON.stringify(body) })
+      // Update contractor link if provider
+      if (role === 'provider') {
+        await api(`/api/admin/users/${umState.editId}/link-contractor`, { method: 'PUT', body: JSON.stringify({ contractor_id: contractorId ? parseInt(contractorId) : null }) })
+      }
       showToast('User updated!', 'success')
       umCloseForm()
     } else {
@@ -7385,6 +8479,10 @@ async function umSave() {
       const body = { name, email, role }
       if (pw) body.password = pw
       const result = await api('/api/admin/users', { method: 'POST', body: JSON.stringify(body) })
+      // Link contractor if provider
+      if (role === 'provider' && contractorId && result.id) {
+        await api(`/api/admin/users/${result.id}/link-contractor`, { method: 'PUT', body: JSON.stringify({ contractor_id: parseInt(contractorId) }) })
+      }
       showToast('User created!', 'success')
       umCloseForm()
       // Show invite link if generated
@@ -8381,6 +9479,761 @@ function cpExportXlsx() {
 
   XLSX.writeFile(wb, `LionMD_ClientPayments_${date}.xlsx`)
   showToast(`Exported ${cpState.view === 'monthly' ? cpPeriodLabel(cpState.currentPeriod) : 'client summary'} to XLSX`, 'success')
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PROVIDER SELF-SERVICE PORTAL
+// ════════════════════════════════════════════════════════════════════
+
+const ppState = {
+  profile: null,     // { contractor, licenses, portal_user }
+  tab: 'profile',    // active sub-tab when inside renderProviderPortal
+}
+
+async function renderProviderPortal() {
+  // Land on My Profile by default
+  state.currentPage = 'provider_profile'
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+  const navEl = $('nav_provider_profile'); if (navEl) navEl.classList.add('active')
+  $('pageTitle').textContent = 'My Profile'
+  renderProviderProfile()
+}
+
+async function ppLoadProfile() {
+  const data = await api('/api/provider/profile')
+  ppState.profile = data
+  return data
+}
+
+// ── My Profile tab ────────────────────────────────────────────────
+async function renderProviderProfile() {
+  const mc = $('mainContent')
+  mc.innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
+  try {
+    const data = await ppLoadProfile()
+    ppDrawProfile(data)
+  } catch(e) {
+    mc.innerHTML = `
+      <div class="max-w-lg mx-auto mt-10 text-center">
+        <div class="card p-8">
+          <i class="fas fa-user-slash text-5xl text-gray-200 mb-4 block"></i>
+          <h3 class="font-bold text-gray-700 text-lg mb-2">Profile Not Linked</h3>
+          <p class="text-gray-400 text-sm">Your account hasn't been linked to a contractor profile yet. Please contact an admin to set this up.</p>
+        </div>
+      </div>`
+  }
+}
+
+function ppDrawProfile(data) {
+  const mc = $('mainContent')
+  const { contractor: ct, portal_user: pu, licenses } = data
+  if (!ct) { mc.innerHTML = '<p class="text-red-500 p-4">No profile linked.</p>'; return }
+
+  const expiringSoon = (licenses || []).filter(l => {
+    if (!l.expiry_date || l.status !== 'active') return false
+    const d = new Date(l.expiry_date); const now = new Date()
+    return d > now && d < new Date(now.getTime() + 60*24*60*60*1000)
+  })
+
+  mc.innerHTML = `
+  <div class="max-w-2xl">
+    <!-- Profile header card -->
+    <div class="card p-6 mb-5">
+      <div class="flex items-start gap-5">
+        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-bold flex-shrink-0" style="background:var(--lion-gold)">
+          ${(ct.name||'?')[0].toUpperCase()}
+        </div>
+        <div class="flex-1 min-w-0">
+          <h2 class="text-xl font-bold text-gray-900">${escHtml(ct.name)}</h2>
+          ${ct.company ? `<p class="text-gray-500 text-sm mt-0.5">${escHtml(ct.company)}</p>` : ''}
+          <div class="flex items-center gap-2 mt-2 flex-wrap">
+            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700"><i class="fas fa-stethoscope mr-1"></i>${escHtml(ct.role_group || 'Provider')}</span>
+            ${(licenses||[]).length > 0 ? `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700"><i class="fas fa-map-marker-alt mr-1"></i>${licenses.length} State${licenses.length!==1?'s':''} Licensed</span>` : ''}
+          </div>
+        </div>
+        <button onclick="ppOpenEditProfile()" class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 flex-shrink-0">
+          <i class="fas fa-pencil"></i> Edit
+        </button>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    ${expiringSoon.length > 0 ? `
+    <div class="mb-4 p-4 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-3">
+      <i class="fas fa-exclamation-triangle text-orange-500 mt-0.5 flex-shrink-0"></i>
+      <div>
+        <p class="font-semibold text-orange-800 text-sm">License expiring within 60 days</p>
+        <p class="text-xs text-orange-600 mt-0.5">${expiringSoon.map(l => l.state + (l.expiry_date ? ' (exp. ' + l.expiry_date + ')' : '')).join(' · ')}</p>
+      </div>
+    </div>` : ''}
+
+    <!-- Contact & Details -->
+    <div class="card p-5 mb-5">
+      <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Contact Information</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <p class="text-xs text-gray-400 font-medium mb-1">Email</p>
+          <p class="text-sm text-gray-700">${escHtml(pu?.email || ct.email || '—')}</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium mb-1">Phone</p>
+          <p class="text-sm text-gray-700">${escHtml(ct.phone || '—')} ${!ct.phone ? '<button onclick="ppOpenEditProfile()" class="text-xs text-blue-500 hover:underline ml-1">+ Add</button>' : ''}</p>
+        </div>
+        <div class="md:col-span-2">
+          <p class="text-xs text-gray-400 font-medium mb-1">Address</p>
+          <p class="text-sm text-gray-700">${escHtml(ct.address || '—')} ${!ct.address ? '<button onclick="ppOpenEditProfile()" class="text-xs text-blue-500 hover:underline ml-1">+ Add</button>' : ''}</p>
+        </div>
+        ${ct.bio ? `
+        <div class="md:col-span-2">
+          <p class="text-xs text-gray-400 font-medium mb-1">Bio / Notes</p>
+          <p class="text-sm text-gray-600 leading-relaxed">${escHtml(ct.bio)}</p>
+        </div>` : ''}
+      </div>
+    </div>
+
+    <!-- CV / Document Upload -->
+    <div class="card p-5 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">CV / Résumé</h3>
+        <label for="ppCvUpload" class="cursor-pointer text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold transition-colors">
+          <i class="fas fa-upload mr-1"></i> Upload New
+        </label>
+        <input id="ppCvUpload" type="file" accept=".pdf,.doc,.docx" class="hidden" onchange="ppUploadCV(this)">
+      </div>
+      ${ct.cv_filename ? `
+      <div class="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-200">
+        <i class="fas fa-file-pdf text-green-500 text-xl flex-shrink-0"></i>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-800 truncate">${escHtml(ct.cv_filename)}</p>
+          ${ct.cv_updated_at ? `<p class="text-xs text-gray-400">Updated ${new Date(ct.cv_updated_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</p>` : ''}
+        </div>
+        ${ct.cv_url ? `<a href="${ct.cv_url}" download="${escHtml(ct.cv_filename)}" class="text-xs px-3 py-1.5 rounded-lg bg-white border border-green-300 text-green-700 hover:bg-green-100 flex-shrink-0">
+          <i class="fas fa-download mr-1"></i>Download
+        </a>` : ''}
+      </div>` : `
+      <div class="text-center py-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+        <i class="fas fa-file-upload text-3xl text-gray-300 mb-2 block"></i>
+        <p class="text-sm text-gray-400">No CV on file</p>
+        <label for="ppCvUpload2" class="mt-2 inline-block cursor-pointer text-xs px-4 py-2 rounded-lg btn-primary font-semibold">
+          <i class="fas fa-upload mr-1"></i> Upload CV
+        </label>
+        <input id="ppCvUpload2" type="file" accept=".pdf,.doc,.docx" class="hidden" onchange="ppUploadCV(this)">
+      </div>`}
+    </div>
+
+    <!-- Licensing summary snippet -->
+    ${(licenses||[]).length > 0 ? `
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">State Licenses (${licenses.length})</h3>
+        <button onclick="navigate('provider_licenses')" class="text-xs text-blue-500 hover:underline">Manage All →</button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${licenses.map(l => {
+          const cls = l.status === 'expired' ? 'bg-red-100 text-red-700' : l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+          return `<span class="px-2.5 py-1 rounded-full text-xs font-semibold ${cls}">${escHtml(l.state)}</span>`
+        }).join('')}
+      </div>
+    </div>` : ''}
+  </div>
+  `
+}
+
+function ppOpenEditProfile() {
+  const data = ppState.profile
+  if (!data) return
+  const { contractor: ct, portal_user: pu } = data
+  let modal = $('ppEditModal')
+  if (!modal) {
+    modal = document.createElement('div')
+    modal.id = 'ppEditModal'
+    modal.className = 'fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4'
+    document.body.appendChild(modal)
+  }
+  modal.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+        <h3 class="font-bold text-gray-800">Edit My Profile</h3>
+        <button onclick="$('ppEditModal').classList.add('hidden')" class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4 overflow-y-auto">
+        <p class="text-xs text-gray-400 -mt-1">Changes are immediately visible to your admin.</p>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Email <span class="font-normal text-gray-400">(updates login email)</span></label>
+            <input id="ppEditEmail" type="email" placeholder="you@example.com" value="${escHtml(pu?.email || ct.email || '')}" class="w-full text-sm"/>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Phone</label>
+            <input id="ppEditPhone" type="tel" placeholder="(555) 123-4567" value="${escHtml(ct.phone||'')}" class="w-full text-sm"/>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Street Address</label>
+            <input id="ppEditAddress" type="text" placeholder="123 Main St" value="${escHtml(ct.address||'')}" class="w-full text-sm"/>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Bio / Professional Summary</label>
+            <textarea id="ppEditBio" rows="3" placeholder="Brief professional background, specialties…" class="w-full text-sm resize-none">${escHtml(ct.bio||'')}</textarea>
+          </div>
+        </div>
+        <div id="ppEditError" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+        <div class="flex gap-3 pt-1">
+          <button onclick="$('ppEditModal').classList.add('hidden')" class="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancel</button>
+          <button onclick="ppSaveProfile()" class="flex-1 btn-primary px-4 py-2 rounded-xl text-sm font-semibold">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  `
+  modal.classList.remove('hidden')
+}
+
+async function ppSaveProfile() {
+  const email   = ($('ppEditEmail')?.value||'').trim()
+  const phone   = ($('ppEditPhone').value||'').trim()
+  const address = ($('ppEditAddress').value||'').trim()
+  const bio     = ($('ppEditBio').value||'').trim()
+  const errEl   = $('ppEditError')
+  errEl.classList.add('hidden')
+  if (email && !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+    errEl.textContent = 'Please enter a valid email address.'
+    errEl.classList.remove('hidden')
+    return
+  }
+  try {
+    await api('/api/provider/profile', { method: 'PUT', body: JSON.stringify({ phone, address, bio, email: email || undefined }) })
+    $('ppEditModal').classList.add('hidden')
+    showToast('Profile updated! Admin can see your changes.', 'success')
+    const data = await ppLoadProfile()
+    ppDrawProfile(data)
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden') }
+}
+
+async function ppUploadCV(input) {
+  const file = input.files?.[0]
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) { showToast('File too large (max 5 MB)', 'error'); return }
+  showLoading('Uploading CV…')
+  try {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        await api('/api/provider/cv', { method: 'POST', body: JSON.stringify({ filename: file.name, data_url: e.target.result }) })
+        hideLoading()
+        showToast('CV uploaded successfully!', 'success')
+        const data = await ppLoadProfile()
+        ppDrawProfile(data)
+      } catch(err) { hideLoading(); showToast('Upload failed: ' + err.message, 'error') }
+    }
+    reader.onerror = () => { hideLoading(); showToast('Failed to read file', 'error') }
+    reader.readAsDataURL(file)
+  } catch(e) { hideLoading(); showToast(e.message, 'error') }
+}
+
+// ── State Licenses tab ────────────────────────────────────────────
+async function renderProviderLicenses() {
+  const mc = $('mainContent')
+  mc.innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
+  try {
+    const data = await ppLoadProfile()
+    ppDrawLicenses(data.licenses || [])
+  } catch(e) {
+    mc.innerHTML = `<p class="text-red-500 p-4">${e.message}</p>`
+  }
+}
+
+function ppDrawLicenses(licenses) {
+  const mc = $('mainContent')
+  const isExpiringSoon = (dateStr) => {
+    if (!dateStr) return false
+    const d = new Date(dateStr); const now = new Date()
+    return d > now && d < new Date(now.getTime() + 60*24*60*60*1000)
+  }
+  const isExpired = (dateStr, status) => status === 'expired' || (dateStr && new Date(dateStr) < new Date())
+
+  const licStatusBadge = s => {
+    const map = { active:'bg-green-100 text-green-700', expired:'bg-red-100 text-red-700', pending:'bg-yellow-100 text-yellow-700' }
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${map[s]||'bg-gray-100 text-gray-500'}">${(s||'').charAt(0).toUpperCase()+(s||'').slice(1)}</span>`
+  }
+
+  const byStatus = { active: licenses.filter(l => l.status === 'active'), pending: licenses.filter(l => l.status === 'pending'), expired: licenses.filter(l => l.status === 'expired') }
+
+  mc.innerHTML = `
+  <div class="max-w-2xl">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-bold text-gray-800">State Licenses</h2>
+        <p class="text-sm text-gray-400 mt-0.5">${licenses.length} license${licenses.length !== 1 ? 's' : ''} on file</p>
+      </div>
+      <button onclick="ppOpenAddLicense()" class="btn-primary px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+        <i class="fas fa-plus"></i> Add License
+      </button>
+    </div>
+
+    <!-- Expiring soon alert -->
+    ${licenses.filter(l => isExpiringSoon(l.expiry_date)).length > 0 ? `
+    <div class="mb-4 p-4 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-3">
+      <i class="fas fa-exclamation-triangle text-orange-500 mt-0.5 flex-shrink-0"></i>
+      <div>
+        <p class="font-semibold text-orange-800 text-sm">Licenses expiring within 60 days</p>
+        <p class="text-xs text-orange-600 mt-0.5">${licenses.filter(l => isExpiringSoon(l.expiry_date)).map(l => l.state + ' (exp. ' + l.expiry_date + ')').join(' · ')}</p>
+      </div>
+    </div>` : ''}
+
+    ${licenses.length === 0 ? `
+    <div class="card p-10 text-center">
+      <i class="fas fa-map-marked-alt text-5xl text-gray-200 mb-4 block"></i>
+      <h3 class="font-bold text-gray-600 text-base mb-1">No licenses on file</h3>
+      <p class="text-sm text-gray-400 mb-4">Add your state medical licenses to keep track of where you're licensed to practice.</p>
+      <button onclick="ppOpenAddLicense()" class="btn-primary px-6 py-2 rounded-xl text-sm font-semibold">
+        <i class="fas fa-plus mr-2"></i>Add First License
+      </button>
+    </div>` : `
+    <div class="space-y-3">
+      ${licenses.map(lic => `
+      <div class="card p-4 hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-3 flex-1 min-w-0">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${lic.status === 'expired' ? 'bg-red-100' : lic.status === 'pending' ? 'bg-yellow-100' : 'bg-green-100'}">
+              <i class="fas fa-certificate ${lic.status === 'expired' ? 'text-red-400' : lic.status === 'pending' ? 'text-yellow-500' : 'text-green-500'}"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-bold text-gray-900 text-base">${escHtml(lic.state)}</span>
+                ${licStatusBadge(lic.status)}
+                ${isExpiringSoon(lic.expiry_date) ? '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700"><i class="fas fa-clock mr-0.5"></i>Expiring Soon</span>' : ''}
+              </div>
+              ${lic.license_type ? `<p class="text-sm text-gray-500 mt-0.5">${escHtml(lic.license_type)}</p>` : ''}
+              <div class="flex items-center gap-4 mt-1.5 text-xs text-gray-400 flex-wrap">
+                ${lic.license_number ? `<span><i class="fas fa-hashtag mr-0.5"></i>${escHtml(lic.license_number)}</span>` : '<span class="italic">No license number</span>'}
+                ${lic.expiry_date ? `<span class="${isExpiringSoon(lic.expiry_date) ? 'text-orange-600 font-semibold' : ''}"><i class="fas fa-calendar mr-0.5"></i>Expires ${lic.expiry_date}</span>` : '<span class="italic">No expiration date</span>'}
+              </div>
+              ${lic.notes ? `<p class="text-xs text-gray-400 mt-1.5 italic">"${escHtml(lic.notes)}"</p>` : ''}
+            </div>
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <button onclick="ppOpenEditLicense(${JSON.stringify(lic).replace(/"/g,'&quot;')})" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+              <i class="fas fa-pencil text-xs"></i>
+            </button>
+            <button onclick="ppDeleteLicense(${lic.id})" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500">
+              <i class="fas fa-trash text-xs"></i>
+            </button>
+          </div>
+        </div>
+      </div>`).join('')}
+    </div>`}
+  </div>
+  `
+}
+
+function ppOpenAddLicense()      { ppShowLicenseModal(null) }
+function ppOpenEditLicense(lic)  { ppShowLicenseModal(lic) }
+
+function ppShowLicenseModal(lic) {
+  const isEdit = !!lic
+  let modal = $('ppLicenseModal')
+  if (!modal) {
+    modal = document.createElement('div')
+    modal.id = 'ppLicenseModal'
+    modal.className = 'fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4'
+    document.body.appendChild(modal)
+  }
+  modal.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h3 class="font-bold text-gray-800">${isEdit ? 'Edit License' : 'Add State License'}</h3>
+        <button onclick="$('ppLicenseModal').classList.add('hidden')" class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">State *</label>
+            <select id="ppLicState" class="w-full text-sm">
+              <option value="">Select…</option>
+              ${US_STATES.map(s => `<option value="${s}" ${lic?.state===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+            <select id="ppLicStatus" class="w-full text-sm">
+              <option value="active" ${(!lic||lic.status==='active')?'selected':''}>Active</option>
+              <option value="pending" ${lic?.status==='pending'?'selected':''}>Pending</option>
+              <option value="expired" ${lic?.status==='expired'?'selected':''}>Expired</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">License Type</label>
+          <input id="ppLicType" type="text" placeholder="e.g. ARNP, MD, DO, NP" value="${escHtml(lic?.license_type||'')}" class="w-full text-sm"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">License Number</label>
+          <input id="ppLicNum" type="text" placeholder="e.g. AP123456" value="${escHtml(lic?.license_number||'')}" class="w-full text-sm"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Expiration Date</label>
+          <input id="ppLicExpiry" type="date" value="${lic?.expiry_date||''}" class="w-full text-sm"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
+          <textarea id="ppLicNotes" rows="2" placeholder="Optional notes…" class="w-full text-sm resize-none">${escHtml(lic?.notes||'')}</textarea>
+        </div>
+        <div id="ppLicError" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+        <div class="flex gap-3 pt-1">
+          <button onclick="$('ppLicenseModal').classList.add('hidden')" class="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">Cancel</button>
+          <button onclick="ppSaveLicense(${isEdit ? lic.id : 'null'})" class="flex-1 btn-primary px-4 py-2 rounded-xl text-sm font-semibold">
+            ${isEdit ? 'Save Changes' : 'Add License'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `
+  modal.classList.remove('hidden')
+}
+
+async function ppSaveLicense(licId) {
+  const state   = $('ppLicState').value
+  const status  = $('ppLicStatus').value
+  const type    = ($('ppLicType').value||'').trim()
+  const num     = ($('ppLicNum').value||'').trim()
+  const expiry  = $('ppLicExpiry').value
+  const notes   = ($('ppLicNotes').value||'').trim()
+  const errEl   = $('ppLicError')
+  errEl.classList.add('hidden')
+  if (!state) { errEl.textContent = 'Please select a state.'; errEl.classList.remove('hidden'); return }
+  try {
+    if (licId) {
+      await api(`/api/provider/licenses/${licId}`, { method: 'PUT', body: JSON.stringify({ state, license_number: num, license_type: type, expiry_date: expiry, status, notes }) })
+    } else {
+      await api('/api/provider/licenses', { method: 'POST', body: JSON.stringify({ state, license_number: num, license_type: type, expiry_date: expiry, status, notes }) })
+    }
+    $('ppLicenseModal').classList.add('hidden')
+    showToast(licId ? 'License updated!' : 'License added!', 'success')
+    const data = await ppLoadProfile()
+    ppDrawLicenses(data.licenses || [])
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden') }
+}
+
+async function ppDeleteLicense(id) {
+  if (!confirm('Delete this license?')) return
+  try {
+    await api(`/api/provider/licenses/${id}`, { method: 'DELETE' })
+    showToast('License removed.', 'success')
+    const data = await ppLoadProfile()
+    ppDrawLicenses(data.licenses || [])
+  } catch(e) { showToast(e.message, 'error') }
+}
+
+// ── My Payroll tab ────────────────────────────────────────────────
+async function renderProviderPayroll() {
+  const mc = $('mainContent')
+  mc.innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
+  try {
+    const data = await api('/api/provider/payroll')
+    ppDrawPayroll(data)
+  } catch(e) {
+    mc.innerHTML = `<p class="text-red-500 p-4">${e.message}</p>`
+  }
+}
+
+function ppDrawPayroll(data) {
+  const mc = $('mainContent')
+  const { periods = [], totals = {} } = data
+  const fmt = n => n != null ? '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+  const fmtN = n => Number(n || 0).toLocaleString()
+
+  mc.innerHTML = `
+  <div class="max-w-2xl">
+    <div class="mb-5">
+      <h2 class="text-lg font-bold text-gray-800">My Payroll</h2>
+      <p class="text-sm text-gray-400 mt-0.5">Earnings summary across all pay periods</p>
+    </div>
+
+    <!-- Lifetime KPI cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div class="card p-4 text-center">
+        <p class="text-xs text-gray-400 mb-1">Lifetime Earnings</p>
+        <p class="text-xl font-bold" style="color:var(--lion-gold)">${fmt(totals.total_pay)}</p>
+      </div>
+      <div class="card p-4 text-center">
+        <p class="text-xs text-gray-400 mb-1">Total Cases</p>
+        <p class="text-xl font-bold text-gray-700">${fmtN(totals.total_cases)}</p>
+      </div>
+      <div class="card p-4 text-center">
+        <p class="text-xs text-gray-400 mb-1">Approved</p>
+        <p class="text-xl font-bold text-emerald-600">${fmtN(totals.approved_count)}</p>
+      </div>
+      <div class="card p-4 text-center">
+        <p class="text-xs text-gray-400 mb-1">Denied</p>
+        <p class="text-xl font-bold text-red-400">${fmtN(totals.denied_count)}</p>
+      </div>
+    </div>
+
+    <!-- Period breakdown -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+        <i class="fas fa-calendar-alt text-gray-300"></i>
+        <span class="font-semibold text-gray-700 text-sm">Pay Period History</span>
+        <span class="ml-auto text-xs text-gray-400">${periods.length} period${periods.length !== 1 ? 's' : ''}</span>
+      </div>
+      ${periods.length === 0 ? `
+        <div class="text-center py-12">
+          <i class="fas fa-receipt text-4xl text-gray-200 mb-3 block"></i>
+          <p class="text-gray-400 text-sm">No payroll records yet</p>
+        </div>
+      ` : `
+        <div class="divide-y divide-gray-50">
+          ${periods.map(p => {
+            const pay = Number(p.total_pay || 0)
+            const cases = Number(p.total_cases || 0)
+            const approved = Number(p.approved_count || 0)
+            const denied = Number(p.denied_count || 0)
+            const approvalRate = cases > 0 ? Math.round((approved / cases) * 100) : 0
+            return `
+            <div class="px-5 py-4 hover:bg-gray-50 transition-colors">
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <span class="font-semibold text-gray-800">${escHtml(p.period_label || p.period_key || '')}</span>
+                </div>
+                <span class="text-lg font-bold" style="color:var(--lion-gold)">${fmt(pay)}</span>
+              </div>
+              <div class="flex items-center gap-4 text-xs text-gray-400 flex-wrap">
+                <span><i class="fas fa-file-medical mr-1"></i>${fmtN(cases)} case${cases !== 1 ? 's' : ''}</span>
+                <span class="text-emerald-600"><i class="fas fa-check mr-1"></i>${fmtN(approved)} approved</span>
+                ${denied > 0 ? `<span class="text-red-400"><i class="fas fa-times mr-1"></i>${fmtN(denied)} denied</span>` : ''}
+                ${p.async_count > 0   ? `<span>${fmtN(p.async_count)} async</span>` : ''}
+                ${p.sync_count > 0    ? `<span>${fmtN(p.sync_count)} sync</span>` : ''}
+                ${p.orderly_count > 0 ? `<span>${fmtN(p.orderly_count)} Orderly</span>` : ''}
+              </div>
+              <!-- Approval bar -->
+              <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-full bg-emerald-400 rounded-full" style="width:${approvalRate}%"></div>
+              </div>
+              <p class="text-xs text-gray-300 mt-0.5">${approvalRate}% approval rate</p>
+            </div>`
+          }).join('')}
+        </div>
+        <!-- Total row -->
+        <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">All Time</span>
+          <span class="font-bold text-base" style="color:var(--lion-gold)">${fmt(totals.total_pay)}</span>
+        </div>
+      `}
+    </div>
+  </div>`
+}
+
+// ── My Consults tab ────────────────────────────────────────────────
+const ppConsultState = { period: '', search: '', page: 1, total: 0, data: [], periods: [] }
+
+async function renderProviderConsults() {
+  const mc = $('mainContent')
+  mc.innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
+  try {
+    // Load periods from payroll endpoint for the filter
+    const payrollData = await api('/api/provider/payroll')
+    ppConsultState.periods = (payrollData.periods || [])
+    if (!ppConsultState.period && ppConsultState.periods.length > 0) {
+      ppConsultState.period = ppConsultState.periods[0].period_key
+    }
+    await ppLoadConsults()
+  } catch(e) {
+    mc.innerHTML = `<p class="text-red-500 p-4">${e.message}</p>`
+  }
+}
+
+async function ppLoadConsults() {
+  const qs = new URLSearchParams({ page: ppConsultState.page, limit: 50 })
+  if (ppConsultState.period) qs.set('period_key', ppConsultState.period)
+  if (ppConsultState.search) qs.set('search', ppConsultState.search)
+  const data = await api('/api/provider/consults?' + qs.toString())
+  ppConsultState.data  = data.data  || []
+  ppConsultState.total = data.total || 0
+  ppDrawConsults()
+}
+
+function ppDrawConsults() {
+  const mc = $('mainContent')
+  const { data: rows, total, periods, period, search } = ppConsultState
+  const pageCount = Math.ceil(total / 50)
+
+  const vtLabel = vt => {
+    if (!vt) return '—'
+    if (vt === 'ASYNC_TEXT_EMAIL') return 'Async'
+    if (vt === 'NO_SHOW') return 'No Show'
+    if (vt.startsWith('SYNC_')) return 'Sync'
+    return vt
+  }
+  const vtBadge = vt => {
+    const cls = vt === 'ASYNC_TEXT_EMAIL' ? 'bg-blue-100 text-blue-700'
+               : vt === 'NO_SHOW'          ? 'bg-gray-100 text-gray-500'
+               : vt?.startsWith('SYNC_')   ? 'bg-purple-100 text-purple-700'
+               :                             'bg-gray-100 text-gray-500'
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${vtLabel(vt)}</span>`
+  }
+  const statusBadge = s => {
+    const cls = s === 'Approved' ? 'bg-emerald-100 text-emerald-700'
+               : s === 'Denied'  ? 'bg-red-100 text-red-600'
+               :                   'bg-yellow-100 text-yellow-700'
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${s || '—'}</span>`
+  }
+  const fmt = n => n != null ? '$' + Number(n).toFixed(2) : '—'
+
+  mc.innerHTML = `
+  <div class="max-w-full">
+    <!-- Controls -->
+    <div class="flex items-center gap-3 mb-5 flex-wrap">
+      <div>
+        <select id="ppCPeriod" onchange="ppConsultState.period=this.value; ppConsultState.page=1; ppLoadConsults()"
+          class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <option value="">All Periods</option>
+          ${periods.map(p => `<option value="${p.period_key}" ${p.period_key===period?'selected':''}>${escHtml(p.period_label||p.period_key)}</option>`).join('')}
+        </select>
+      </div>
+      <input id="ppCSearch" type="text" placeholder="Search patient, case ID, org…"
+        value="${escHtml(search)}"
+        oninput="ppConsultState.search=this.value; ppConsultState.page=1; clearTimeout(ppConsultState._t); ppConsultState._t=setTimeout(ppLoadConsults,350)"
+        class="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm w-56 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+      <span class="text-sm text-gray-400 ml-auto">${total.toLocaleString()} case${total !== 1 ? 's' : ''}</span>
+    </div>
+
+    <!-- Table -->
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 text-left bg-gray-50">
+              <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+              <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
+              <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Organization</th>
+              <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+              <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Decision</th>
+              <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Fee</th>
+              <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Period</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length === 0 ? `
+              <tr><td colspan="7" class="px-4 py-12 text-center text-gray-300">
+                <i class="fas fa-file-medical text-4xl mb-3 block"></i>
+                <p class="text-sm text-gray-400">No consults found${period ? ' for this period' : ''}</p>
+              </td></tr>` :
+              rows.map(r => `
+              <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">${r.decision_date ? new Date(r.decision_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'}</td>
+                <td class="px-4 py-3">
+                  <p class="font-medium text-gray-800">${escHtml(r.patient_name || '—')}</p>
+                  ${r.case_id_short ? `<p class="text-xs text-gray-400">${escHtml(r.case_id_short)}</p>` : ''}
+                </td>
+                <td class="px-4 py-3 text-gray-600 max-w-[160px] truncate">${escHtml(r.organization_name || '—')}</td>
+                <td class="px-4 py-3">${vtBadge(r.visit_type)}</td>
+                <td class="px-4 py-3">${statusBadge(r.decision_status)}</td>
+                <td class="px-4 py-3 text-right font-semibold text-gray-700">${fmt(r.contractor_fee)}</td>
+                <td class="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">${escHtml(r.period_label || r.period_key || '—')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      ${pageCount > 1 ? `
+      <div class="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+        <button onclick="ppConsultState.page=Math.max(1,ppConsultState.page-1); ppLoadConsults()"
+          class="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-white disabled:opacity-40"
+          ${ppConsultState.page <= 1 ? 'disabled' : ''}>
+          <i class="fas fa-chevron-left mr-1"></i>Prev
+        </button>
+        <span class="text-xs text-gray-400">Page ${ppConsultState.page} of ${pageCount}</span>
+        <button onclick="ppConsultState.page=Math.min(${pageCount},ppConsultState.page+1); ppLoadConsults()"
+          class="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-white disabled:opacity-40"
+          ${ppConsultState.page >= pageCount ? 'disabled' : ''}>
+          Next<i class="fas fa-chevron-right ml-1"></i>
+        </button>
+      </div>` : ''}
+    </div>
+  </div>`
+}
+
+// ── Documents & CV tab ────────────────────────────────────────────
+async function renderProviderDocuments() {
+  const mc = $('mainContent')
+  mc.innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
+  try {
+    const data = await ppLoadProfile()
+    ppDrawDocuments(data.contractor)
+  } catch(e) {
+    mc.innerHTML = `<p class="text-red-500 p-4">${e.message}</p>`
+  }
+}
+
+function ppDrawDocuments(ct) {
+  const mc = $('mainContent')
+  mc.innerHTML = `
+  <div class="max-w-2xl">
+    <div class="mb-5">
+      <h2 class="text-lg font-bold text-gray-800">Documents & CV</h2>
+      <p class="text-sm text-gray-400 mt-0.5">Upload and manage your professional documents</p>
+    </div>
+
+    <!-- CV / Resume Section -->
+    <div class="card p-6 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-file-pdf text-blue-500 text-lg"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-gray-800">CV / Résumé</h3>
+            <p class="text-xs text-gray-400">PDF, Word documents up to 5 MB</p>
+          </div>
+        </div>
+        <label for="ppDocCvUpload" class="cursor-pointer btn-primary px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+          <i class="fas fa-upload"></i> ${ct?.cv_filename ? 'Replace' : 'Upload'}
+        </label>
+        <input id="ppDocCvUpload" type="file" accept=".pdf,.doc,.docx" class="hidden" onchange="ppUploadCV(this); renderProviderDocuments()">
+      </div>
+
+      ${ct?.cv_filename ? `
+      <div class="p-4 bg-green-50 rounded-xl border border-green-200">
+        <div class="flex items-center gap-3">
+          <i class="fas fa-check-circle text-green-500 text-xl flex-shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-gray-800">${escHtml(ct.cv_filename)}</p>
+            ${ct.cv_updated_at ? `<p class="text-xs text-gray-400 mt-0.5">Last updated ${new Date(ct.cv_updated_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</p>` : ''}
+          </div>
+          ${ct.cv_url ? `<a href="${ct.cv_url}" download="${escHtml(ct.cv_filename)}"
+            class="text-sm px-4 py-2 rounded-xl bg-white border border-green-300 text-green-700 hover:bg-green-100 font-semibold flex-shrink-0 flex items-center gap-2">
+            <i class="fas fa-download"></i> Download
+          </a>` : ''}
+        </div>
+      </div>` : `
+      <div class="p-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-center">
+        <i class="fas fa-file-upload text-4xl text-gray-200 mb-3 block"></i>
+        <p class="text-gray-400 text-sm mb-1">No CV uploaded yet</p>
+        <p class="text-gray-300 text-xs">Drop a PDF or Word file here, or use the Upload button above</p>
+      </div>`}
+    </div>
+
+    <!-- Tips section -->
+    <div class="card p-5 bg-blue-50 border border-blue-100">
+      <div class="flex items-start gap-3">
+        <i class="fas fa-lightbulb text-blue-400 mt-0.5 flex-shrink-0"></i>
+        <div>
+          <p class="font-semibold text-blue-800 text-sm">Document Tips</p>
+          <ul class="text-xs text-blue-600 mt-1.5 space-y-1 list-disc list-inside">
+            <li>Keep your CV updated with your latest experience and certifications</li>
+            <li>PDF format is recommended for best compatibility</li>
+            <li>Maximum file size: 5 MB</li>
+            <li>Contact an admin if you need to upload additional document types</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  `
 }
 
 // ════════════════════════════════════════════════════
