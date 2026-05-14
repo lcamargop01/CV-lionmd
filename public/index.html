@@ -875,7 +875,7 @@
         <h2 id="pageTitle" class="text-base md:text-lg font-semibold text-gray-800 truncate">Dashboard</h2>
         <span id="periodBadge" class="hidden px-2 py-0.5 md:px-3 md:py-1 rounded-full text-xs font-semibold text-white truncate max-w-[100px] md:max-w-none" style="background: var(--lion-gold);"></span>
       </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
+      <div id="topBarRight" class="flex items-center gap-2 flex-shrink-0">
         <select id="sessionSelector" onchange="onSessionChange(this.value)" class="text-xs md:text-sm px-2 py-1.5 max-w-[120px] md:max-w-[180px]">
           <option value="">Select Period...</option>
         </select>
@@ -1361,14 +1361,14 @@ async function loadInitialData() {
   // Onboarding-only role (or admin who chose onboarding): skip payroll APIs
   const goOnboarding = state.role === 'onboarding' || (state.role === 'admin' && state.adminView === 'onboarding')
   if (goOnboarding) {
-    $('sessionSelector').closest('div.flex.items-center.gap-2').style.display = 'none'
+    $('topBarRight').style.display = 'none'
     hideLoading()
     navigate('onboarding')
     return
   }
 
   // Restore period selector visibility
-  const topBarRight = $('sessionSelector').closest('div.flex.items-center.gap-2')
+  const topBarRight = $('topBarRight')
   if (topBarRight) topBarRight.style.display = ''
 
   showLoading('Loading data...')
