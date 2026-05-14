@@ -227,8 +227,7 @@
     /* Column color accents */
     .kb-col[data-status="new"] { background: #f0f4ff; border-color: #c7d2fe; }
     .kb-col[data-status="new"] .kb-col-header { background: rgba(238,242,255,0.8); }
-    .kb-col[data-status="resume_received"] { background: #f5f0ff; border-color: #ddd6fe; }
-    .kb-col[data-status="resume_received"] .kb-col-header { background: rgba(245,243,255,0.8); }
+
     .kb-col[data-status="contacted"] { background: #faf0ff; border-color: #e9d5ff; }
     .kb-col[data-status="contacted"] .kb-col-header { background: rgba(250,240,255,0.8); }
     .kb-col[data-status="interview_scheduled"] { background: #fffdf0; border-color: #fde68a; }
@@ -5745,7 +5744,6 @@ async function exportGusto() {
 
 const OB_STATUSES = [
   { key: 'new',                 label: 'New',                icon: 'fa-star',              color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-400' },
-  { key: 'resume_received',     label: 'Resume Received',    icon: 'fa-file-alt',          color: 'bg-indigo-100 text-indigo-700', dot: 'bg-indigo-400' },
   { key: 'contacted',           label: 'Contacted',          icon: 'fa-envelope',          color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-400' },
   { key: 'interview_scheduled', label: 'Interview Scheduled',icon: 'fa-calendar-check',    color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-400' },
   { key: 'interviewed',         label: 'Interviewed',        icon: 'fa-comments',          color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-400' },
@@ -6001,14 +5999,13 @@ function obPipelineHTML() {
 // ── Contractors Tab (unified: pending onboarding + active payroll contractors) ────────
 function obOnboardedHTML() {
   const search = (obState.contractorsSearch || '').toLowerCase().trim()
-  const checkItems = ['payroll_sent','contract_sent','contract_signed','training_scheduled','training_completed','docs_received']
+  const checkItems = ['payroll_sent','contract_sent','contract_signed','training_scheduled','training_completed']
   const checkLabels = {
     payroll_sent:       'Payroll Sent',
     contract_sent:      'Contract Sent',
     contract_signed:    'Contract Signed',
     training_scheduled: 'Training Scheduled',
     training_completed: 'Training Completed',
-    docs_received:      'Docs Received',
   }
 
   // Section 1: Hired candidates still completing onboarding checklist (not yet converted to payroll)
@@ -6672,7 +6669,6 @@ function obCalendarHTML() {
     contract_signed:    { label: 'Contract Signed',          icon: 'fa-signature',    color: 'bg-indigo-100 text-indigo-700' },
     training_scheduled: { label: 'Training Scheduled',       icon: 'fa-calendar-plus', color: 'bg-yellow-100 text-yellow-700' },
     training_completed: { label: 'Training Completed',       icon: 'fa-graduation-cap', color: 'bg-green-100 text-green-700' },
-    docs_received:      { label: 'All Docs Received',        icon: 'fa-folder-open',  color: 'bg-orange-100 text-orange-700' },
   }
 
   // Build pending checklist items from hired_pending
@@ -6963,8 +6959,8 @@ function obToggleMoreMenu() {
 function obKanbanCard(c) {
   const hired    = c.status === 'hired'
   const rejected = c.status === 'rejected'
-  // Hired checklist: payroll_sent, contract_sent, contract_signed, training_scheduled, training_completed, docs_received
-  const checkItems = ['payroll_sent','contract_sent','contract_signed','training_scheduled','training_completed','docs_received']
+  // Hired checklist: payroll_sent, contract_sent, contract_signed, training_scheduled, training_completed
+  const checkItems = ['payroll_sent','contract_sent','contract_signed','training_scheduled','training_completed']
   const done = hired ? checkItems.filter(k => c[k]).length : 0
   const total = hired ? checkItems.length : 0
   const pct   = hired && total > 0 ? Math.round((done / total) * 100) : 0
@@ -7060,7 +7056,6 @@ function obKanbanCard(c) {
 function obCardSelectStyle(status) {
   const styles = {
     new:                 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe',
-    resume_received:     'background:#f5f3ff;color:#5b21b6;border-color:#ddd6fe',
     contacted:           'background:#faf5ff;color:#7e22ce;border-color:#e9d5ff',
     interview_scheduled: 'background:#fefce8;color:#92400e;border-color:#fde68a',
     interviewed:         'background:#fff7ed;color:#9a3412;border-color:#fed7aa',
@@ -7129,7 +7124,6 @@ function obDetailHTML() {
   const isHired = c.status === 'hired'
   const tabs = [
     { key: 'overview',  label: 'Overview',  icon: 'fa-user' },
-    { key: 'resume',    label: 'Resume',     icon: 'fa-file-alt' },
     { key: 'meetings',  label: 'Meetings',   icon: 'fa-calendar' },
     { key: 'documents', label: 'Documents',  icon: 'fa-paperclip' },
     { key: 'contract',  label: 'Contract',   icon: 'fa-file-signature' },
@@ -7203,7 +7197,6 @@ function obOverviewTab(c) {
     { key: 'contract_signed',      label: 'Contract Signed',          icon: 'fa-signature' },
     { key: 'training_scheduled',   label: 'Training Scheduled',       icon: 'fa-calendar-plus' },
     { key: 'training_completed',   label: 'Training Completed',       icon: 'fa-graduation-cap' },
-    { key: 'docs_received',        label: 'All Docs Received',        icon: 'fa-folder-check' },
   ]
   return `
   <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -8360,7 +8353,7 @@ async function obScheduleMeeting(candidateId) {
     await api(`/api/onboarding/candidates/${candidateId}/meetings`, { method: 'POST', body: JSON.stringify(body) })
     // Auto-update candidate status to interview_scheduled if still in earlier stage
     const c = obState.selectedCandidate
-    const earlyStatuses = ['new','resume_received','contacted']
+    const earlyStatuses = ['new','contacted']
     if (c && earlyStatuses.includes(c.status) && body.meeting_type === 'interview') {
       await api(`/api/onboarding/candidates/${candidateId}`, { method: 'PUT', body: JSON.stringify({ status: 'interview_scheduled' }) })
     }
