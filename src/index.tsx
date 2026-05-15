@@ -734,9 +734,9 @@ app.get('/api/contractors/:id/history', async (c) => {
       AND c.decision_status != 'No Decision'
   `).bind(id).first() as any
 
-  // Linked onboarding candidate (if any)
+  // Linked onboarding candidate (if any) — include photo for display in contractor detail
   const obCandidate = await c.env.DB.prepare(
-    `SELECT id, full_name, status, specialty, converted_at, created_at FROM onboarding_candidates WHERE converted_contractor_id=? LIMIT 1`
+    `SELECT id, full_name, status, specialty, states_licensed, converted_at, created_at, photo_data, photo_mime FROM onboarding_candidates WHERE converted_contractor_id=? LIMIT 1`
   ).bind(id).first() as any
 
   return c.json({
@@ -2612,6 +2612,14 @@ async function ensureProviderSchema(db: D1Database) {
   await db.prepare(`ALTER TABLE contractors ADD COLUMN phone TEXT DEFAULT ''`).run().catch(() => {})
   await db.prepare(`ALTER TABLE contractors ADD COLUMN bio TEXT DEFAULT ''`).run().catch(() => {})
   await db.prepare(`ALTER TABLE contractors ADD COLUMN address TEXT DEFAULT ''`).run().catch(() => {})
+  // Profile photo stored as base64 on contractors row (set by provider, visible to admin)
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN photo_data TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN photo_mime TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN photo_updated_at DATETIME`).run().catch(() => {})
+  // Professional profile fields
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN npi TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN specialty TEXT DEFAULT ''`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE contractors ADD COLUMN states_licensed TEXT DEFAULT ''`).run().catch(() => {})
 }
 
 // ── requireProvider: auth middleware — admin OR provider role ─────
@@ -2639,7 +2647,11 @@ app.get('/api/provider/profile', requireProvider, async (c) => {
   const licenses = await c.env.DB.prepare(
     `SELECT * FROM provider_licenses WHERE contractor_id=? ORDER BY state ASC`
   ).bind(pu.contractor_id).all()
-  return c.json({ contractor, licenses: licenses.results, portal_user: { id: pu.id, name: pu.name, email: pu.email, phone: pu.phone || '' } })
+  // Pull onboarding candidate record for any extra fields (photo fallback, specialty, states)
+  const ob = await c.env.DB.prepare(
+    `SELECT id, full_name, specialty, states_licensed, photo_data, photo_mime FROM onboarding_candidates WHERE converted_contractor_id=? LIMIT 1`
+  ).bind(pu.contractor_id).first() as any
+  return c.json({ contractor, licenses: licenses.results, portal_user: { id: pu.id, name: pu.name, email: pu.email, phone: pu.phone || '' }, ob_candidate: ob || null })
 })
 
 // ── PUT /api/provider/profile ─────────────────────────────────────
@@ -2650,11 +2662,11 @@ app.put('/api/provider/profile', requireProvider, async (c) => {
   const u = c.get('user')
   const pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE id=?`).bind(u.id).first() as any
   if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
-  const { phone, bio, address, email } = await c.req.json() as any
+  const { phone, bio, address, email, npi, specialty, states_licensed } = await c.req.json() as any
 
   // 1. Write all editable fields to the contractors row (what admin sees)
-  const sets: string[] = ['phone=?', 'bio=?', 'address=?']
-  const vals: any[] = [phone || '', bio || '', address || '']
+  const sets: string[] = ['phone=?', 'bio=?', 'address=?', 'npi=?', 'specialty=?', 'states_licensed=?']
+  const vals: any[] = [phone || '', bio || '', address || '', npi || '', specialty || '', states_licensed || '']
   if (email) { sets.push('email=?'); vals.push(email) }
   vals.push(pu.contractor_id)
   await c.env.DB.prepare(`UPDATE contractors SET ${sets.join(', ')} WHERE id=?`).bind(...vals).run()
@@ -2669,6 +2681,24 @@ app.put('/api/provider/profile', requireProvider, async (c) => {
       `UPDATE portal_users SET phone=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
     ).bind(phone || '', u.id).run()
   }
+  return c.json({ ok: true })
+})
+
+// ── POST /api/provider/photo ──────────────────────────────────────
+// Provider uploads profile photo → stored on their contractors row
+app.post('/api/provider/photo', requireProvider, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.contractor_id) return c.json({ error: 'No linked contractor profile' }, 404)
+  const { data_url, mime } = await c.req.json() as any
+  if (!data_url) return c.json({ error: 'data_url required' }, 400)
+  // Strip the data:mime;base64, prefix to store only the base64 portion
+  const base64 = data_url.includes(',') ? data_url.split(',')[1] : data_url
+  const mimeType = mime || (data_url.match(/^data:([^;]+);/) || [])[1] || 'image/jpeg'
+  await c.env.DB.prepare(
+    `UPDATE contractors SET photo_data=?, photo_mime=?, photo_updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(base64, mimeType, pu.contractor_id).run()
   return c.json({ ok: true })
 })
 
@@ -2852,6 +2882,21 @@ app.put('/api/admin/licenses/:id', requireAdmin, async (c) => {
 app.delete('/api/admin/licenses/:id', requireAdmin, async (c) => {
   await c.env.DB.prepare(`DELETE FROM provider_licenses WHERE id=?`).bind(c.req.param('id')).run()
   return c.json({ ok: true })
+})
+
+// ── Admin: GET /api/admin/contractors/:id/full-profile ───────────
+// Returns complete profile: contractor row + licenses + linked portal user + onboarding record (with photo)
+app.get('/api/admin/contractors/:id/full-profile', requireAdmin, async (c) => {
+  await ensureProviderSchema(c.env.DB)
+  const cid = c.req.param('id')
+  const contractor = await c.env.DB.prepare(`SELECT * FROM contractors WHERE id=?`).bind(cid).first() as any
+  if (!contractor) return c.json({ error: 'Not found' }, 404)
+  const [licensesRes, portalUser, obCandidate] = await Promise.all([
+    c.env.DB.prepare(`SELECT * FROM provider_licenses WHERE contractor_id=? ORDER BY state ASC`).bind(cid).all(),
+    c.env.DB.prepare(`SELECT id, name, email, role, is_active, last_login, contractor_id FROM portal_users WHERE contractor_id=? LIMIT 1`).bind(cid).first() as Promise<any>,
+    c.env.DB.prepare(`SELECT * FROM onboarding_candidates WHERE converted_contractor_id=? LIMIT 1`).bind(cid).first() as Promise<any>,
+  ])
+  return c.json({ contractor, licenses: licensesRes.results, portal_user: portalUser || null, ob_candidate: obCandidate || null })
 })
 
 // ── Admin: PUT /api/admin/users/:id/link-contractor ──────────────
