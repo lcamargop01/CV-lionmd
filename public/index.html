@@ -9286,12 +9286,10 @@ function umBulkShowResults(results) {
   itemsEl.innerHTML = [
     ...created.map(r => {
       const link = origin + '/?token=' + r.invite_token
-      const emailStatusHtml = r.email_sent
-        ? `<span class="text-xs text-green-600 font-semibold"><i class="fas fa-paper-plane mr-1"></i>Invite emailed</span>`
-        : `<button onclick="umSendInviteEmail(this, ${r.user_id}, '${escHtml(r.name).replace(/'/g,"&#39;")}')"
-             class="text-xs px-3 py-1 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors flex-shrink-0">
-             <i class="fas fa-envelope mr-1"></i>Send Email
-           </button>`
+      const emailStatusHtml = `<button onclick="umSendInviteEmail(this, ${r.user_id}, '${escHtml(r.name).replace(/'/g,"&#39;")}')"
+           class="text-xs px-3 py-1 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors flex-shrink-0">
+           <i class="fas fa-envelope mr-1"></i>Send Email
+         </button>`
       return `
         <div class="flex items-start gap-3 p-3 bg-white rounded-xl border border-green-200">
           <div class="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -9343,15 +9341,8 @@ function umBulkShowResults(results) {
   $('umBulkResults').classList.remove('hidden')
 
   // Summary toast
-  const emailedCount = created.filter(r => r.email_sent).length
-  if (created.length) {
-    const msg = emailedCount > 0
-      ? `${created.length} account${created.length !== 1 ? 's' : ''} created · ${emailedCount} invite email${emailedCount !== 1 ? 's' : ''} sent!`
-      : `${created.length} portal account${created.length !== 1 ? 's' : ''} created!`
-    showToast(msg, 'success')
-  } else {
-    showToast('No new accounts created.', 'info')
-  }
+  if (created.length) showToast(`${created.length} portal account${created.length !== 1 ? 's' : ''} created! Send invite emails using the buttons below.`, 'success')
+  else showToast('No new accounts created.', 'info')
 }
 
 async function umSendInviteEmail(btn, userId, name) {
@@ -9591,12 +9582,7 @@ async function umResendInvite(id, name) {
     umDrawPage()
     if (result.invite_token) {
       const link = window.location.origin + '/?token=' + result.invite_token
-      if (result.email_sent) {
-        showToast(`New invite link generated and emailed to ${name}!`, 'success')
-        showInviteModal(link)
-      } else {
-        showInviteModal(link)
-      }
+      showInviteModal(link)
       return
     }
     showToast('New invite link generated!', 'success')

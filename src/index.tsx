@@ -2649,45 +2649,21 @@ app.post('/api/admin/users/bulk-portal-setup', requireAdmin, async (c) => {
        VALUES (?,?,?,1,1,?,?,?)`
     ).bind(item.name, emailKey, 'provider', inviteToken, item.contractor_id, creator?.id ?? null).run()
 
-    // Auto-send invite email if RESEND_API_KEY is configured
-    const portalOrigin = new URL(c.req.url).origin
-    const inviteLink = `${portalOrigin}/?token=${inviteToken}`
-    let emailSent = false
-    let emailError: string | undefined
-    if (c.env.RESEND_API_KEY) {
-      const emailResult = await sendInviteEmail(c.env.RESEND_API_KEY, { name: item.name, email: emailKey }, inviteLink)
-      emailSent = emailResult.ok
-      emailError = emailResult.error
-    }
-
-    results.push({ ...item, status: 'created', user_id: r.meta.last_row_id as number, invite_token: inviteToken, email_sent: emailSent, email_error: emailError })
+    results.push({ ...item, status: 'created', user_id: r.meta.last_row_id as number, invite_token: inviteToken })
   }
 
   return c.json({ ok: true, results })
 })
 
 // ── POST /api/admin/users/:id/reset-invite ───────────────────────
-// Re-generate an invite token and optionally email it
+// Re-generate an invite token so admin can copy or manually email the link
 app.post('/api/admin/users/:id/reset-invite', requireAdmin, async (c) => {
   const inviteToken = generateInviteToken()
   const id = c.req.param('id')
   await c.env.DB.prepare(
     `UPDATE portal_users SET invite_token=?, must_set_password=1, password_hash=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
   ).bind(inviteToken, id).run()
-
-  // Try to send email if key is configured
-  const user = await c.env.DB.prepare('SELECT name, email FROM portal_users WHERE id=?').bind(id).first() as any
-  const portalOrigin = new URL(c.req.url).origin
-  const inviteLink = `${portalOrigin}/?token=${inviteToken}`
-  let emailSent = false
-  let emailError: string | undefined
-  if (c.env.RESEND_API_KEY && user?.email) {
-    const emailResult = await sendInviteEmail(c.env.RESEND_API_KEY, { name: user.name, email: user.email }, inviteLink)
-    emailSent = emailResult.ok
-    emailError = emailResult.error
-  }
-
-  return c.json({ ok: true, invite_token: inviteToken, email_sent: emailSent, email_error: emailError })
+  return c.json({ ok: true, invite_token: inviteToken })
 })
 
 // ── POST /api/admin/send-invite-email ────────────────────────────
