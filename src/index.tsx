@@ -68,7 +68,7 @@ async function sendInviteEmail(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Lion MD Portal <onboarding@resend.dev>',
+        from: 'Lion MD Portal <noreply@lion.md>',
         to: [`${to.name} <${to.email}>`],
         subject: 'You\'ve been invited to the Lion MD Provider Portal',
         html,
