@@ -4247,13 +4247,15 @@ function renderContractorGroupedTable(contractors, duplicateIds = new Set(), cli
     const list = byGroup[g.key]
     const rows = list.map(c => {
       const isDup = duplicateIds.has(c.id)
-      const rowClick = clickFn ? `onclick="${clickFn}(${c.id})"` : ''
-      const rowHover = clickFn ? 'hover:bg-yellow-50/40 cursor-pointer' : ''
+      // Always make rows clickable — opens the full profile panel
+      const avatarHtml = c.photo_data
+        ? `<img src="data:${c.photo_mime||'image/jpeg'};base64,${c.photo_data}" class="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-yellow-300" alt="">`
+        : `<div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(c.name || '?')[0].toUpperCase()}</div>`
       return `
-        <tr class="table-row border-b border-gray-50 ${isDup ? 'bg-amber-50/40' : ''} ${rowHover}" ${rowClick}>
+        <tr class="table-row border-b border-gray-50 ${isDup ? 'bg-amber-50/40' : ''} hover:bg-yellow-50/40 cursor-pointer transition-colors" onclick="obOpenContractorDetail(${c.id})">
           <td class="px-5 py-3 font-semibold text-gray-800">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:var(--lion-gold)">${(c.name || '?')[0].toUpperCase()}</div>
+              ${avatarHtml}
               <div>
                 ${escHtml(c.name)}
                 ${isDup ? '<span class="ml-1 text-xs text-amber-500 font-normal"><i class="fas fa-clone"></i> dup</span>' : ''}
@@ -4267,14 +4269,17 @@ function renderContractorGroupedTable(contractors, duplicateIds = new Set(), cli
           <td class="px-5 py-3 text-gray-500 text-xs">${escHtml(c.email || '—')}</td>
           <td class="px-5 py-3 text-center" onclick="event.stopPropagation()">
             <div class="flex gap-2 justify-center flex-wrap">
+              <button onclick="obOpenContractorDetail(${c.id})" class="text-xs px-3 py-1.5 btn-primary rounded-lg" title="View full profile">
+                <i class="fas fa-id-card mr-1"></i>Profile
+              </button>
               <button onclick="openContractorModal(${JSON.stringify(c).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 btn-outline rounded-lg">
                 <i class="fas fa-edit mr-1"></i>Edit
               </button>
               ${isDup ? `<button onclick="openMergeModal(${JSON.stringify(state.contractors.filter(x=>x.name.trim().toLowerCase()===c.name.trim().toLowerCase())).replace(/"/g,'&quot;')})" class="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-300">
                 <i class="fas fa-compress-arrows-alt mr-1"></i>Merge
               </button>` : ''}
-              <button onclick="toggleContractorActive(${c.id}, true, '${escHtml(c.name)}')" title="Deactivate contractor" class="text-xs px-3 py-1.5 bg-gray-50 text-gray-400 rounded-lg hover:bg-red-50 hover:text-red-500 border border-gray-200 transition-colors">
-                <i class="fas fa-user-slash"></i>
+              <button onclick="toggleContractorActive(${c.id}, true, '${escHtml(c.name)}')" title="Deactivate" class="w-8 h-8 flex items-center justify-center bg-gray-50 text-gray-400 rounded-lg hover:bg-red-50 hover:text-red-500 border border-gray-200 transition-colors">
+                <i class="fas fa-user-slash text-xs"></i>
               </button>
             </div>
           </td>
@@ -4301,11 +4306,15 @@ function renderInactiveContractorsSection() {
   const inactive = state.inactiveContractors || []
   if (inactive.length === 0) return ''
 
-  const rows = inactive.map(c => `
-    <tr class="border-b border-gray-50 bg-gray-50/60 opacity-75">
+  const rows = inactive.map(c => {
+    const avatarHtml = c.photo_data
+      ? `<img src="data:${c.photo_mime||'image/jpeg'};base64,${c.photo_data}" class="w-8 h-8 rounded-full object-cover flex-shrink-0 opacity-60" alt="">`
+      : `<div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 bg-gray-400">${(c.name||'?')[0].toUpperCase()}</div>`
+    return `
+    <tr class="border-b border-gray-50 bg-gray-50/60 opacity-75 hover:opacity-100 hover:bg-yellow-50/30 cursor-pointer transition-all" onclick="obOpenContractorDetail(${c.id})">
       <td class="px-5 py-3">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 bg-gray-400">${(c.name||'?')[0].toUpperCase()}</div>
+          ${avatarHtml}
           <div>
             <p class="font-semibold text-gray-500">${escHtml(c.name)}</p>
             <p class="text-xs text-gray-400">ID #${c.id}</p>
@@ -4316,8 +4325,12 @@ function renderInactiveContractorsSection() {
       <td class="px-5 py-3 text-gray-400">${escHtml(c.company || '—')}</td>
       <td class="px-5 py-3 font-mono text-xs text-gray-400">${escHtml(c.ein_ssn || '—')}</td>
       <td class="px-5 py-3 text-gray-400 text-xs">${escHtml(c.email || '—')}</td>
-      <td class="px-5 py-3 text-center">
+      <td class="px-5 py-3 text-center" onclick="event.stopPropagation()">
         <div class="flex gap-2 justify-center">
+          <button onclick="obOpenContractorDetail(${c.id})"
+            class="text-xs px-3 py-1.5 btn-primary rounded-lg">
+            <i class="fas fa-id-card mr-1"></i>Profile
+          </button>
           <button onclick="openContractorModal(${JSON.stringify(c).replace(/"/g,'&quot;')})"
             class="text-xs px-3 py-1.5 btn-outline rounded-lg">
             <i class="fas fa-edit mr-1"></i>Edit
@@ -4328,7 +4341,8 @@ function renderInactiveContractorsSection() {
           </button>
         </div>
       </td>
-    </tr>`).join('')
+    </tr>`
+  }).join('')
 
   return `
     <div class="card overflow-hidden">
