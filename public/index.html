@@ -6375,13 +6375,22 @@ function obRenderContractorDetail(data) {
         <p class="text-xs font-semibold text-blue-800">Portal Account Active</p>
         <p class="text-xs text-blue-600 truncate">${escHtml(portalUser.email)} · Last login: ${portalUser.last_login ? new Date(portalUser.last_login).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'Never'}</p>
       </div>
+      <button onclick="ctSendInviteEmail(this, ${portalUser.id}, '${escHtml((portalUser.name||ct.name||'').replace(/'/g,"&#39;"))}')"
+        class="flex-shrink-0 text-xs px-2.5 py-1.5 rounded-lg bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 transition-colors font-semibold"
+        title="Re-send invite email">
+        <i class="fas fa-envelope mr-1"></i>Resend
+      </button>
     </div>` : `
     <div class="mb-4 p-3 rounded-xl border border-gray-200 bg-gray-50 flex items-center gap-3">
       <i class="fas fa-user-slash text-gray-400 text-lg flex-shrink-0"></i>
       <div class="flex-1 min-w-0">
         <p class="text-xs font-semibold text-gray-600">No Portal Account</p>
-        <p class="text-xs text-gray-400">Use Bulk Portal Setup in User Management to invite this provider.</p>
+        <p class="text-xs text-gray-400">${escHtml(ct.email || '')} ${ct.email ? '— ready to invite' : 'No email on file'}</p>
       </div>
+      ${ct.email ? `<button onclick="ctCreateAndSendInvite(this, ${ct.id}, '${escHtml((ct.name||'').replace(/'/g,"&#39;"))}', '${escHtml(ct.email)}')"
+        class="flex-shrink-0 text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors font-semibold">
+        <i class="fas fa-envelope mr-1"></i>Send Invite
+      </button>` : ''}
     </div>`}
 
     <!-- Onboarding link (if came through pipeline) -->
@@ -9277,15 +9286,24 @@ function umBulkShowResults(results) {
   itemsEl.innerHTML = [
     ...created.map(r => {
       const link = origin + '/?token=' + r.invite_token
+      const emailStatusHtml = r.email_sent
+        ? `<span class="text-xs text-green-600 font-semibold"><i class="fas fa-paper-plane mr-1"></i>Invite emailed</span>`
+        : `<button onclick="umSendInviteEmail(this, ${r.user_id}, '${escHtml(r.name).replace(/'/g,"&#39;")}')"
+             class="text-xs px-3 py-1 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors flex-shrink-0">
+             <i class="fas fa-envelope mr-1"></i>Send Email
+           </button>`
       return `
         <div class="flex items-start gap-3 p-3 bg-white rounded-xl border border-green-200">
           <div class="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
             <i class="fas fa-check text-green-600 text-xs"></i>
           </div>
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-semibold text-gray-800">${escHtml(r.name)}</div>
-            <div class="text-xs text-gray-400 truncate">${escHtml(r.email)}</div>
-            <div class="flex items-center gap-2 mt-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="text-sm font-semibold text-gray-800">${escHtml(r.name)}</div>
+              <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Created</span>
+            </div>
+            <div class="text-xs text-gray-400 truncate mb-2">${escHtml(r.email)}</div>
+            <div class="flex items-center gap-2 flex-wrap">
               <input type="text" readonly value="${escHtml(link)}"
                 onclick="this.select()"
                 class="flex-1 text-xs font-mono bg-gray-50 text-gray-600 border border-gray-200 rounded-lg px-2 py-1 cursor-pointer min-w-0"/>
@@ -9293,9 +9311,9 @@ function umBulkShowResults(results) {
                 class="flex-shrink-0 px-3 py-1 rounded-lg bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 transition-colors">
                 <i class="fas fa-copy mr-1"></i>Copy
               </button>
+              ${emailStatusHtml}
             </div>
           </div>
-          <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full flex-shrink-0">Created</span>
         </div>`
     }),
     ...existing.map(r => `
@@ -9325,8 +9343,81 @@ function umBulkShowResults(results) {
   $('umBulkResults').classList.remove('hidden')
 
   // Summary toast
-  if (created.length) showToast(`${created.length} portal account${created.length !== 1 ? 's' : ''} created successfully!`, 'success')
-  else showToast('No new accounts created.', 'info')
+  const emailedCount = created.filter(r => r.email_sent).length
+  if (created.length) {
+    const msg = emailedCount > 0
+      ? `${created.length} account${created.length !== 1 ? 's' : ''} created · ${emailedCount} invite email${emailedCount !== 1 ? 's' : ''} sent!`
+      : `${created.length} portal account${created.length !== 1 ? 's' : ''} created!`
+    showToast(msg, 'success')
+  } else {
+    showToast('No new accounts created.', 'info')
+  }
+}
+
+async function umSendInviteEmail(btn, userId, name) {
+  const orig = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<div class="spinner !w-3 !h-3 !border-2 inline-block"></div>'
+  try {
+    await api('/api/admin/send-invite-email', { method: 'POST', body: JSON.stringify({ user_id: userId }) })
+    btn.outerHTML = `<span class="text-xs text-green-600 font-semibold"><i class="fas fa-paper-plane mr-1"></i>Invite emailed</span>`
+    showToast(`Invite email sent to ${name}!`, 'success')
+  } catch(e) {
+    btn.disabled = false
+    btn.innerHTML = orig
+    showToast('Email failed: ' + e.message, 'error')
+  }
+}
+
+// Send invite email from contractor detail panel (existing portal user)
+async function ctSendInviteEmail(btn, userId, name) {
+  const orig = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<div class="spinner !w-3 !h-3 !border-2 inline-block"></div>'
+  try {
+    await api('/api/admin/send-invite-email', { method: 'POST', body: JSON.stringify({ user_id: userId }) })
+    btn.innerHTML = '<i class="fas fa-check mr-1"></i>Sent!'
+    btn.classList.replace('bg-white', 'bg-green-50')
+    btn.classList.replace('text-blue-700', 'text-green-700')
+    btn.classList.replace('border-blue-300', 'border-green-300')
+    showToast(`Invite email sent to ${name}!`, 'success')
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = orig }, 3000)
+  } catch(e) {
+    btn.disabled = false
+    btn.innerHTML = orig
+    showToast('Email failed: ' + e.message, 'error')
+  }
+}
+
+// Create portal account + send invite from contractor detail panel (no account yet)
+async function ctCreateAndSendInvite(btn, contractorId, name, email) {
+  if (!confirm(`Create a portal account for ${name} and send an invite email to ${email}?`)) return
+  const orig = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<div class="spinner !w-3 !h-3 !border-2 inline-block"></div>'
+  try {
+    const res = await api('/api/admin/users/bulk-portal-setup', {
+      method: 'POST',
+      body: JSON.stringify({ contractors: [{ contractor_id: contractorId, name, email }] })
+    })
+    const r = (res.results || [])[0]
+    if (!r) throw new Error('No result returned')
+    if (r.status === 'already_exists') {
+      showToast(`${name} already has a portal account.`, 'info')
+    } else if (r.status === 'created') {
+      if (r.email_sent) {
+        showToast(`Portal account created and invite emailed to ${name}!`, 'success')
+      } else {
+        showToast(`Portal account created for ${name}. Email could not be sent — copy the link manually.`, 'info')
+      }
+    }
+    // Refresh the detail panel
+    if (ctDetailState.contractorId) obOpenContractorDetail(ctDetailState.contractorId)
+  } catch(e) {
+    btn.disabled = false
+    btn.innerHTML = orig
+    showToast('Error: ' + e.message, 'error')
+  }
 }
 
 function umBulkCopyLink(btn, link) {
@@ -9496,16 +9587,19 @@ async function umResendInvite(id, name) {
   if (!confirm(`Generate a new invite link for "${name}"? Any previous link will be invalidated.`)) return
   try {
     const result = await api(`/api/admin/users/${id}/reset-invite`, { method: 'POST' })
+    umState.users = await api('/api/admin/users')
+    umDrawPage()
     if (result.invite_token) {
       const link = window.location.origin + '/?token=' + result.invite_token
-      umState.users = await api('/api/admin/users')
-      umDrawPage()
-      showInviteModal(link)
+      if (result.email_sent) {
+        showToast(`New invite link generated and emailed to ${name}!`, 'success')
+        showInviteModal(link)
+      } else {
+        showInviteModal(link)
+      }
       return
     }
     showToast('New invite link generated!', 'success')
-    umState.users = await api('/api/admin/users')
-    umDrawPage()
   } catch(e) { showToast(e.message, 'error') }
 }
 

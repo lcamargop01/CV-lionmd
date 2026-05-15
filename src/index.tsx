@@ -3,6 +3,85 @@ import { cors } from 'hono/cors'
 
 type Bindings = {
   DB: D1Database
+  RESEND_API_KEY: string
+}
+
+// ──────────────────────────────────────────────
+// Resend Email Helper
+// ──────────────────────────────────────────────
+async function sendInviteEmail(
+  apiKey: string,
+  to: { name: string; email: string },
+  inviteLink: string
+): Promise<{ ok: boolean; error?: string }> {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Portal Invitation</title></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:#1a1a2e;padding:28px 40px;text-align:center;">
+            <div style="font-size:22px;font-weight:700;color:#d4a017;letter-spacing:0.5px;">🦁 Lion MD Portal</div>
+            <div style="font-size:12px;color:#8888aa;margin-top:4px;letter-spacing:1px;">PROVIDER ACCESS</div>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px 40px 32px;">
+            <p style="margin:0 0 16px;font-size:16px;color:#374151;">Hi <strong>${to.name}</strong>,</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">
+              You've been invited to access the <strong>Lion MD Provider Portal</strong>. Click the button below to set up your account and get started.
+            </p>
+            <!-- CTA Button -->
+            <table cellpadding="0" cellspacing="0" width="100%">
+              <tr><td align="center" style="padding:8px 0 28px;">
+                <a href="${inviteLink}" style="display:inline-block;background:#d4a017;color:#1a1a2e;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:8px;letter-spacing:0.3px;">
+                  Set Up My Account →
+                </a>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Or copy and paste this link into your browser:</p>
+            <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:10px 14px;border-radius:6px;border:1px solid #e5e7eb;">${inviteLink}</p>
+            <p style="margin:0;font-size:13px;color:#9ca3af;">This invitation link will remain active until you use it. If you didn't expect this email, you can safely ignore it.</p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Lion MD Portal · Sent by your administrator</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Lion MD Portal <onboarding@resend.dev>',
+        to: [`${to.name} <${to.email}>`],
+        subject: 'You\'ve been invited to the Lion MD Provider Portal',
+        html,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      return { ok: false, error: err }
+    }
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -2570,20 +2649,74 @@ app.post('/api/admin/users/bulk-portal-setup', requireAdmin, async (c) => {
        VALUES (?,?,?,1,1,?,?,?)`
     ).bind(item.name, emailKey, 'provider', inviteToken, item.contractor_id, creator?.id ?? null).run()
 
-    results.push({ ...item, status: 'created', user_id: r.meta.last_row_id as number, invite_token: inviteToken })
+    // Auto-send invite email if RESEND_API_KEY is configured
+    const portalOrigin = new URL(c.req.url).origin
+    const inviteLink = `${portalOrigin}/?token=${inviteToken}`
+    let emailSent = false
+    let emailError: string | undefined
+    if (c.env.RESEND_API_KEY) {
+      const emailResult = await sendInviteEmail(c.env.RESEND_API_KEY, { name: item.name, email: emailKey }, inviteLink)
+      emailSent = emailResult.ok
+      emailError = emailResult.error
+    }
+
+    results.push({ ...item, status: 'created', user_id: r.meta.last_row_id as number, invite_token: inviteToken, email_sent: emailSent, email_error: emailError })
   }
 
   return c.json({ ok: true, results })
 })
 
 // ── POST /api/admin/users/:id/reset-invite ───────────────────────
-// Re-generate an invite token so admin can resend the setup link
+// Re-generate an invite token and optionally email it
 app.post('/api/admin/users/:id/reset-invite', requireAdmin, async (c) => {
   const inviteToken = generateInviteToken()
+  const id = c.req.param('id')
   await c.env.DB.prepare(
     `UPDATE portal_users SET invite_token=?, must_set_password=1, password_hash=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
-  ).bind(inviteToken, c.req.param('id')).run()
-  return c.json({ ok: true, invite_token: inviteToken })
+  ).bind(inviteToken, id).run()
+
+  // Try to send email if key is configured
+  const user = await c.env.DB.prepare('SELECT name, email FROM portal_users WHERE id=?').bind(id).first() as any
+  const portalOrigin = new URL(c.req.url).origin
+  const inviteLink = `${portalOrigin}/?token=${inviteToken}`
+  let emailSent = false
+  let emailError: string | undefined
+  if (c.env.RESEND_API_KEY && user?.email) {
+    const emailResult = await sendInviteEmail(c.env.RESEND_API_KEY, { name: user.name, email: user.email }, inviteLink)
+    emailSent = emailResult.ok
+    emailError = emailResult.error
+  }
+
+  return c.json({ ok: true, invite_token: inviteToken, email_sent: emailSent, email_error: emailError })
+})
+
+// ── POST /api/admin/send-invite-email ────────────────────────────
+// Manually send (or re-send) an invite email for an existing portal user
+app.post('/api/admin/send-invite-email', requireAdmin, async (c) => {
+  if (!c.env.RESEND_API_KEY) return c.json({ error: 'Email service not configured' }, 503)
+  const { user_id } = await c.req.json() as any
+  if (!user_id) return c.json({ error: 'user_id required' }, 400)
+
+  const user = await c.env.DB.prepare(
+    'SELECT id, name, email, invite_token FROM portal_users WHERE id=? AND is_active=1'
+  ).bind(user_id).first() as any
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  if (!user.email) return c.json({ error: 'User has no email address' }, 400)
+
+  // Regenerate token if missing
+  let token = user.invite_token
+  if (!token) {
+    token = generateInviteToken()
+    await c.env.DB.prepare(
+      'UPDATE portal_users SET invite_token=?, must_set_password=1, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+    ).bind(token, user.id).run()
+  }
+
+  const portalOrigin = new URL(c.req.url).origin
+  const inviteLink = `${portalOrigin}/?token=${token}`
+  const result = await sendInviteEmail(c.env.RESEND_API_KEY, { name: user.name, email: user.email }, inviteLink)
+  if (!result.ok) return c.json({ error: result.error || 'Failed to send email' }, 500)
+  return c.json({ ok: true, invite_link: inviteLink })
 })
 
 // ════════════════════════════════════════════════════════════════════
