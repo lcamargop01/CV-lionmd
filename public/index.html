@@ -1420,17 +1420,18 @@ function showLoginCard() {
 function showLoginForm() {
   $('landingPage').classList.add('hidden')
   $('loginPanel').classList.remove('hidden')
-  // Ensure login card is the default visible card
   $('loginCard').classList.remove('hidden')
   $('setupCard').classList.add('hidden')
   $('viewPickerCard').classList.add('hidden')
   $('loginEmail').focus()
+  history.pushState({}, '', '/login')
 }
 
 // Return to landing page from login panel
 function showLandingPage() {
   $('loginPanel').classList.add('hidden')
   $('landingPage').classList.remove('hidden')
+  history.pushState({}, '', '/')
 }
 
 // ════════════════════════════════════════════════════
@@ -1450,6 +1451,7 @@ function showApplyForm() {
   // Hide login screen, show apply screen
   $('loginScreen').classList.add('hidden')
   $('applyScreen').classList.remove('hidden')
+  history.pushState({}, '', '/apply')
   // Reset to step 1
   document.querySelectorAll('.apply-step').forEach(s => s.classList.remove('active'))
   $('applyStep1').classList.add('active')
@@ -1475,6 +1477,7 @@ function showApplyForm() {
 function hideApplyForm() {
   $('applyScreen').classList.add('hidden')
   $('loginScreen').classList.remove('hidden')
+  history.pushState({}, '', '/')
 }
 
 function applyGoStep(n) {
@@ -11404,13 +11407,56 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   } catch(_) {}
 
-  // Check for invite token in URL first
+  // Check for invite token in URL first (?token=xxx)
   const hasInvite = await checkInviteToken()
-  if (hasInvite) return  // Show setup card, don't try to restore session
+  if (hasInvite) return
 
-  // Try to restore existing session
-  const restored = await tryRestoreSession()
-  // If no session, login screen is already visible (shown by default in HTML)
+  // ── Clean path routing ──────────────────────────────────────────
+  // Read the pathname so lion.md/apply and lion.md/login work directly
+  const path = window.location.pathname.replace(/\/$/, '') // strip trailing slash
+
+  if (path === '/apply') {
+    // Go straight to apply form, skip landing page
+    history.replaceState({}, '', '/apply')
+    showApplyForm()
+    return
+  }
+
+  if (path === '/login') {
+    // Go straight to login form
+    history.replaceState({}, '', '/login')
+    showLoginForm()
+    // Still try to restore session — if already logged in, go to app
+    const restored = await tryRestoreSession()
+    if (!restored) {
+      // Already showing login form above — nothing more to do
+    }
+    return
+  }
+
+  if (path === '/portal') {
+    // Try to restore session; if not logged in, show login form
+    history.replaceState({}, '', '/portal')
+    const restored = await tryRestoreSession()
+    if (!restored) showLoginForm()
+    return
+  }
+
+  // Default: try to restore session, otherwise show landing page
+  await tryRestoreSession()
+
+  // Handle browser back/forward between clean paths
+  window.addEventListener('popstate', () => {
+    const p = window.location.pathname.replace(/\/$/, '')
+    if (p === '/apply') { showApplyForm() }
+    else if (p === '/login') { showLoginForm() }
+    else {
+      $('applyScreen').classList.add('hidden')
+      $('loginPanel').classList.add('hidden')
+      $('loginScreen').classList.remove('hidden')
+      $('landingPage').classList.remove('hidden')
+    }
+  })
 })
 </script>
 </body>

@@ -3853,4 +3853,26 @@ app.post('/api/client-payments/seed', requireAdmin, async (c) => {
   return c.json({ ok: true, clients: clientNames.length, entries_inserted: inserted, skipped })
 })
 
+// ── Clean path routing ───────────────────────────────────────────
+// Serve index.html for all known frontend routes so the browser
+// can navigate directly to lion.md/apply, lion.md/login, etc.
+// The frontend JS reads window.location.pathname on boot and shows
+// the correct screen. All /api/* routes are handled above this.
+const frontendPaths = ['/apply', '/login', '/portal', '/invite']
+for (const path of frontendPaths) {
+  app.get(path, async (c) => {
+    const html = await fetch(new URL('/index.html', c.req.url).href.replace(path, '/index.html'))
+      .catch(() => null)
+    // In Cloudflare Pages, static assets are served by the platform.
+    // We just need to return a 200 with the right content — Pages will
+    // serve the actual index.html because it's in the static output.
+    // Use a redirect-to-root with the path encoded as a query param,
+    // then the JS picks it up. Simpler: just rewrite via c.env ASSETS.
+    if ((c.env as any).ASSETS) {
+      return (c.env as any).ASSETS.fetch(new Request(new URL('/', c.req.url)))
+    }
+    return c.redirect('/', 302)
+  })
+}
+
 export default app
