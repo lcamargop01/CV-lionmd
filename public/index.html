@@ -6484,13 +6484,7 @@ function obRenderContractorDetail(data) {
               <i class="fas fa-id-badge w-4 text-gray-300 flex-shrink-0"></i>
               <span class="text-gray-600">NPI: <span class="font-mono">${escHtml(ct.npi)}</span></span>
             </div>` : ''}
-            ${statesLicensed ? `
-            <div class="flex items-start gap-3 text-sm">
-              <i class="fas fa-map-marked-alt w-4 text-gray-300 flex-shrink-0 mt-0.5"></i>
-              <div class="flex flex-wrap gap-1">
-                ${statesLicensed.split(',').map(s=>s.trim()).filter(Boolean).map(s=>`<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">${escHtml(s)}</span>`).join('')}
-              </div>
-            </div>` : ''}
+
           </div>
         </div>
 
