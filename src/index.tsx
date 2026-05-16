@@ -132,11 +132,10 @@ function isDeniedPaid(pk: string | null | undefined): boolean {
 
 // ──────────────────────────────────────────────
 // April 2026 mid-month CV rate change — ASYNC_TEXT_EMAIL only:
-//   Apr  1–15: CV pays $20  (first half, old rate)
-//   Apr 16–30: CV pays $15  (second half — same as rate table; no override needed)
-// Contractor fee is NEVER touched — always comes from the rate table.
-// Orderly and all other types always use the rate table as-is.
-// decision_date stored as "2026-04-09" or "Apr 9, 2026" etc.
+//   Decision date before Apr 15, 2026 (incl. any March date in April period): CV=$20
+//   Apr 15–30: CV=$15 (rate table)
+// Only applies to the 2026-04 period. Contractor fee never touched.
+// decision_date stored as "2026-04-09", "Mar 31, 2026", "04/09/2026", etc.
 // ──────────────────────────────────────────────
 function aprilAsyncCvFee(
   periodKey: string | null | undefined,
@@ -145,16 +144,40 @@ function aprilAsyncCvFee(
 ): number {
   if ((periodKey || '') !== '2026-04') return defaultCvFee
   if (!decisionDate) return defaultCvFee
-  // Parse day robustly from ISO (2026-04-09) or long form (Apr 9, 2026)
-  const isoMatch  = decisionDate.match(/-(\d{1,2})(?:T|\s|$)/)
-  const slashMatch = decisionDate.match(/\/(\d{1,2})\//)
-  const longMatch = decisionDate.match(/(\d{1,2}),?\s*202/)
-  const day = isoMatch   ? parseInt(isoMatch[1])
-            : slashMatch ? parseInt(slashMatch[1])
-            : longMatch  ? parseInt(longMatch[1])
-            : NaN
-  if (isNaN(day)) return defaultCvFee
-  return day < 15 ? 20 : defaultCvFee  // before Apr 15 (exclusive)=$20; Apr 15 onward=rate table
+
+  const d = decisionDate.trim()
+
+  // ISO format: 2026-04-09 or 2026-03-31
+  const isoMatch = d.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const month = parseInt(isoMatch[2])
+    const day   = parseInt(isoMatch[3])
+    // Any pre-April date (e.g. Mar 31) always gets $20
+    if (month < 4) return 20
+    return day < 15 ? 20 : defaultCvFee
+  }
+
+  // Slash format: 03/31/2026 or 04/09/2026
+  const slashMatch = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (slashMatch) {
+    const month = parseInt(slashMatch[1])
+    const day   = parseInt(slashMatch[2])
+    if (month < 4) return 20
+    return day < 15 ? 20 : defaultCvFee
+  }
+
+  // Long form: "Mar 31, 2026" or "Apr 9, 2026"
+  const MONTHS: Record<string, number> = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 }
+  const longMatch = d.match(/^([A-Za-z]{3})\s+(\d{1,2}),?\s*\d{4}/)
+  if (longMatch) {
+    const month = MONTHS[longMatch[1].toLowerCase()] ?? NaN
+    const day   = parseInt(longMatch[2])
+    if (isNaN(month)) return defaultCvFee
+    if (month < 4) return 20
+    return day < 15 ? 20 : defaultCvFee
+  }
+
+  return defaultCvFee
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
