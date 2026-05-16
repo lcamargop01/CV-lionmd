@@ -1402,6 +1402,7 @@ function vpGo(view) {
   $('app').classList.remove('hidden')
   if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
   state.adminView = view
+  localStorage.setItem('lmd_admin_view', view)  // persist across refreshes
   // Rebuild nav and subtitle immediately so sidebar reflects the chosen view
   applyRoleUI(state.role, state.user?.name)
   buildNav()
@@ -1746,6 +1747,8 @@ function showViewPicker() {
 function logout() {
   localStorage.removeItem('lmd_token')
   localStorage.removeItem('lmd_user')
+  localStorage.removeItem('lmd_admin_view')
+  localStorage.removeItem('lmd_last_page')
   state = { role: null, user: null, token: null, periods: [], currentPeriod: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
   // Return to landing page, not directly to login card
   $('app').classList.add('hidden')
@@ -1777,13 +1780,26 @@ async function tryRestoreSession() {
     applyRoleUI(me.role, me.name)
     buildNav()
     if (me.role === 'admin') {
-      $('loginCard').classList.add('hidden')
-      $('setupCard').classList.add('hidden')
-      $('viewPickerCard').classList.remove('hidden')
-      $('landingPage').classList.add('hidden')
-      $('loginPanel').classList.remove('hidden')
-      const wl = $('vpWelcome')
-      if (wl) wl.textContent = 'Welcome back, ' + me.name.split(' ')[0] + '!'
+      const savedView = localStorage.getItem('lmd_admin_view')
+      if (savedView) {
+        // Skip the picker — go straight back to where they were
+        state.adminView = savedView
+        applyRoleUI(me.role, me.name)
+        buildNav()
+        $('loginScreen').classList.add('hidden')
+        $('app').classList.remove('hidden')
+        if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
+        loadInitialData()
+      } else {
+        // First login — show the view picker
+        $('loginCard').classList.add('hidden')
+        $('setupCard').classList.add('hidden')
+        $('viewPickerCard').classList.remove('hidden')
+        $('landingPage').classList.add('hidden')
+        $('loginPanel').classList.remove('hidden')
+        const wl = $('vpWelcome')
+        if (wl) wl.textContent = 'Welcome back, ' + me.name.split(' ')[0] + '!'
+      }
     } else if (me.role === 'provider') {
       $('loginScreen').classList.add('hidden')
       $('app').classList.remove('hidden')
@@ -1921,6 +1937,7 @@ function navigate(page) {
   }
 
   state.currentPage = page
+  localStorage.setItem('lmd_last_page', page)  // persist across refreshes
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
   const navEl = $(`nav_${page}`)
   if (navEl) navEl.classList.add('active')
@@ -1973,7 +1990,11 @@ async function loadInitialData() {
       await selectPeriod(state.periods[0].period_key)
     }
 
-    const landingPage = state.role === 'carevalidate' ? 'cv_dashboard' : 'dashboard'
+    // Restore last visited page, or fall back to role default
+    const savedPage = localStorage.getItem('lmd_last_page')
+    const defaultPage = state.role === 'carevalidate' ? 'cv_dashboard' : 'dashboard'
+    const validPages = Object.keys({ dashboard:1, upload:1, consults:1, payroll:1, contractors:1, onboarding:1, rates:1, carevalidate:1, cv_dashboard:1, cv_detail:1, users:1, payments:1 })
+    const landingPage = (savedPage && validPages.includes(savedPage)) ? savedPage : defaultPage
     navigate(landingPage)
   } catch(e) {
     showToast('Error loading data: ' + e.message, 'error')
