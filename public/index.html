@@ -1915,32 +1915,53 @@ function buildNav() {
   `).join('')
 }
 
+// Map page id → clean URL path
+const PAGE_PATHS = {
+  dashboard:          '/dashboard',
+  upload:             '/upload',
+  consults:           '/consults',
+  payroll:            '/payroll',
+  contractors:        '/contractors',
+  onboarding:         '/onboarding',
+  rates:              '/rates',
+  carevalidate:       '/carevalidate',
+  cv_dashboard:       '/cv/dashboard',
+  cv_detail:          '/cv/detail',
+  users:              '/users',
+  payments:           '/payments',
+  provider_profile:   '/portal/profile',
+  provider_payroll:   '/portal/payroll',
+  provider_consults:  '/portal/consults',
+  provider_licenses:  '/portal/licenses',
+  provider_documents: '/portal/documents',
+  // onboarding sub-tabs
+  'onboarding/kanban':    '/onboarding',
+  'onboarding/onboarded': '/contractors/onboarded',
+  'onboarding/calendar':  '/onboarding/calendar',
+}
+
 function navigate(page) {
   // Special routing for onboarding-view sidebar items
   const inObView = state.role === 'onboarding' || (state.role === 'admin' && state.adminView === 'onboarding')
   if (inObView && (page === 'calendar' || page === 'contractors' || page === 'onboarding')) {
-    // Map sidebar page id → onboarding main tab
-    const tabMap = { onboarding: 'kanban', contractors: 'onboarded', calendar: 'calendar' }
+    const tabMap   = { onboarding: 'kanban', contractors: 'onboarded', calendar: 'calendar' }
     const titleMap = { onboarding: 'Onboarding', contractors: 'Onboarded Contractors', calendar: 'Calendar & Deadlines' }
     state.currentPage = 'onboarding'
+    const targetTab = tabMap[page] || 'kanban'
+    localStorage.setItem('lmd_last_page', 'onboarding')
+    history.pushState({}, '', PAGE_PATHS['onboarding/' + targetTab] || '/onboarding')
     $('pageTitle').textContent = titleMap[page] || 'Onboarding'
-    // Highlight the correct nav item
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
     const navEl = $(`nav_${page}`); if (navEl) navEl.classList.add('active')
-    // If obRoot already exists, just switch tab; otherwise do a full render
-    const targetTab = tabMap[page] || 'kanban'
-    if ($('obRoot')) {
-      obSwitchMainTab(targetTab)
-    } else {
-      obState.mainTab = targetTab
-      renderOnboarding()
-    }
+    if ($('obRoot')) { obSwitchMainTab(targetTab) } else { obState.mainTab = targetTab; renderOnboarding() }
     if (isMobile()) closeMobileSidebar()
     return
   }
 
   state.currentPage = page
-  localStorage.setItem('lmd_last_page', page)  // persist across refreshes
+  localStorage.setItem('lmd_last_page', page)
+  if (PAGE_PATHS[page]) history.pushState({}, '', PAGE_PATHS[page])
+
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
   const navEl = $(`nav_${page}`)
   if (navEl) navEl.classList.add('active')
@@ -1951,7 +1972,6 @@ function navigate(page) {
   const pages = { dashboard: renderDashboard, upload: renderUpload, consults: renderConsults, payroll: renderPayroll, contractors: renderContractors, onboarding: renderOnboarding, rates: renderRates, carevalidate: renderCVView, cv_dashboard: renderCVDashboard, cv_detail: renderCVDetail, users: renderUserManagement, payments: renderClientPayments, provider_profile: renderProviderProfile, provider_payroll: renderProviderPayroll, provider_consults: renderProviderConsults, provider_licenses: renderProviderLicenses, provider_documents: renderProviderDocuments }
   if (pages[page]) pages[page]()
 
-  // Auto-close sidebar on mobile after navigation
   if (isMobile()) closeMobileSidebar()
 }
 
@@ -11412,50 +11432,81 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (hasInvite) return
 
   // ── Clean path routing ──────────────────────────────────────────
-  // Read the pathname so lion.md/apply and lion.md/login work directly
-  const path = window.location.pathname.replace(/\/$/, '') // strip trailing slash
+  const path = window.location.pathname.replace(/\/$/, '') || '/'
+
+  // Reverse map: URL path → page id
+  const PATH_TO_PAGE = {
+    '/dashboard':          'dashboard',
+    '/upload':             'upload',
+    '/consults':           'consults',
+    '/payroll':            'payroll',
+    '/contractors':        'contractors',
+    '/contractors/onboarded': 'contractors',  // ob sub-tab
+    '/onboarding':         'onboarding',
+    '/onboarding/calendar':'onboarding',
+    '/rates':              'rates',
+    '/carevalidate':       'carevalidate',
+    '/cv/dashboard':       'cv_dashboard',
+    '/cv/detail':          'cv_detail',
+    '/users':              'users',
+    '/payments':           'payments',
+    '/portal/profile':     'provider_profile',
+    '/portal/payroll':     'provider_payroll',
+    '/portal/consults':    'provider_consults',
+    '/portal/licenses':    'provider_licenses',
+    '/portal/documents':   'provider_documents',
+  }
+
+  const appPage = PATH_TO_PAGE[path]
 
   if (path === '/apply') {
-    // Go straight to apply form, skip landing page
     history.replaceState({}, '', '/apply')
     showApplyForm()
     return
   }
 
   if (path === '/login') {
-    // Go straight to login form
     history.replaceState({}, '', '/login')
-    showLoginForm()
-    // Still try to restore session — if already logged in, go to app
-    const restored = await tryRestoreSession()
-    if (!restored) {
-      // Already showing login form above — nothing more to do
-    }
-    return
-  }
-
-  if (path === '/portal') {
-    // Try to restore session; if not logged in, show login form
-    history.replaceState({}, '', '/portal')
     const restored = await tryRestoreSession()
     if (!restored) showLoginForm()
     return
   }
 
-  // Default: try to restore session, otherwise show landing page
+  if (path === '/portal' || path.startsWith('/portal/')) {
+    const restored = await tryRestoreSession()
+    if (!restored) showLoginForm()
+    return
+  }
+
+  if (appPage) {
+    // Deep link to an in-app page — restore session then navigate there
+    const restored = await tryRestoreSession()
+    if (restored) {
+      // Override whatever page tryRestoreSession landed on
+      navigate(appPage)
+    } else {
+      // Not logged in — go to login, remember where they wanted to go
+      localStorage.setItem('lmd_last_page', appPage)
+      showLoginForm()
+    }
+    return
+  }
+
+  // Default (/) — try to restore session, otherwise show landing page
   await tryRestoreSession()
 
   // Handle browser back/forward between clean paths
   window.addEventListener('popstate', () => {
-    const p = window.location.pathname.replace(/\/$/, '')
+    const p = window.location.pathname.replace(/\/$/, '') || '/'
     if (p === '/apply') { showApplyForm() }
     else if (p === '/login') { showLoginForm() }
-    else {
+    else if (p === '/' || p === '') {
       $('applyScreen').classList.add('hidden')
       $('loginPanel').classList.add('hidden')
       $('loginScreen').classList.remove('hidden')
       $('landingPage').classList.remove('hidden')
     }
+    // In-app popstate: browser back/forward handled naturally by navigate()
   })
 })
 </script>
