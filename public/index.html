@@ -1986,16 +1986,17 @@ async function loadInitialData() {
     state.typeRates = await api('/api/contractor-type-rates').catch(() => [])
     populateSessionSelector()
 
-    if (state.periods.length > 0) {
-      await selectPeriod(state.periods[0].period_key)
-    }
-
-    // Restore last visited page, or fall back to role default
+    // Resolve target page BEFORE selectPeriod so its navigate(state.currentPage) uses the right page
     const savedPage = localStorage.getItem('lmd_last_page')
     const defaultPage = state.role === 'carevalidate' ? 'cv_dashboard' : 'dashboard'
-    const validPages = Object.keys({ dashboard:1, upload:1, consults:1, payroll:1, contractors:1, onboarding:1, rates:1, carevalidate:1, cv_dashboard:1, cv_detail:1, users:1, payments:1 })
-    const landingPage = (savedPage && validPages.includes(savedPage)) ? savedPage : defaultPage
-    navigate(landingPage)
+    const validPages = ['dashboard','upload','consults','payroll','contractors','onboarding','rates','carevalidate','cv_dashboard','cv_detail','users','payments']
+    state.currentPage = (savedPage && validPages.includes(savedPage)) ? savedPage : defaultPage
+
+    if (state.periods.length > 0) {
+      await selectPeriod(state.periods[0].period_key)
+    } else {
+      navigate(state.currentPage)
+    }
   } catch(e) {
     showToast('Error loading data: ' + e.message, 'error')
   } finally {
