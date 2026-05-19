@@ -10624,7 +10624,7 @@ function cpExportXlsx() {
 // CANDIDATE PORTAL — read-only onboarding status view
 // ══════════════════════════════════════════════════════════════════
 
-const cpState = { data: null }
+const candPortalState = { data: null }
 
 async function renderCandidatePortal() {
   state.currentPage = 'candidate_status'
@@ -10639,7 +10639,7 @@ async function renderCandidateStatus() {
   mc.innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
   try {
     const data = await api('/api/candidate/status')
-    cpState.data = data
+    candPortalState.data = data
     const c = data.candidate
     const meetings = data.meetings || []
     const docs = data.docs || []
@@ -10795,8 +10795,8 @@ async function renderCandidateDocuments() {
   const mc = $('mainContent')
   mc.innerHTML = `<div class="flex items-center justify-center h-40"><div class="spinner"></div></div>`
   try {
-    const data = cpState.data || await api('/api/candidate/status')
-    cpState.data = data
+    const data = candPortalState.data || await api('/api/candidate/status')
+    candPortalState.data = data
     const docs = data.docs || []
     mc.innerHTML = `
     <div class="max-w-2xl">
