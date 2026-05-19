@@ -1236,9 +1236,9 @@ app.get('/api/consults', async (c) => {
 })
 
 // ──────────────────────────────────────────────
-// GET /api/consults/export — same filters as /api/consults, no pagination.
-// Returns ALL matching rows (hard-capped at 100 000 for safety).
-// Columns include everything the table shows + EIN/SSN, company, period.
+// GET /api/consults/export — same filters as /api/consults but paginated.
+// page + limit params let the frontend fetch all rows in chunks.
+// Default chunk: 10 000 rows. Returns { total, page, limit, data[] }.
 // ──────────────────────────────────────────────
 app.get('/api/consults/export', async (c) => {
   const period_key      = c.req.query('period_key')
@@ -1254,6 +1254,9 @@ app.get('/api/consults/export', async (c) => {
   const search          = c.req.query('search')
   const rawSortBy       = c.req.query('sort_by')  || 'decision_date'
   const rawSortDir      = c.req.query('sort_dir') || 'desc'
+  const page            = Math.max(1, parseInt(c.req.query('page')  || '1'))
+  const limit           = Math.min(10000, Math.max(1, parseInt(c.req.query('limit') || '10000')))
+  const offset          = (page - 1) * limit
 
   const SORT_COLS: Record<string, string> = {
     decision_date:    'c.decision_date',
@@ -1299,6 +1302,11 @@ app.get('/api/consults/export', async (c) => {
     params.push(`%${search}%`, `%${search}%`, `%${search}%`)
   }
 
+  const countResult = await c.env.DB.prepare(
+    `SELECT COUNT(*) as total FROM consults c
+     LEFT JOIN upload_sessions s ON c.session_id = s.id ${where}`
+  ).bind(...params).first() as any
+
   const rows = await c.env.DB.prepare(
     `SELECT
        c.case_id_short, c.decision_date, c.patient_name, c.organization_name,
@@ -1311,10 +1319,10 @@ app.get('/api/consults/export', async (c) => {
      LEFT JOIN upload_sessions s  ON c.session_id  = s.id
      ${where}
      ORDER BY ${orderBy}
-     LIMIT 100000`
-  ).bind(...params).all()
+     LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all()
 
-  return c.json({ total: rows.results.length, data: rows.results })
+  return c.json({ total: countResult?.total || 0, page, limit, data: rows.results })
 })
 
 // Distinct doctor names for the filter dropdown (scoped to current period)

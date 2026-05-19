@@ -3303,35 +3303,55 @@ function renderConsultsTable(rows, total, page) {
 // ── Export Consult Records to Excel ──────────────────────────────────────────
 // fullExport=true  → all records for current period (no filters applied)
 // fullExport=false → current filtered view (same params as what's on screen)
+// Fetches in chunks of 10 000 rows to handle 200k+ record periods.
 async function exportConsultsXlsx(fullExport = false) {
   if (!state.currentPeriod) { showToast('No period selected', 'warning'); return }
   const pk = state.currentPeriod.period_key
   const periodLabel = (state.currentPeriod.period_label || pk).replace(/[/\\:*?"<>|]/g, '-')
 
-  const params = new URLSearchParams({ period_key: pk, sort_by: consultsState.sortBy, sort_dir: consultsState.sortDir })
+  const baseParams = new URLSearchParams({ period_key: pk, sort_by: 'decision_date', sort_dir: 'asc', limit: '10000' })
   let filenameSuffix = 'All'
 
   if (!fullExport) {
-    if (consultsState.search)       { params.set('search',          consultsState.search);       filenameSuffix = 'Filtered' }
-    if (consultsState.doctor)       { params.set('doctor_name',     consultsState.doctor);       filenameSuffix = 'Filtered' }
-    if (consultsState.organization) { params.set('organization',    consultsState.organization); filenameSuffix = 'Filtered' }
+    if (consultsState.search)           { baseParams.set('search',          consultsState.search);        filenameSuffix = 'Filtered' }
+    if (consultsState.doctor)           { baseParams.set('doctor_name',     consultsState.doctor);        filenameSuffix = 'Filtered' }
+    if (consultsState.organization)     { baseParams.set('organization',    consultsState.organization);  filenameSuffix = 'Filtered' }
     const vt = consultsState.visitType
-    if (vt)                              { params.set('visit_type',      vt);                         filenameSuffix = 'Filtered' }
-    if (consultsState.isOrderly !== '')  { params.set('is_orderly',      consultsState.isOrderly);    filenameSuffix = 'Filtered' }
-    if (consultsState.isFlagged !== '')  { params.set('is_flagged',      consultsState.isFlagged);    filenameSuffix = 'Filtered' }
-    if (consultsState.decisionStatus)    { params.set('decision_status', consultsState.decisionStatus); filenameSuffix = 'Filtered' }
-    if (consultsState.dateFrom)          { params.set('date_from',       consultsState.dateFrom);     filenameSuffix = 'Filtered' }
-    if (consultsState.dateTo)            { params.set('date_to',         consultsState.dateTo);       filenameSuffix = 'Filtered' }
+    if (vt)                             { baseParams.set('visit_type',      vt);                          filenameSuffix = 'Filtered' }
+    if (consultsState.isOrderly !== '') { baseParams.set('is_orderly',      consultsState.isOrderly);     filenameSuffix = 'Filtered' }
+    if (consultsState.isFlagged !== '') { baseParams.set('is_flagged',      consultsState.isFlagged);     filenameSuffix = 'Filtered' }
+    if (consultsState.decisionStatus)   { baseParams.set('decision_status', consultsState.decisionStatus);filenameSuffix = 'Filtered' }
+    if (consultsState.dateFrom)         { baseParams.set('date_from',       consultsState.dateFrom);      filenameSuffix = 'Filtered' }
+    if (consultsState.dateTo)           { baseParams.set('date_to',         consultsState.dateTo);        filenameSuffix = 'Filtered' }
   }
 
-  showToast('Preparing export…', 'info')
-  let result
+  // ── Show progress toast and disable buttons ──────────────────────────────
+  const toastId = `export-toast-${Date.now()}`
+  const updateToast = (msg) => showToast(msg, 'info')
+  updateToast('Starting export… fetching page 1')
+
+  const CHUNK = 10000
+  let allRows = []
+  let page = 1
+  let total = null
+
   try {
-    result = await api('/api/consults/export?' + params)
+    while (true) {
+      const params = new URLSearchParams(baseParams)
+      params.set('page', String(page))
+      const result = await api('/api/consults/export?' + params)
+      if (total === null) total = result.total
+      allRows = allRows.concat(result.data || [])
+      const fetched = allRows.length
+      updateToast(`Fetching… ${fmtNum(fetched)} / ${fmtNum(total)} rows`)
+      if (result.data.length < CHUNK || fetched >= total) break
+      page++
+    }
   } catch(e) { showToast('Export failed: ' + e.message, 'error'); return }
 
-  const rows = result.data
-  if (!rows || !rows.length) { showToast('No records to export.', 'warning'); return }
+  if (!allRows.length) { showToast('No records to export.', 'warning'); return }
+
+  updateToast(`Building Excel file for ${fmtNum(allRows.length)} rows…`)
 
   // ── Friendly visit type label ───────────────────────────────────────────
   const vtLabel = {
@@ -3340,23 +3360,23 @@ async function exportConsultsXlsx(fullExport = false) {
   }
 
   // ── Build sheet rows ─────────────────────────────────────────────────────
-  const sheetRows = rows.map(r => ({
-    'Case ID':          r.case_id_short || (r.case_id || '').substring(0, 8),
-    'Date':             r.decision_date ? r.decision_date.substring(0, 10) : '',
-    'Patient':          r.patient_name  || '',
-    'Organization':     r.organization_name || '',
-    'Doctor':           r.doctor_name   || '',
-    'Contractor':       r.contractor_name || '',
-    'Visit Type':       vtLabel[r.visit_type] || r.visit_type || '',
-    'OrderlyMeds':      r.is_orderly ? 'Yes' : 'No',
-    'CV Fee':           r.carevalidate_fee != null ? Number(r.carevalidate_fee) : '',
-    'Contractor Fee':   r.contractor_fee  != null ? Number(r.contractor_fee)  : '',
-    'Status':           r.decision_status || '',
-    'Flagged':          r.is_flagged ? 'Yes' : 'No',
-    'Period':           r.period_label || r.period_key || pk,
-    'EIN / SSN':        r.ein_ssn     || '',
-    'Company':          r.company     || '',
-    'Full Case ID':     r.case_id     || '',
+  const sheetRows = allRows.map(r => ({
+    'Case ID':        r.case_id_short || (r.case_id || '').substring(0, 8),
+    'Date':           r.decision_date ? r.decision_date.substring(0, 10) : '',
+    'Patient':        r.patient_name  || '',
+    'Organization':   r.organization_name || '',
+    'Doctor':         r.doctor_name   || '',
+    'Contractor':     r.contractor_name || '',
+    'Visit Type':     vtLabel[r.visit_type] || r.visit_type || '',
+    'OrderlyMeds':    r.is_orderly ? 'Yes' : 'No',
+    'CV Fee':         r.carevalidate_fee != null ? Number(r.carevalidate_fee) : '',
+    'Contractor Fee': r.contractor_fee  != null ? Number(r.contractor_fee)  : '',
+    'Status':         r.decision_status || '',
+    'Flagged':        r.is_flagged ? 'Yes' : 'No',
+    'Period':         r.period_label || r.period_key || pk,
+    'EIN / SSN':      r.ein_ssn  || '',
+    'Company':        r.company  || '',
+    'Full Case ID':   r.case_id  || '',
   }))
 
   const wb = XLSX.utils.book_new()
@@ -3366,27 +3386,27 @@ async function exportConsultsXlsx(fullExport = false) {
              'Flagged','Period','EIN / SSN','Company','Full Case ID']
   })
 
-  // ── Column widths ─────────────────────────────────────────────────────────
+  // ── Column widths ────────────────────────────────────────────────────────
   ws['!cols'] = [
     { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 28 }, { wch: 24 }, { wch: 24 },
     { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 10 },
     { wch: 8  }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 36 }
   ]
 
-  // ── Currency format for fee columns (I=CV Fee col 9, J=Contractor Fee col 10) ──
+  // ── Dollar format on CV Fee (col 8) and Contractor Fee (col 9) ──────────
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
   for (let R = 1; R <= range.e.r; R++) {
-    const cvCell  = ws[XLSX.utils.encode_cell({ r: R, c: 8 })]
-    const ctCell  = ws[XLSX.utils.encode_cell({ r: R, c: 9 })]
-    if (cvCell  && cvCell.t  === 'n') cvCell.z  = '"$"#,##0.00'
-    if (ctCell  && ctCell.t  === 'n') ctCell.z  = '"$"#,##0.00'
+    const cvCell = ws[XLSX.utils.encode_cell({ r: R, c: 8 })]
+    const ctCell = ws[XLSX.utils.encode_cell({ r: R, c: 9 })]
+    if (cvCell && cvCell.t === 'n') cvCell.z = '"$"#,##0.00'
+    if (ctCell && ctCell.t === 'n') ctCell.z = '"$"#,##0.00'
   }
 
   const date = new Date().toISOString().slice(0, 10)
   const sheetName = `${periodLabel} ${filenameSuffix}`.substring(0, 31)
   XLSX.utils.book_append_sheet(wb, ws, sheetName)
   XLSX.writeFile(wb, `LionMD_Consults_${periodLabel}_${filenameSuffix}_${date}.xlsx`)
-  showToast(`Exported ${fmtNum(rows.length)} records to Excel`, 'success')
+  showToast(`✅ Exported ${fmtNum(allRows.length)} records to Excel`, 'success')
 }
 
 // ════════════════════════════════════════════════════
