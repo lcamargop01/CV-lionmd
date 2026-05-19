@@ -132,9 +132,11 @@ function isDeniedPaid(pk: string | null | undefined): boolean {
 }
 
 // ──────────────────────────────────────────────
-// April 2026 mid-month CV rate change — ASYNC_TEXT_EMAIL only:
-//   Decision date before Apr 15, 2026 (incl. any March date in April period): CV=$20
-//   Apr 15–30: CV=$15 (rate table)
+// April 2026 mid-month CV rate change — ASYNC_TEXT_EMAIL only
+// (OrderlyMeds ASYNC records are included — they share the same rule):
+//   Decision date Apr 1–15, 2026 (incl. any pre-April date in this period): CV=$20
+//   Apr 16–30: CV=$15 (standard rate table)
+// Apr 15 itself → $20 (one-time exception, confirmed).
 // Only applies to the 2026-04 period. Contractor fee never touched.
 // decision_date stored as "2026-04-09", "Mar 31, 2026", "04/09/2026", etc.
 // ──────────────────────────────────────────────
@@ -155,7 +157,8 @@ function aprilAsyncCvFee(
     const day   = parseInt(isoMatch[3])
     // Any pre-April date (e.g. Mar 31) always gets $20
     if (month < 4) return 20
-    return day < 15 ? 20 : defaultCvFee
+    // Apr 1–15 inclusive → $20; Apr 16+ → standard rate
+    return day <= 15 ? 20 : defaultCvFee
   }
 
   // Slash format: 03/31/2026 or 04/09/2026
@@ -164,7 +167,7 @@ function aprilAsyncCvFee(
     const month = parseInt(slashMatch[1])
     const day   = parseInt(slashMatch[2])
     if (month < 4) return 20
-    return day < 15 ? 20 : defaultCvFee
+    return day <= 15 ? 20 : defaultCvFee
   }
 
   // Long form: "Mar 31, 2026" or "Apr 9, 2026"
@@ -175,7 +178,7 @@ function aprilAsyncCvFee(
     const day   = parseInt(longMatch[2])
     if (isNaN(month)) return defaultCvFee
     if (month < 4) return 20
-    return day < 15 ? 20 : defaultCvFee
+    return day <= 15 ? 20 : defaultCvFee
   }
 
   return defaultCvFee
