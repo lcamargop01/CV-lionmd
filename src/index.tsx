@@ -24,8 +24,9 @@ async function sendInviteEmail(
         <!-- Header -->
         <tr>
           <td style="background:#1a1a2e;padding:28px 40px;text-align:center;">
-            <div style="font-size:22px;font-weight:700;color:#d4a017;letter-spacing:0.5px;">🦁 Lion MD Portal</div>
-            <div style="font-size:12px;color:#8888aa;margin-top:4px;letter-spacing:1px;">PROVIDER ACCESS</div>
+            <img src="https://lionmd-payroll.pages.dev/lion-logo.png" alt="Lion MD" width="80" style="display:block;margin:0 auto 10px;width:80px;height:auto;" />
+            <div style="font-size:18px;font-weight:700;color:#d4a017;letter-spacing:0.5px;">Lion MD Portal</div>
+            <div style="font-size:11px;color:#8888aa;margin-top:4px;letter-spacing:1px;">PROVIDER ACCESS</div>
           </td>
         </tr>
         <!-- Body -->
