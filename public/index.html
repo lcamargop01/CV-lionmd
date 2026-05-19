@@ -3033,10 +3033,21 @@ async function renderConsults() {
         ${chips.join('')}
         <button onclick="clearAllDrillFilters()" class="text-xs text-red-400 hover:text-red-600 ml-1 font-medium">Clear all</button>
       </div>` : ''}
-      <!-- Filters -->
+      <!-- Filters + Export -->
       <div class="p-3 md:p-4 border-b border-gray-100">
         <div class="flex flex-col gap-2">
-          <input type="text" id="searchInput" placeholder="Search patient, case ID, org..." class="w-full" value="${consultsState.search}" oninput="debounceSearch(this.value)"/>
+          <!-- Top row: search + export button -->
+          <div class="flex gap-2 items-center">
+            <input type="text" id="searchInput" placeholder="Search patient, case ID, org..." class="flex-1" value="${consultsState.search}" oninput="debounceSearch(this.value)"/>
+            <button onclick="exportConsultsXlsx(false)" title="Export current filtered view to Excel"
+              class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border-2 border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors whitespace-nowrap">
+              <i class="fas fa-file-excel"></i><span class="hidden sm:inline">Export</span>
+            </button>
+            <button onclick="exportConsultsXlsx(true)" title="Export ALL records for this period (ignore filters)"
+              class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border-2 border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors whitespace-nowrap">
+              <i class="fas fa-file-excel"></i><span class="hidden sm:inline">Full Export</span>
+            </button>
+          </div>
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
             <select id="doctorFilter" onchange="filterConsults()" class="w-full text-sm">
               <option value="">All Doctors</option>
@@ -3287,6 +3298,95 @@ function renderConsultsTable(rows, total, page) {
         <button onclick="loadConsultsPage(${page+1})" ${page >= totalPages ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-40 hover:bg-gray-50">Next →</button>
       </div>`
   }
+}
+
+// ── Export Consult Records to Excel ──────────────────────────────────────────
+// fullExport=true  → all records for current period (no filters applied)
+// fullExport=false → current filtered view (same params as what's on screen)
+async function exportConsultsXlsx(fullExport = false) {
+  if (!state.currentPeriod) { showToast('No period selected', 'warning'); return }
+  const pk = state.currentPeriod.period_key
+  const periodLabel = (state.currentPeriod.period_label || pk).replace(/[/\\:*?"<>|]/g, '-')
+
+  const params = new URLSearchParams({ period_key: pk, sort_by: consultsState.sortBy, sort_dir: consultsState.sortDir })
+  let filenameSuffix = 'All'
+
+  if (!fullExport) {
+    if (consultsState.search)       { params.set('search',          consultsState.search);       filenameSuffix = 'Filtered' }
+    if (consultsState.doctor)       { params.set('doctor_name',     consultsState.doctor);       filenameSuffix = 'Filtered' }
+    if (consultsState.organization) { params.set('organization',    consultsState.organization); filenameSuffix = 'Filtered' }
+    const vt = consultsState.visitType
+    if (vt)                              { params.set('visit_type',      vt);                         filenameSuffix = 'Filtered' }
+    if (consultsState.isOrderly !== '')  { params.set('is_orderly',      consultsState.isOrderly);    filenameSuffix = 'Filtered' }
+    if (consultsState.isFlagged !== '')  { params.set('is_flagged',      consultsState.isFlagged);    filenameSuffix = 'Filtered' }
+    if (consultsState.decisionStatus)    { params.set('decision_status', consultsState.decisionStatus); filenameSuffix = 'Filtered' }
+    if (consultsState.dateFrom)          { params.set('date_from',       consultsState.dateFrom);     filenameSuffix = 'Filtered' }
+    if (consultsState.dateTo)            { params.set('date_to',         consultsState.dateTo);       filenameSuffix = 'Filtered' }
+  }
+
+  showToast('Preparing export…', 'info')
+  let result
+  try {
+    result = await api('/api/consults/export?' + params)
+  } catch(e) { showToast('Export failed: ' + e.message, 'error'); return }
+
+  const rows = result.data
+  if (!rows || !rows.length) { showToast('No records to export.', 'warning'); return }
+
+  // ── Friendly visit type label ───────────────────────────────────────────
+  const vtLabel = {
+    ASYNC_TEXT_EMAIL: 'Async', SYNC_PHONE: 'Sync Phone',
+    SYNC_VIDEO: 'Sync Video', SYNC_IN_PERSON: 'Sync In-Person', NO_SHOW: 'No Show'
+  }
+
+  // ── Build sheet rows ─────────────────────────────────────────────────────
+  const sheetRows = rows.map(r => ({
+    'Case ID':          r.case_id_short || (r.case_id || '').substring(0, 8),
+    'Date':             r.decision_date ? r.decision_date.substring(0, 10) : '',
+    'Patient':          r.patient_name  || '',
+    'Organization':     r.organization_name || '',
+    'Doctor':           r.doctor_name   || '',
+    'Contractor':       r.contractor_name || '',
+    'Visit Type':       vtLabel[r.visit_type] || r.visit_type || '',
+    'OrderlyMeds':      r.is_orderly ? 'Yes' : 'No',
+    'CV Fee':           r.carevalidate_fee != null ? Number(r.carevalidate_fee) : '',
+    'Contractor Fee':   r.contractor_fee  != null ? Number(r.contractor_fee)  : '',
+    'Status':           r.decision_status || '',
+    'Flagged':          r.is_flagged ? 'Yes' : 'No',
+    'Period':           r.period_label || r.period_key || pk,
+    'EIN / SSN':        r.ein_ssn     || '',
+    'Company':          r.company     || '',
+    'Full Case ID':     r.case_id     || '',
+  }))
+
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.json_to_sheet(sheetRows, {
+    header: ['Case ID','Date','Patient','Organization','Doctor','Contractor',
+             'Visit Type','OrderlyMeds','CV Fee','Contractor Fee','Status',
+             'Flagged','Period','EIN / SSN','Company','Full Case ID']
+  })
+
+  // ── Column widths ─────────────────────────────────────────────────────────
+  ws['!cols'] = [
+    { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 28 }, { wch: 24 }, { wch: 24 },
+    { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 10 },
+    { wch: 8  }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 36 }
+  ]
+
+  // ── Currency format for fee columns (I=CV Fee col 9, J=Contractor Fee col 10) ──
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
+  for (let R = 1; R <= range.e.r; R++) {
+    const cvCell  = ws[XLSX.utils.encode_cell({ r: R, c: 8 })]
+    const ctCell  = ws[XLSX.utils.encode_cell({ r: R, c: 9 })]
+    if (cvCell  && cvCell.t  === 'n') cvCell.z  = '"$"#,##0.00'
+    if (ctCell  && ctCell.t  === 'n') ctCell.z  = '"$"#,##0.00'
+  }
+
+  const date = new Date().toISOString().slice(0, 10)
+  const sheetName = `${periodLabel} ${filenameSuffix}`.substring(0, 31)
+  XLSX.utils.book_append_sheet(wb, ws, sheetName)
+  XLSX.writeFile(wb, `LionMD_Consults_${periodLabel}_${filenameSuffix}_${date}.xlsx`)
+  showToast(`Exported ${fmtNum(rows.length)} records to Excel`, 'success')
 }
 
 // ════════════════════════════════════════════════════

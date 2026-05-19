@@ -1235,6 +1235,88 @@ app.get('/api/consults', async (c) => {
   return c.json({ total: countResult?.total || 0, page: parseInt(page), limit: parseInt(limit), data: rows.results })
 })
 
+// ──────────────────────────────────────────────
+// GET /api/consults/export — same filters as /api/consults, no pagination.
+// Returns ALL matching rows (hard-capped at 100 000 for safety).
+// Columns include everything the table shows + EIN/SSN, company, period.
+// ──────────────────────────────────────────────
+app.get('/api/consults/export', async (c) => {
+  const period_key      = c.req.query('period_key')
+  const session_id      = c.req.query('session_id')
+  const doctor_name     = c.req.query('doctor_name')
+  const visit_type      = c.req.query('visit_type')
+  const is_orderly      = c.req.query('is_orderly')
+  const is_flagged      = c.req.query('is_flagged')
+  const decision_status = c.req.query('decision_status')
+  const organization    = c.req.query('organization')
+  const date_from       = c.req.query('date_from')
+  const date_to         = c.req.query('date_to')
+  const search          = c.req.query('search')
+  const rawSortBy       = c.req.query('sort_by')  || 'decision_date'
+  const rawSortDir      = c.req.query('sort_dir') || 'desc'
+
+  const SORT_COLS: Record<string, string> = {
+    decision_date:    'c.decision_date',
+    patient_name:     'c.patient_name',
+    organization_name:'c.organization_name',
+    doctor_name:      'c.doctor_name',
+    visit_type:       'c.visit_type',
+    carevalidate_fee: 'c.carevalidate_fee',
+    contractor_fee:   'c.contractor_fee',
+    case_id_short:    'c.case_id_short',
+    decision_status:  'c.decision_status',
+  }
+  const sortCol = SORT_COLS[rawSortBy] ?? 'c.decision_date'
+  const sortDir = rawSortDir.toLowerCase() === 'asc' ? 'ASC' : 'DESC'
+  const orderBy = `${sortCol} ${sortDir}, c.id ${sortDir}`
+
+  let where = 'WHERE 1=1'
+  const params: any[] = []
+
+  if (period_key) {
+    where += ' AND s.period_key=?'; params.push(period_key)
+  } else if (session_id) {
+    where += ' AND c.session_id=?'; params.push(session_id)
+  }
+  if (doctor_name) { where += ' AND c.doctor_name=?';    params.push(doctor_name) }
+  if (visit_type === '_SYNC') {
+    where += ` AND c.visit_type IN ('SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON')`
+  } else if (visit_type === '_OTHER') {
+    where += ` AND (c.visit_type IS NULL OR c.visit_type NOT IN ('ASYNC_TEXT_EMAIL','SYNC_PHONE','SYNC_VIDEO','SYNC_IN_PERSON','NO_SHOW') OR c.visit_type = '')`
+  } else if (visit_type) {
+    where += ' AND c.visit_type=?'; params.push(visit_type)
+  }
+  if (is_orderly === '1') { where += ' AND c.is_orderly=1' }
+  if (is_orderly === '0') { where += ' AND c.is_orderly=0' }
+  if (is_flagged === '1') { where += ' AND c.is_flagged=1' }
+  if (is_flagged === '0') { where += ' AND (c.is_flagged=0 OR c.is_flagged IS NULL)' }
+  if (decision_status)    { where += ' AND c.decision_status=?'; params.push(decision_status) }
+  if (organization)       { where += ' AND c.organization_name=?'; params.push(organization) }
+  if (date_from)          { where += ' AND c.decision_date >= ?';  params.push(date_from) }
+  if (date_to)            { where += ' AND c.decision_date <= ?';  params.push(date_to) }
+  if (search) {
+    where += ' AND (c.patient_name LIKE ? OR c.case_id_short LIKE ? OR c.organization_name LIKE ?)'
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`)
+  }
+
+  const rows = await c.env.DB.prepare(
+    `SELECT
+       c.case_id_short, c.decision_date, c.patient_name, c.organization_name,
+       c.doctor_name, c.visit_type, c.is_orderly, c.is_flagged,
+       c.carevalidate_fee, c.contractor_fee, c.decision_status,
+       c.case_id, ct.name AS contractor_name, ct.ein_ssn, ct.company,
+       s.period_key, s.period_label
+     FROM consults c
+     LEFT JOIN contractors ct ON c.contractor_id = ct.id
+     LEFT JOIN upload_sessions s  ON c.session_id  = s.id
+     ${where}
+     ORDER BY ${orderBy}
+     LIMIT 100000`
+  ).bind(...params).all()
+
+  return c.json({ total: rows.results.length, data: rows.results })
+})
+
 // Distinct doctor names for the filter dropdown (scoped to current period)
 app.get('/api/consults/doctors', async (c) => {
   const period_key = c.req.query('period_key')
