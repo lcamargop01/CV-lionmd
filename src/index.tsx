@@ -1114,6 +1114,8 @@ app.get('/api/consults', async (c) => {
   const is_flagged      = c.req.query('is_flagged')       // '1' | '0'
   const decision_status = c.req.query('decision_status')  // 'Approved' | 'Denied' | 'Pending'
   const organization    = c.req.query('organization')
+  const date_from       = c.req.query('date_from')   // 'YYYY-MM-DD'
+  const date_to         = c.req.query('date_to')     // 'YYYY-MM-DD'
   const page            = c.req.query('page')  || '1'
   const limit           = c.req.query('limit') || '50'
   const search          = c.req.query('search')
@@ -1161,6 +1163,8 @@ app.get('/api/consults', async (c) => {
   if (is_flagged === '0') { where += ' AND (c.is_flagged=0 OR c.is_flagged IS NULL)' }
   if (decision_status)    { where += ' AND c.decision_status=?'; params.push(decision_status) }
   if (organization) { where += ' AND c.organization_name=?'; params.push(organization) }
+  if (date_from)    { where += ' AND c.decision_date >= ?';  params.push(date_from) }
+  if (date_to)      { where += ' AND c.decision_date <= ?';  params.push(date_to)   }
   if (search) {
     where += ' AND (c.patient_name LIKE ? OR c.case_id_short LIKE ? OR c.organization_name LIKE ?)'
     params.push(`%${search}%`, `%${search}%`, `%${search}%`)

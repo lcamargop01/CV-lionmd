@@ -2966,7 +2966,7 @@ async function executeDeletePeriod(periodKey, label) {
 // ════════════════════════════════════════════════════
 // CONSULTS TABLE PAGE
 // ════════════════════════════════════════════════════
-let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', isOrderly: '', organization: '', isFlagged: '', decisionStatus: '', sortBy: 'decision_date', sortDir: 'desc' }
+let consultsState = { page: 1, data: [], total: 0, search: '', doctor: '', visitType: '', isOrderly: '', organization: '', isFlagged: '', decisionStatus: '', dateFrom: '', dateTo: '', sortBy: 'decision_date', sortDir: 'desc' }
 
 // drillDownConsults — navigate to consults page pre-filtered
 // opts: { doctor, visitType, isOrderly }
@@ -2984,6 +2984,8 @@ function drillDownConsults(opts = {}) {
     organization:   '',
     isFlagged:      isFlagged,
     decisionStatus: decisionStatus,
+    dateFrom:       '',
+    dateTo:         '',
     sortBy: 'decision_date',
     sortDir: 'desc'
   }
@@ -3003,6 +3005,12 @@ async function renderConsults() {
   if (consultsState.isFlagged === '1') chips.push(`<span class="drilldown-chip" style="background:#fef9c3;color:#92400e;border-color:#fde68a"><i class="fas fa-flag mr-1"></i>Flagged Only<button onclick="clearDrillFilter('isFlagged')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
   if (consultsState.isFlagged === '0') chips.push(`<span class="drilldown-chip"><i class="fas fa-flag mr-1 text-gray-400"></i>Not Flagged<button onclick="clearDrillFilter('isFlagged')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
   if (consultsState.decisionStatus) chips.push(`<span class="drilldown-chip"><i class="fas fa-check-circle mr-1"></i>${escHtml(consultsState.decisionStatus)}<button onclick="clearDrillFilter('decisionStatus')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  if (consultsState.dateFrom && consultsState.dateTo)
+    chips.push(`<span class="drilldown-chip" style="background:#ede9fe;color:#5b21b6;border-color:#c4b5fd"><i class="fas fa-calendar-alt mr-1"></i>${escHtml(consultsState.dateFrom)} – ${escHtml(consultsState.dateTo)}<button onclick="clearDrillFilter('dateRange')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  else if (consultsState.dateFrom)
+    chips.push(`<span class="drilldown-chip" style="background:#ede9fe;color:#5b21b6;border-color:#c4b5fd"><i class="fas fa-calendar-alt mr-1"></i>From ${escHtml(consultsState.dateFrom)}<button onclick="clearDrillFilter('dateFrom')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
+  else if (consultsState.dateTo)
+    chips.push(`<span class="drilldown-chip" style="background:#ede9fe;color:#5b21b6;border-color:#c4b5fd"><i class="fas fa-calendar-alt mr-1"></i>Until ${escHtml(consultsState.dateTo)}<button onclick="clearDrillFilter('dateTo')" class="ml-1.5 hover:text-red-500">&times;</button></span>`)
 
   // vtFilter select: include _SYNC/_OTHER options when active
   const vtOptions = [
@@ -3056,6 +3064,24 @@ async function renderConsults() {
               <option value="">All Orgs</option>
             </select>
           </div>
+          <!-- Date range filter row -->
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-medium text-gray-500 whitespace-nowrap"><i class="fas fa-calendar-alt mr-1 text-violet-400"></i>Date Range:</span>
+            <div class="flex items-center gap-1.5">
+              <label class="text-xs text-gray-400 whitespace-nowrap">From</label>
+              <input type="date" id="dateFromFilter" value="${consultsState.dateFrom}" onchange="filterConsults()"
+                class="text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"/>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <label class="text-xs text-gray-400 whitespace-nowrap">To</label>
+              <input type="date" id="dateToFilter" value="${consultsState.dateTo}" onchange="filterConsults()"
+                class="text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"/>
+            </div>
+            ${consultsState.dateFrom || consultsState.dateTo ? `
+            <button onclick="clearDrillFilter('dateRange')" class="text-xs text-violet-500 hover:text-red-500 font-medium px-2 py-1 rounded border border-violet-200 hover:border-red-200 transition-colors">
+              <i class="fas fa-times mr-1"></i>Clear dates
+            </button>` : ''}
+          </div>
           <span id="countLabel" class="text-xs text-gray-400"></span>
         </div>
       </div>
@@ -3087,6 +3113,8 @@ function clearDrillFilter(field) {
   if (field === 'isOrderly')      consultsState.isOrderly      = ''
   if (field === 'isFlagged')      consultsState.isFlagged      = ''
   if (field === 'decisionStatus') consultsState.decisionStatus = ''
+  if (field === 'dateFrom' || field === 'dateRange') consultsState.dateFrom = ''
+  if (field === 'dateTo'   || field === 'dateRange') consultsState.dateTo   = ''
   renderConsults()
 }
 
@@ -3098,6 +3126,8 @@ function clearAllDrillFilters() {
   consultsState.decisionStatus = ''
   consultsState.organization   = ''
   consultsState.search         = ''
+  consultsState.dateFrom       = ''
+  consultsState.dateTo         = ''
   renderConsults()
 }
 
@@ -3131,12 +3161,14 @@ function debounceSearch(val) {
 }
 
 async function filterConsults() {
-  consultsState.doctor         = $('doctorFilter')?.value  || ''
-  consultsState.visitType      = $('vtFilter')?.value      || ''
-  consultsState.isOrderly      = $('orderlyFilter')?.value ?? ''
-  consultsState.isFlagged      = $('flagFilter')?.value    ?? ''
-  consultsState.decisionStatus = $('statusFilter')?.value  || ''
-  consultsState.organization   = $('orgFilter')?.value     || ''
+  consultsState.doctor         = $('doctorFilter')?.value    || ''
+  consultsState.visitType      = $('vtFilter')?.value        || ''
+  consultsState.isOrderly      = $('orderlyFilter')?.value   ?? ''
+  consultsState.isFlagged      = $('flagFilter')?.value      ?? ''
+  consultsState.decisionStatus = $('statusFilter')?.value    || ''
+  consultsState.organization   = $('orgFilter')?.value       || ''
+  consultsState.dateFrom       = $('dateFromFilter')?.value  || ''
+  consultsState.dateTo         = $('dateToFilter')?.value    || ''
   await loadConsultsPage(1)
 }
 
@@ -3199,6 +3231,8 @@ async function loadConsultsPage(page) {
   if (consultsState.isOrderly !== '')      params.set('is_orderly',      consultsState.isOrderly)
   if (consultsState.isFlagged !== '')      params.set('is_flagged',      consultsState.isFlagged)
   if (consultsState.decisionStatus)        params.set('decision_status', consultsState.decisionStatus)
+  if (consultsState.dateFrom)              params.set('date_from',       consultsState.dateFrom)
+  if (consultsState.dateTo)               params.set('date_to',         consultsState.dateTo)
 
   try {
     const result = await api('/api/consults?' + params)
