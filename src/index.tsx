@@ -2721,6 +2721,177 @@ app.post('/api/admin/send-invite-email', requireAdmin, async (c) => {
 
 // ════════════════════════════════════════════════════════════════════
 // PROVIDER MODULE
+// ══════════════════════════════════════════════════════════════════
+// CANDIDATE PORTAL — onboarding candidates can log in and see status
+// portal_users.candidate_id links a portal user → onboarding_candidates row
+// ══════════════════════════════════════════════════════════════════
+
+async function ensureCandidateSchema(db: D1Database) {
+  await db.prepare(`ALTER TABLE portal_users ADD COLUMN candidate_id INTEGER`).run().catch(() => {})
+}
+
+// ── requireCandidate: admin OR candidate role ────────────────────
+async function requireCandidate(c: any, next: any) {
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
+  const payload = await verifyToken(token)
+  if (!payload) return c.json({ error: 'Invalid or expired token' }, 401)
+  if (payload.role !== 'admin' && payload.role !== 'candidate') return c.json({ error: 'Access denied' }, 403)
+  c.set('user', payload)
+  return next()
+}
+
+// ── GET /api/candidate/status ─────────────────────────────────────
+// Candidate fetches their own onboarding record + docs + meetings
+app.get('/api/candidate/status', requireCandidate, async (c) => {
+  await ensureCandidateSchema(c.env.DB)
+  const u = c.get('user')
+  const pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE id=?`).bind(u.id).first() as any
+  if (!pu?.candidate_id && u.role !== 'admin') return c.json({ error: 'No candidate profile linked' }, 404)
+
+  const candidateId = pu?.candidate_id ?? c.req.query('candidate_id')
+  if (!candidateId) return c.json({ error: 'No candidate profile linked' }, 404)
+
+  const [candidate, docs, meetings] = await Promise.all([
+    c.env.DB.prepare(`SELECT id, full_name, email, phone, specialty, role_group, status, states_licensed, source, notes,
+      payroll_sent, payroll_sent_at, contract_sent, contract_sent_at, contract_signed, contract_signed_at,
+      training_scheduled, training_scheduled_at, training_completed, training_completed_at,
+      docs_received, docs_received_at, converted_contractor_id, converted_at, created_at, updated_at
+      FROM onboarding_candidates WHERE id=?`).bind(candidateId).first() as any,
+    c.env.DB.prepare(`SELECT id, doc_type, file_name, file_size, mime_type, uploaded_at FROM onboarding_documents WHERE candidate_id=? ORDER BY uploaded_at DESC`).bind(candidateId).all(),
+    c.env.DB.prepare(`SELECT id, title, scheduled_at, duration_min, meeting_link, meeting_type, status, notes FROM onboarding_meetings WHERE candidate_id=? ORDER BY scheduled_at DESC`).bind(candidateId).all(),
+  ])
+
+  if (!candidate) return c.json({ error: 'Candidate not found' }, 404)
+  return c.json({ candidate, docs: docs.results, meetings: meetings.results })
+})
+
+// ── POST /api/admin/onboarding/candidates/:id/send-invite ─────────
+// Admin sends a portal login invite to an onboarding candidate
+app.post('/api/admin/onboarding/candidates/:id/send-invite', requireAdmin, async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  await ensureCandidateSchema(c.env.DB)
+  if (!c.env.RESEND_API_KEY) return c.json({ error: 'Email service not configured' }, 503)
+
+  const candidateId = c.req.param('id')
+  const candidate = await c.env.DB.prepare(`SELECT * FROM onboarding_candidates WHERE id=?`).bind(candidateId).first() as any
+  if (!candidate) return c.json({ error: 'Candidate not found' }, 404)
+  if (!candidate.email) return c.json({ error: 'Candidate has no email address' }, 400)
+
+  const emailKey = candidate.email.toLowerCase().trim()
+
+  // Find or create portal_user linked to this candidate
+  let pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE candidate_id=? AND is_active=1`).bind(candidateId).first() as any
+  if (!pu) {
+    // Also check by email (might exist without candidate_id)
+    pu = await c.env.DB.prepare(`SELECT * FROM portal_users WHERE LOWER(email)=? AND is_active=1`).bind(emailKey).first() as any
+  }
+
+  const inviteToken = generateInviteToken()
+  const creator = c.get('user')
+
+  if (pu) {
+    // Update existing user: set role=candidate, link candidate_id, reset invite token
+    await c.env.DB.prepare(
+      `UPDATE portal_users SET role='candidate', candidate_id=?, invite_token=?, must_set_password=1, password_hash=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(candidateId, inviteToken, pu.id).run()
+  } else {
+    // Create new candidate portal user
+    await c.env.DB.prepare(
+      `INSERT INTO portal_users (name, email, role, is_active, must_set_password, invite_token, candidate_id, created_by) VALUES (?,?,?,1,1,?,?,?)`
+    ).bind(candidate.full_name, emailKey, 'candidate', inviteToken, candidateId, creator?.id ?? null).run()
+  }
+
+  const portalOrigin = new URL(c.req.url).origin
+  const inviteLink = `${portalOrigin}/?token=${inviteToken}`
+
+  const result = await sendCandidateInviteEmail(c.env.RESEND_API_KEY, { name: candidate.full_name, email: candidate.email }, inviteLink, candidate.status)
+  if (!result.ok) return c.json({ error: result.error || 'Failed to send email' }, 500)
+  return c.json({ ok: true, invite_link: inviteLink })
+})
+
+// ── Candidate invite email ────────────────────────────────────────
+async function sendCandidateInviteEmail(
+  apiKey: string,
+  to: { name: string; email: string },
+  inviteLink: string,
+  status: string
+): Promise<{ ok: boolean; error?: string }> {
+  const statusLabel: Record<string, string> = {
+    new: 'Application Received',
+    contacted: 'Under Review',
+    interview_scheduled: 'Interview Scheduled',
+    interviewed: 'Interview Complete',
+    hired: 'Hired — Onboarding in Progress',
+    rejected: 'Not Moving Forward',
+  }
+  const displayStatus = statusLabel[status] || status
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lion MD Onboarding Portal</title></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#1a1a2e;padding:28px 40px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:#d4a017;letter-spacing:0.5px;">Lion MD Onboarding Portal</div>
+            <div style="font-size:11px;color:#8888aa;margin-top:4px;letter-spacing:1px;">CANDIDATE ACCESS</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px 40px 32px;">
+            <p style="margin:0 0 16px;font-size:16px;color:#374151;">Hi <strong>${to.name}</strong>,</p>
+            <p style="margin:0 0 20px;font-size:15px;color:#4b5563;line-height:1.6;">
+              You've been invited to access the <strong>Lion MD Onboarding Portal</strong> where you can track the status of your application in real time.
+            </p>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin:0 0 24px;">
+              <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">Current Status</div>
+              <div style="font-size:15px;font-weight:700;color:#16a34a;">${displayStatus}</div>
+            </div>
+            <table cellpadding="0" cellspacing="0" width="100%">
+              <tr><td align="center" style="padding:8px 0 28px;">
+                <a href="${inviteLink}" style="display:inline-block;background:#d4a017;color:#1a1a2e;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:8px;letter-spacing:0.3px;">
+                  View My Application Status →
+                </a>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Or copy and paste this link into your browser:</p>
+            <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:10px 14px;border-radius:6px;border:1px solid #e5e7eb;">${inviteLink}</p>
+            <p style="margin:0;font-size:13px;color:#9ca3af;">If you didn't expect this email, you can safely ignore it.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">© 2026 Lion MD Portal™ · Sent by your administrator</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Lion MD Portal <noreply@lion.md>',
+        to: [`${to.name} <${to.email}>`],
+        subject: 'Your Lion MD Onboarding Portal Access',
+        html,
+      }),
+    })
+    if (!res.ok) { const err = await res.text(); return { ok: false, error: err } }
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
+}
+
 // Tables: provider_licenses  (contractor profile + state licensing)
 // portal_users gets: contractor_id column (links a provider user → contractor row)
 // ════════════════════════════════════════════════════════════════════
