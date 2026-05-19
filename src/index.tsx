@@ -278,6 +278,50 @@ app.put('/api/contractor-type-rates', async (c) => {
 })
 
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// ONE-SHOT: patch Apr 15 2026 ASYNC CV fee to $20 (all date formats)
+// Uses a JOIN to upload_sessions — no dynamic IN list, no spread risk.
+// Idempotent: only touches rows where carevalidate_fee != 20.
+// ──────────────────────────────────────────────
+app.post('/api/admin/fix-apr15-cv-fee', async (c) => {
+  try {
+    const db = c.env.DB
+
+    // Use subquery join instead of dynamic IN — works for any number of sessions
+    const base = `
+      UPDATE consults SET carevalidate_fee=20
+      WHERE is_override=0
+        AND visit_type='ASYNC_TEXT_EMAIL'
+        AND carevalidate_fee != 20
+        AND session_id IN (SELECT id FROM upload_sessions WHERE period_key='2026-04')
+        AND `
+
+    const r1 = await db.prepare(base + `decision_date LIKE '2026-04-15%'`).run()
+    const r2 = await db.prepare(base + `decision_date LIKE '04/15/2026%'`).run()
+    const r3 = await db.prepare(base + `(decision_date LIKE 'Apr 15,%' OR decision_date LIKE 'Apr 15 %')`).run()
+
+    const c1 = (r1.meta as any)?.changes ?? 0
+    const c2 = (r2.meta as any)?.changes ?? 0
+    const c3 = (r3.meta as any)?.changes ?? 0
+    const total = c1 + c2 + c3
+
+    // Recompute session totals for all 2026-04 sessions
+    const sessRows = await db.prepare(`SELECT id FROM upload_sessions WHERE period_key='2026-04'`).all()
+    for (const row of sessRows.results as any[]) {
+      const tot = await db.prepare(
+        'SELECT COUNT(*) as tc, SUM(carevalidate_fee) as cv, SUM(contractor_fee) as ct FROM consults WHERE session_id=?'
+      ).bind(row.id).first() as any
+      await db.prepare(
+        'UPDATE upload_sessions SET total_cases=?, total_carevalidate_amount=?, total_contractor_amount=? WHERE id=?'
+      ).bind(tot?.tc ?? 0, tot?.cv ?? 0, tot?.ct ?? 0, row.id).run()
+    }
+
+    return c.json({ ok: true, updated: total, byFormat: { iso: c1, slash: c2, long: c3 }, sessions: (sessRows.results as any[]).length, message: `Fixed ${total} Apr 15 ASYNC consult(s) → CV=$20` })
+  } catch (err: any) {
+    return c.json({ ok: false, error: String(err?.message ?? err) }, 500)
+  }
+})
+
 // RECALCULATE PERIODS — recompute all consult fees using current rates
 // ──────────────────────────────────────────────
 app.post('/api/recalculate', async (c) => {
