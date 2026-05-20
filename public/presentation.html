@@ -506,6 +506,98 @@
     align-items: center;
     gap: 0;
   }
+
+  /* ── SCREENSHOT SLIDES ──────────────────────── */
+  .ss-slide {
+    position: relative;
+    width: 100%; height: 100%;
+    background: #090914;
+    display: flex;
+    flex-direction: column;
+  }
+  .ss-topbar {
+    flex-shrink: 0;
+    height: 36px;
+    background: linear-gradient(90deg,#0d0d1e,#16213e);
+    border-bottom: 1px solid rgba(201,168,76,0.25);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+  }
+  .ss-topbar-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .ss-topbar-sub {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.3px;
+  }
+  .ss-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  .ss-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top left;
+  }
+  /* dark vignette overlay so callouts pop */
+  .ss-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg,rgba(0,0,0,0.12) 0%,rgba(0,0,0,0) 60%);
+    pointer-events: none;
+  }
+  /* callout label box */
+  .callout {
+    position: absolute;
+    background: var(--gold);
+    color: #0d0d1e;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    z-index: 10;
+    line-height: 1.4;
+  }
+  .callout::after {
+    content: '';
+    position: absolute;
+    width: 2px;
+    background: var(--gold);
+    z-index: 9;
+  }
+  /* arrow line directions */
+  .callout.arrow-down::after  { top: 100%; left: 50%; transform: translateX(-50%); height: var(--arrow-len, 20px); }
+  .callout.arrow-up::after    { bottom: 100%; left: 50%; transform: translateX(-50%); height: var(--arrow-len, 20px); }
+  .callout.arrow-right::after { top: 50%; left: 100%; transform: translateY(-50%); width: var(--arrow-len, 20px); height: 2px; }
+  .callout.arrow-left::after  { top: 50%; right: 100%; width: var(--arrow-len, 20px); height: 2px; }
+  /* arrowhead dot at tip */
+  .callout::before {
+    content: '';
+    position: absolute;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--gold);
+    z-index: 10;
+  }
+  .callout.arrow-down::before  { top: calc(100% + var(--arrow-len, 20px) - 3px); left: 50%; transform: translateX(-50%); }
+  .callout.arrow-up::before    { bottom: calc(100% + var(--arrow-len, 20px) - 3px); left: 50%; transform: translateX(-50%); }
+  .callout.arrow-right::before { top: 50%; left: calc(100% + var(--arrow-len, 20px) - 3px); transform: translateY(-50%); }
+  .callout.arrow-left::before  { top: 50%; right: calc(100% + var(--arrow-len, 20px) - 3px); transform: translateY(-50%); }
 </style>
 </head>
 <body>
@@ -534,7 +626,7 @@
           <span class="cover-pill"><i class="fas fa-mobile-alt mr-1"></i>Mobile Ready</span>
           <span class="cover-pill"><i class="fas fa-globe mr-1"></i>Cloud Hosted</span>
         </div>
-        <div class="slide-num-badge">01 / 11</div>
+        <div class="slide-num-badge">01 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -610,7 +702,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">02 / 11</div>
+        <div class="slide-num-badge">02 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -676,7 +768,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">03 / 11</div>
+        <div class="slide-num-badge">03 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -746,7 +838,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">04 / 11</div>
+        <div class="slide-num-badge">04 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -811,7 +903,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">05 / 11</div>
+        <div class="slide-num-badge">05 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -884,7 +976,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">06 / 11</div>
+        <div class="slide-num-badge">06 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -954,7 +1046,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">07 / 11</div>
+        <div class="slide-num-badge">07 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -1006,7 +1098,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">08 / 11</div>
+        <div class="slide-num-badge">08 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -1072,7 +1164,7 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">09 / 11</div>
+        <div class="slide-num-badge">09 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
@@ -1134,11 +1226,173 @@
             </div>
           </div>
         </div>
-        <div class="slide-num-badge">10 / 11</div>
+        <div class="slide-num-badge">10 / 18</div>
       </div>
 
       <!-- ══════════════════════════════════════════ -->
-      <!-- SLIDE 11 — CLOSING                        -->
+      <!-- SLIDE 11 — SCREENSHOT: DASHBOARD          -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-ss-dashboard">
+        <div class="ss-slide">
+          <div class="ss-topbar">
+            <i class="fas fa-chart-pie" style="color:var(--gold);font-size:12px;"></i>
+            <span class="ss-topbar-title">Dashboard</span>
+            <span class="ss-topbar-sub">Real-time payroll analytics for the current period</span>
+          </div>
+          <div class="ss-body">
+            <img class="ss-img" src="/static/screens/03-dashboard.png" alt="Dashboard screenshot">
+            <div class="ss-overlay"></div>
+            <!-- Callouts -->
+            <div class="callout arrow-down" style="left:19%;top:7%;--arrow-len:18px;">Period Selector</div>
+            <div class="callout arrow-down" style="left:32%;top:7%;--arrow-len:30px;">KPI Summary Cards</div>
+            <div class="callout arrow-down" style="left:55%;top:7%;--arrow-len:32px;">Visit Type Donut Chart</div>
+            <div class="callout arrow-down" style="left:78%;top:7%;--arrow-len:28px;">Contractor Earnings Bar</div>
+            <div class="callout arrow-right" style="left:0.5%;top:50%;--arrow-len:12px;">Navigation Sidebar</div>
+          </div>
+        </div>
+        <div class="slide-num-badge">11 / 18</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 12 — SCREENSHOT: PAYROLL            -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-ss-payroll">
+        <div class="ss-slide">
+          <div class="ss-topbar">
+            <i class="fas fa-dollar-sign" style="color:var(--gold);font-size:12px;"></i>
+            <span class="ss-topbar-title">Contractor Payroll</span>
+            <span class="ss-topbar-sub">Auto-calculated paystubs per contractor per period</span>
+          </div>
+          <div class="ss-body">
+            <img class="ss-img" src="/static/screens/04-payroll.png" alt="Payroll screenshot">
+            <div class="ss-overlay"></div>
+            <div class="callout arrow-down" style="left:24%;top:7%;--arrow-len:32px;">Chris Garcia Mgmt Fee Card</div>
+            <div class="callout arrow-down" style="left:50%;top:7%;--arrow-len:28px;">Per-Contractor Payout Cards</div>
+            <div class="callout arrow-down" style="left:74%;top:7%;--arrow-len:24px;">Paystub Button</div>
+            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">Export to Gusto CSV</div>
+          </div>
+        </div>
+        <div class="slide-num-badge">12 / 18</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 13 — SCREENSHOT: CONTRACTORS        -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-ss-contractors">
+        <div class="ss-slide">
+          <div class="ss-topbar">
+            <i class="fas fa-user-md" style="color:var(--gold);font-size:12px;"></i>
+            <span class="ss-topbar-title">Contractors</span>
+            <span class="ss-topbar-sub">Full contractor directory with profiles, EINs, and group assignments</span>
+          </div>
+          <div class="ss-body">
+            <img class="ss-img" src="/static/screens/05-contractors.png" alt="Contractors screenshot">
+            <div class="ss-overlay"></div>
+            <div class="callout arrow-down" style="left:14%;top:7%;--arrow-len:36px;">Contractor Table</div>
+            <div class="callout arrow-down" style="left:36%;top:7%;--arrow-len:30px;">Company & EIN / SSN</div>
+            <div class="callout arrow-down" style="left:55%;top:7%;--arrow-len:26px;">Active / Inactive Count</div>
+            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">Add / Export / Sync</div>
+            <div class="callout arrow-down" style="left:76%;top:7%;--arrow-len:36px;">Profile &amp; Edit Actions</div>
+          </div>
+        </div>
+        <div class="slide-num-badge">13 / 18</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 14 — SCREENSHOT: CONSULT RECORDS    -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-ss-consults">
+        <div class="ss-slide">
+          <div class="ss-topbar">
+            <i class="fas fa-file-medical" style="color:var(--gold);font-size:12px;"></i>
+            <span class="ss-topbar-title">Consult Records</span>
+            <span class="ss-topbar-sub">203,000+ records searchable, filterable, and exportable</span>
+          </div>
+          <div class="ss-body">
+            <img class="ss-img" src="/static/screens/06-consults.png" alt="Consults screenshot">
+            <div class="ss-overlay"></div>
+            <div class="callout arrow-down" style="left:16%;top:7%;--arrow-len:22px;">Search Bar</div>
+            <div class="callout arrow-down" style="left:38%;top:7%;--arrow-len:28px;">Filter Dropdowns</div>
+            <div class="callout arrow-down" style="left:58%;top:7%;--arrow-len:24px;">Date Range Filter</div>
+            <div class="callout arrow-left" style="right:1%;top:10%;--arrow-len:14px;">Export / Full Export</div>
+            <div class="callout arrow-down" style="left:50%;top:30%;--arrow-len:20px;">203,432 Records</div>
+            <div class="callout arrow-down" style="left:72%;top:43%;--arrow-len:18px;">CV Fee &amp; Contractor Fee</div>
+          </div>
+        </div>
+        <div class="slide-num-badge">14 / 18</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 15 — SCREENSHOT: ONBOARDING         -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-ss-onboarding">
+        <div class="ss-slide">
+          <div class="ss-topbar">
+            <i class="fas fa-user-plus" style="color:var(--gold);font-size:12px;"></i>
+            <span class="ss-topbar-title">Onboarding Pipeline</span>
+            <span class="ss-topbar-sub">Kanban board tracking every candidate from application to hired</span>
+          </div>
+          <div class="ss-body">
+            <img class="ss-img" src="/static/screens/07-onboarding.png" alt="Onboarding screenshot">
+            <div class="ss-overlay"></div>
+            <div class="callout arrow-down" style="left:15%;top:7%;--arrow-len:24px;">Pipeline / Contractors / Calendar Tabs</div>
+            <div class="callout arrow-down" style="left:38%;top:7%;--arrow-len:30px;">Status Summary Chips</div>
+            <div class="callout arrow-down" style="left:22%;top:30%;--arrow-len:20px;">Kanban Stage Columns</div>
+            <div class="callout arrow-down" style="left:48%;top:30%;--arrow-len:22px;">Candidate Card</div>
+            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">+ Add Candidate</div>
+          </div>
+        </div>
+        <div class="slide-num-badge">15 / 18</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 16 — SCREENSHOT: CLIENT PAYMENTS    -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-ss-payments">
+        <div class="ss-slide">
+          <div class="ss-topbar">
+            <i class="fas fa-credit-card" style="color:var(--gold);font-size:12px;"></i>
+            <span class="ss-topbar-title">Client Payments</span>
+            <span class="ss-topbar-sub">Track revenue from 54 clients — $14M+ all-time</span>
+          </div>
+          <div class="ss-body">
+            <img class="ss-img" src="/static/screens/08-payments.png" alt="Client Payments screenshot">
+            <div class="ss-overlay"></div>
+            <div class="callout arrow-down" style="left:10%;top:7%;--arrow-len:28px;">KPI Cards (Revenue, Paid, Past Due)</div>
+            <div class="callout arrow-down" style="left:42%;top:7%;--arrow-len:24px;">Monthly / Clients View Toggle</div>
+            <div class="callout arrow-down" style="left:64%;top:7%;--arrow-len:30px;">Per-Client Payment Rows</div>
+            <div class="callout arrow-down" style="left:48%;top:55%;--arrow-len:18px;">Paid Status Badge</div>
+            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">Export XLSX</div>
+          </div>
+        </div>
+        <div class="slide-num-badge">16 / 18</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 17 — SCREENSHOT: CAREVALIDATE VIEW  -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-ss-carevalidate">
+        <div class="ss-slide">
+          <div class="ss-topbar">
+            <i class="fas fa-shield-alt" style="color:var(--gold);font-size:12px;"></i>
+            <span class="ss-topbar-title">CareValidate View</span>
+            <span class="ss-topbar-sub">Isolated view of what CareValidate owes Lion MD — by contractor</span>
+          </div>
+          <div class="ss-body">
+            <img class="ss-img" src="/static/screens/11-carevalidate.png" alt="CareValidate screenshot">
+            <div class="ss-overlay"></div>
+            <div class="callout arrow-down" style="left:10%;top:7%;--arrow-len:30px;">Total CV Owes Lion MD</div>
+            <div class="callout arrow-down" style="left:30%;top:7%;--arrow-len:28px;">Async Revenue</div>
+            <div class="callout arrow-down" style="left:54%;top:7%;--arrow-len:28px;">Sync Revenue</div>
+            <div class="callout arrow-down" style="left:75%;top:7%;--arrow-len:28px;">OrderlyMeds Revenue</div>
+            <div class="callout arrow-down" style="left:35%;top:42%;--arrow-len:18px;">Breakdown by Contractor</div>
+          </div>
+        </div>
+        <div class="slide-num-badge">17 / 18</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 18 — CLOSING                        -->
       <!-- ══════════════════════════════════════════ -->
       <div class="slide" id="slide-close">
         <div class="cover-grid-lines"></div>
@@ -1181,7 +1435,7 @@
             <div style="height:1px;width:60px;background:rgba(255,255,255,0.1);"></div>
           </div>
         </div>
-        <div class="slide-num-badge">11 / 11</div>
+        <div class="slide-num-badge">18 / 18</div>
       </div>
 
     </div><!-- /viewport -->
