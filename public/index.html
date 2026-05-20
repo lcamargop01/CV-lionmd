@@ -1149,11 +1149,8 @@
 <!-- Mobile sidebar overlay -->
 <div id="mobileOverlay" onclick="closeMobileSidebar()"></div>
 
-<!-- App Layout: position:fixed inset:0 when visible so it's a true full-screen
-     frame. Body stays free to scroll the landing page beneath it.
-     JS toggles the 'app-visible' class to show/hide (avoids Tailwind hidden
-     overriding the inline display:flex). -->
-<div id="app" style="display:none;position:fixed;inset:0;flex-direction:row;overflow:hidden;z-index:10;">
+<!-- App Layout -->
+<div id="app" style="display:none;flex-direction:row;height:100vh;height:100dvh;width:100%;">
 
   <!-- Sidebar: on desktop it's a normal flex item (relative); on mobile CSS overrides to fixed -->
   <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col left-0 top-0 w-[260px] flex-shrink-0 relative">
@@ -1411,15 +1408,15 @@ function applySession(token, user) {
     if (wl) wl.textContent = 'Welcome back, ' + user.name.split(' ')[0] + '!'
   } else if (user.role === 'provider') {
     $('loginScreen').classList.add('hidden')
-    $('app').style.display='flex'
+    showApp()
     renderProviderPortal()
   } else if (user.role === 'candidate') {
     $('loginScreen').classList.add('hidden')
-    $('app').style.display='flex'
+    showApp()
     renderCandidatePortal()
   } else {
     $('loginScreen').classList.add('hidden')
-    $('app').style.display='flex'
+    showApp()
     loadInitialData()
   }
 }
@@ -1428,7 +1425,7 @@ function applySession(token, user) {
 function vpGo(view) {
   $('loginScreen').classList.add('hidden')
   $('viewPickerCard').classList.add('hidden')
-  $('app').style.display='flex'
+  showApp()
   state.adminView = view
   localStorage.setItem('lmd_admin_view', view)  // persist across refreshes
   // Rebuild nav and subtitle immediately so sidebar reflects the chosen view
@@ -1806,7 +1803,7 @@ function applyRoleUI(role, name) {
 function showViewPicker() {
   const wl = $('vpWelcome')
   if (wl && state.user) wl.textContent = 'Hi ' + state.user.name.split(' ')[0] + '! Where would you like to go?'
-  $('app').style.display='none'
+  hideApp()
   $('loginCard').classList.add('hidden')
   $('setupCard').classList.add('hidden')
   $('viewPickerCard').classList.remove('hidden')
@@ -1822,12 +1819,11 @@ function logout() {
   localStorage.removeItem('lmd_admin_view')
   localStorage.removeItem('lmd_last_page')
   state = { role: null, user: null, token: null, periods: [], currentPeriod: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
-  // Always release any body scroll-lock left by the mobile sidebar
-  document.body.style.overflow = ''
+  // Close sidebar if open, then hide app (hideApp releases all body scroll locks)
   $('sidebar').classList.remove('sidebar-open')
   $('mobileOverlay').classList.remove('active')
   // Return to landing page, not directly to login card
-  $('app').style.display='none'
+  hideApp()
   $('loginScreen').classList.remove('hidden')
   $('landingPage').classList.remove('hidden')
   $('loginPanel').classList.add('hidden')
@@ -1863,7 +1859,7 @@ async function tryRestoreSession() {
         applyRoleUI(me.role, me.name)
         buildNav()
         $('loginScreen').classList.add('hidden')
-        $('app').style.display='flex'
+        showApp()
             loadInitialData()
       } else {
         // First login — show the view picker
@@ -1877,15 +1873,15 @@ async function tryRestoreSession() {
       }
     } else if (me.role === 'provider') {
       $('loginScreen').classList.add('hidden')
-      $('app').style.display='flex'
+      showApp()
         renderProviderPortal()
     } else if (me.role === 'candidate') {
       $('loginScreen').classList.add('hidden')
-      $('app').style.display='flex'
+      showApp()
         renderCandidatePortal()
     } else {
       $('loginScreen').classList.add('hidden')
-      $('app').style.display='flex'
+      showApp()
         loadInitialData()
     }
     return true
@@ -1924,17 +1920,30 @@ async function doChangePw() {
 // ════════════════════════════════════════════════════
 function isMobile() { return window.innerWidth < 768 }
 
+// Show/hide the main app shell.
+// Body is locked while the app is visible so the landing page
+// beneath it cannot scroll; released on logout so it can scroll freely.
+function showApp() {
+  $('app').style.display = 'flex'
+  document.body.style.overflow = 'hidden'
+  document.body.style.position = 'fixed'
+  document.body.style.width = '100%'
+}
+function hideApp() {
+  $('app').style.display = 'none'
+  document.body.style.overflow = ''
+  document.body.style.position = ''
+  document.body.style.width = ''
+}
+
 function openMobileSidebar() {
-  $('sidebar').style.transform = ''  // clear any lingering inline style
   $('sidebar').classList.add('sidebar-open')
   $('mobileOverlay').classList.add('active')
-  document.body.style.overflow = 'hidden'
 }
 
 function closeMobileSidebar() {
   $('sidebar').classList.remove('sidebar-open')
   $('mobileOverlay').classList.remove('active')
-  document.body.style.overflow = ''
 }
 
 window.addEventListener('resize', () => {
