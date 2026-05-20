@@ -85,18 +85,20 @@
   }
 
   .ctrl-btn {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.10);
+    border: 2px solid rgba(255,255,255,0.22);
     border-radius: 50%;
-    width: 44px; height: 44px;
+    width: 68px; height: 68px;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
     color: #fff;
-    font-size: 15px;
-    transition: background 0.2s, border-color 0.2s;
+    font-size: 24px;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
   }
-  .ctrl-btn:hover { background: rgba(201,168,76,0.18); border-color: var(--gold); }
-  .ctrl-btn:disabled { opacity: 0.25; cursor: default; }
+  .ctrl-btn:hover { background: rgba(201,168,76,0.28); border-color: var(--gold); transform: scale(1.08); }
+  .ctrl-btn:active { transform: scale(0.96); }
+  .ctrl-btn:disabled { opacity: 0.22; cursor: default; transform: none; }
 
   #dots {
     display: flex;
@@ -339,12 +341,25 @@
     flex-direction: column;
   }
   .cover-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .cover-logo img {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    margin-bottom: 10px;
+    box-shadow: 0 0 28px rgba(201,168,76,0.35);
+  }
+  .cover-logo span {
     font-size: 13px;
     font-weight: 800;
-    letter-spacing: 2px;
+    letter-spacing: 3px;
     color: var(--gold);
     text-transform: uppercase;
-    margin-bottom: 20px;
   }
   .cover-title {
     font-size: 46px;
@@ -490,7 +505,10 @@
       <div class="slide active" id="slide-cover">
         <div class="cover-grid-lines"></div>
         <div class="cover-bg"></div>
-        <div class="cover-logo"><i class="fas fa-paw mr-2"></i>Lion MD Portal</div>
+        <div class="cover-logo">
+          <img src="/static/lion-logo.png" alt="Lion MD Logo">
+          <span>Lion MD Portal</span>
+        </div>
         <h1 class="cover-title">Your Practice,<br><span>Fully Automated</span></h1>
         <p class="cover-sub">A complete platform for payroll, onboarding, and provider management</p>
         <div class="cover-pills">
@@ -1167,7 +1185,7 @@
   </div><!-- /scaler -->
 </div><!-- /deck -->
 
-<div id="kbd-hint">← → arrow keys to navigate &nbsp;·&nbsp; Space to advance</div>
+<div id="kbd-hint">Tap the arrows to navigate &nbsp;·&nbsp; or use ← → keys / swipe</div>
 
 <script>
   const slides = Array.from(document.querySelectorAll('.slide'))
