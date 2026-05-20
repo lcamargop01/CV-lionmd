@@ -40,7 +40,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
+    overflow: visible;
   }
 
   /* ── SLIDE VIEWPORT ─────────────────────────── */
@@ -78,10 +78,21 @@
 
   /* ── CONTROLS ───────────────────────────────── */
   #controls {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 24px;
-    margin-top: 20px;
+    gap: 20px;
+    z-index: 1000;
+    background: rgba(13,13,30,0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 60px;
+    padding: 10px 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   }
 
   .ctrl-btn {
@@ -127,12 +138,13 @@
   /* keyboard hint */
   #kbd-hint {
     position: fixed;
-    bottom: 14px;
+    bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
-    color: rgba(255,255,255,0.2);
-    font-size: 11px;
+    color: rgba(255,255,255,0.18);
+    font-size: 10px;
     letter-spacing: 0.5px;
+    white-space: nowrap;
   }
 
   /* ── SHARED LAYOUT HELPERS ──────────────────── */
@@ -484,7 +496,7 @@
 
   /* ── RESPONSIVE SCALE ───────────────────────── */
   #scaler {
-    transform-origin: center center;
+    transform-origin: center top;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1170,20 +1182,20 @@
 
     </div><!-- /viewport -->
 
-    <!-- Controls -->
-    <div id="controls">
-      <button class="ctrl-btn" id="btnPrev" onclick="prevSlide()" title="Previous (←)">
-        <i class="fas fa-chevron-left"></i>
-      </button>
-      <div id="dots"></div>
-      <button class="ctrl-btn" id="btnNext" onclick="nextSlide()" title="Next (→)">
-        <i class="fas fa-chevron-right"></i>
-      </button>
-      <span id="slide-counter">1 / 11</span>
-    </div>
-
   </div><!-- /scaler -->
 </div><!-- /deck -->
+
+<!-- Controls — outside deck/scaler so they never get scaled or clipped -->
+<div id="controls">
+  <button class="ctrl-btn" id="btnPrev" onclick="prevSlide()" title="Previous (←)">
+    <i class="fas fa-chevron-left"></i>
+  </button>
+  <div id="dots"></div>
+  <button class="ctrl-btn" id="btnNext" onclick="nextSlide()" title="Next (→)">
+    <i class="fas fa-chevron-right"></i>
+  </button>
+  <span id="slide-counter">1 / 11</span>
+</div>
 
 <div id="kbd-hint">Tap the arrows to navigate &nbsp;·&nbsp; or use ← → keys / swipe</div>
 
@@ -1267,7 +1279,7 @@
   /* ── Keyboard ──────────────────────────────── */
   document.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide() }
-    if (e.key === 'ArrowLeft')                   { e.preventDefault(); prevSlide() }
+    if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prevSlide() }
   })
 
   /* ── Swipe support ─────────────────────────── */
@@ -1288,17 +1300,21 @@
     const H = window.innerHeight
     const slideW = 1000
     const slideH = 600
-    const controlH = 80  // approx height of controls + gap
-    const maxW = W  * 0.94
+    const controlH = 110  // controls bar height + padding
+    const maxW = W  * 0.96
     const maxH = (H - controlH) * 0.96
     const scaleX = maxW  / slideW
     const scaleY = maxH  / slideH
     const s = Math.min(scaleX, scaleY, 1.2)  // cap at 1.2x
-    document.getElementById('scaler').style.transform = `scale(${s})`
-    document.getElementById('scaler').style.transformOrigin = 'center top'
-    // Adjust outer deck height so controls don't overflow
-    document.getElementById('deck').style.paddingTop =
-      Math.max(0, (H - slideH * s - controlH * s) / 2) + 'px'
+    const scaler = document.getElementById('scaler')
+    scaler.style.transform = `scale(${s})`
+    scaler.style.transformOrigin = 'center top'
+    // Center the scaled slide in the available space above controls
+    const scaledH = slideH * s
+    const topOffset = Math.max(0, (H - controlH - scaledH) / 2)
+    document.getElementById('deck').style.paddingTop = topOffset + 'px'
+    document.getElementById('deck').style.justifyContent = 'flex-start'
+    document.getElementById('deck').style.paddingBottom = controlH + 'px'
   }
   window.addEventListener('resize', scaleSlides)
   scaleSlides()
