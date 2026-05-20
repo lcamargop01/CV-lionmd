@@ -20,7 +20,7 @@
       --lion-accent: #e94560;
     }
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f0f2f5; }
-    .sidebar { background: var(--lion-dark); min-height: 100vh; width: 260px; transition: width 0.3s; }
+    .sidebar { background: var(--lion-dark); min-height: 100%; width: 260px; transition: width 0.3s; }
     .sidebar-collapsed { width: 70px; }
     .nav-item { transition: all 0.2s; border-left: 3px solid transparent; }
     .nav-item:hover, .nav-item.active { background: rgba(201,168,76,0.12); border-left-color: var(--lion-gold); }
@@ -296,15 +296,16 @@
       #sidebar {
         position: fixed !important;
         top: 0; left: 0;
+        min-height: 0 !important;       /* kill the 100vh min-height from .sidebar */
         height: 100vh !important;       /* fallback for older browsers */
-        height: 100dvh !important;      /* dynamic viewport — fixes iOS Safari chrome clip */
+        height: 100dvh !important;      /* dynamic viewport — fills exactly the visible area */
         width: 260px !important;
         transform: translateX(-100%);
         z-index: 9000 !important;
         box-shadow: none;
         display: flex !important;
         flex-direction: column !important;
-        overflow: hidden !important;    /* let inner sections scroll, not the sidebar itself */
+        overflow: hidden !important;
       }
       #sidebar.sidebar-open {
         transform: translateX(0) !important;
@@ -1152,7 +1153,7 @@
 <div id="app" class="flex hidden">
 
   <!-- Sidebar: on desktop it's a normal flex item (relative); on mobile CSS overrides to fixed -->
-  <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col left-0 top-0 h-screen w-[260px] flex-shrink-0 relative" style="height:100vh;height:100dvh;">
+  <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col left-0 top-0 w-[260px] flex-shrink-0 relative">
     <div class="p-4 border-b border-white/10 flex items-center gap-3">
       <div class="w-10 h-10 rounded-xl flex-shrink-0 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
         <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
