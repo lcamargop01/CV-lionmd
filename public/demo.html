@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lion MD Portal — Interactive Demo</title>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --gold:  #C9A84C;
+    --gold2: #f0c040;
+    --dark:  #1a1a2e;
+    --navy:  #16213e;
+    --blue:  #0f3460;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f0f2f5; overflow: hidden; height: 100dvh; display: flex; flex-direction: column; }
+
+  /* ── DEMO BANNER ── */
+  #demo-banner {
+    background: linear-gradient(90deg, var(--dark), var(--navy));
+    border-bottom: 1px solid rgba(201,168,76,0.3);
+    padding: 6px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0; z-index: 200;
+  }
+  #demo-banner .badge { background: var(--gold); color: #0d0d1e; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; margin-right: 10px; }
+  #demo-banner .info { color: rgba(255,255,255,0.55); font-size: 11px; }
+  #demo-banner .tour-btn { background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.4); color: var(--gold); font-size: 11px; font-weight: 700; padding: 4px 14px; border-radius: 6px; cursor: pointer; letter-spacing: 0.5px; transition: all 0.2s; }
+  #demo-banner .tour-btn:hover { background: rgba(201,168,76,0.3); }
+
+  /* ── APP SHELL ── */
+  #app-shell { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--dark);
+    display: flex; flex-direction: column;
+    border-right: 1px solid rgba(255,255,255,0.04);
+    overflow-y: auto;
+  }
+  .sidebar-logo {
+    padding: 18px 16px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sidebar-logo img { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--gold); }
+  .sidebar-logo-text { line-height: 1.2; }
+  .sidebar-logo-text .name { color: #fff; font-size: 13px; font-weight: 700; }
+  .sidebar-logo-text .sub { color: rgba(255,255,255,0.35); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  .sidebar-section { padding: 10px 10px 4px; color: rgba(255,255,255,0.25); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; margin: 1px 6px;
+    border-radius: 8px; cursor: pointer;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px; font-weight: 500;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .nav-item:hover { background: rgba(201,168,76,0.08); color: rgba(255,255,255,0.85); }
+  .nav-item.active { background: rgba(201,168,76,0.12); border-left-color: var(--gold); color: var(--gold); }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+  .sidebar-footer { margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06); padding: 12px 10px; }
+  .user-row { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 8px; cursor: pointer; }
+  .user-row:hover { background: rgba(255,255,255,0.05); }
+  .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--gold); color: #0d0d1e; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+  .user-name { color: #fff; font-size: 12px; font-weight: 600; }
+  .user-role { color: rgba(255,255,255,0.35); font-size: 10px; }
+
+  /* ── MAIN CONTENT ── */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0 28px;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .page-title { font-size: 18px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 10px; }
+  .period-pill { background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #0d0d1e; font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.5px; }
+  .role-badge { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.3); color: var(--gold); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; }
+  #content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+  /* ── SCREEN SWITCHING ── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── CARDS ── */
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 22px; }
+  .kpi-card { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); border-left: 3px solid transparent; }
+  .kpi-card.gold { border-left-color: var(--gold); }
+  .kpi-card.blue { border-left-color: #3b82f6; }
+  .kpi-card.green { border-left-color: #10b981; }
+  .kpi-card.purple { border-left-color: #8b5cf6; }
+  .kpi-card.rose { border-left-color: #f43f5e; }
+  .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; margin-bottom: 6px; }
+  .kpi-value { font-size: 20px; font-weight: 800; color: #111827; }
+  .kpi-sub { font-size: 10px; color: #9ca3af; margin-top: 3px; }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f9fafb; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+  td { padding: 11px 14px; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
+  .avatar-cell { display: flex; align-items: center; gap: 9px; }
+  .tbl-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; color: #fff; flex-shrink: 0; }
+  .badge-pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; letter-spacing: 0.3px; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-blue  { background: #dbeafe; color: #1e40af; }
+  .badge-gold  { background: rgba(201,168,76,0.15); color: #92400e; }
+  .badge-gray  { background: #f3f4f6; color: #6b7280; }
+  .badge-purple { background: #ede9fe; color: #5b21b6; }
+  .badge-red   { background: #fee2e2; color: #991b1b; }
+
+  /* ── BUTTONS ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: all 0.15s; border: none; }
+  .btn-gold { background: var(--gold); color: #fff; }
+  .btn-gold:hover { background: #b8943a; }
+  .btn-outline-gold { background: transparent; border: 1.5px solid var(--gold); color: var(--gold); }
+  .btn-outline-gold:hover { background: rgba(201,168,76,0.08); }
+  .btn-outline { background: transparent; border: 1.5px solid #d1d5db; color: #374151; }
+  .btn-outline:hover { border-color: #9ca3af; }
+  .btn-green { background: #10b981; color: #fff; }
+  .btn-red { background: #ef4444; color: #fff; }
+
+  /* ── TOUR SYSTEM ── */
+  #tour-overlay { display: none; position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+  #tour-overlay.active { display: block; }
+  .tour-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.45);
+    pointer-events: all;
+  }
+  .tour-spotlight {
+    position: absolute;
+    border-radius: 10px;
+    box-shadow: 0 0 0 4000px rgba(0,0,0,0.45), 0 0 0 3px var(--gold), 0 0 24px rgba(201,168,76,0.5);
+    transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+    pointer-events: none;
+  }
+  .tour-tooltip {
+    position: absolute;
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 18px;
+    max-width: 300px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    pointer-events: all;
+    transition: all 0.3s ease;
+    z-index: 1001;
+  }
+  .tour-tooltip::before {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    background: #fff;
+    transform: rotate(45deg);
+  }
+  .tour-tooltip.arrow-top::before    { top: -6px; left: 24px; }
+  .tour-tooltip.arrow-bottom::before { bottom: -6px; left: 24px; }
+  .tour-tooltip.arrow-left::before   { left: -6px; top: 20px; }
+  .tour-tooltip.arrow-right::before  { right: -6px; top: 20px; }
+  .tour-step-num { font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+  .tour-title { font-size: 14px; font-weight: 800; color: #111827; margin-bottom: 6px; }
+  .tour-body { font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 14px; }
+  .tour-actions { display: flex; align-items: center; justify-content: space-between; }
+  .tour-dots { display: flex; gap: 5px; }
+  .tour-dot { width: 6px; height: 6px; border-radius: 50%; background: #e5e7eb; }
+  .tour-dot.done { background: var(--gold); }
+  .tour-btn-next { background: var(--gold); color: #fff; font-size: 12px; font-weight: 700; padding: 7px 18px; border-radius: 8px; cursor: pointer; border: none; display: flex; align-items: center; gap: 6px; }
+  .tour-btn-next:hover { background: #b8943a; }
+  .tour-btn-skip { font-size: 11px; color: #9ca3af; cursor: pointer; background: none; border: none; }
+  .tour-btn-skip:hover { color: #6b7280; }
+
+  /* ── HOTSPOT (pulsing dot) ── */
+  .hotspot {
+    position: absolute;
+    width: 22px; height: 22px;
+    cursor: pointer;
+    z-index: 500;
+    pointer-events: all;
+  }
+  .hotspot-ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    animation: pulse-ring 1.6s ease-out infinite;
+  }
+  .hotspot-dot {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--gold);
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0 8px rgba(201,168,76,0.7);
+  }
+  @keyframes pulse-ring {
+    0%   { transform: scale(1);   opacity: 0.9; }
+    70%  { transform: scale(1.9); opacity: 0; }
+    100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  /* ── CHARTS ── */
+  .donut-wrap { position: relative; width: 130px; height: 130px; flex-shrink: 0; }
+  svg.donut { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+
+  /* ── MISC ── */
+  .empty-state { text-align: center; padding: 48px 20px; color: #9ca3af; }
+  .empty-state i { font-size: 36px; margin-bottom: 12px; opacity: 0.3; }
+  .divider { height: 1px; background: #e5e7eb; margin: 20px 0; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section-title { font-size: 15px; font-weight: 700; color: #111827; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+
+  /* bar chart */
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .bar-label { width: 130px; font-size: 11px; color: #374151; text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { flex: 1; height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+  .bar-val { width: 80px; font-size: 11px; color: #6b7280; flex-shrink: 0; }
+
+  /* kanban */
+  .kanban { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+  .kanban-col { flex-shrink: 0; width: 200px; }
+  .kanban-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .kanban-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; }
+  .kanban-count { background: #f3f4f6; color: #6b7280; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; }
+  .kanban-card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); margin-bottom: 8px; cursor: pointer; border-left: 3px solid #e5e7eb; transition: all 0.15s; }
+  .kanban-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
+  .kanban-card.stage-new { border-left-color: #6366f1; }
+  .kanban-card.stage-contacted { border-left-color: #3b82f6; }
+  .kanban-card.stage-interview { border-left-color: #f59e0b; }
+  .kanban-card.stage-hired { border-left-color: #10b981; }
+  .kc-name { font-size: 12px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+  .kc-sub  { font-size: 10px; color: #9ca3af; }
+
+  /* modal */
+  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 900; align-items: center; justify-content: center; }
+  #modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 520px; width: 90%; box-shadow: 0 25px 80px rgba(0,0,0,0.3); }
+  .modal-title { font-size: 16px; font-weight: 800; color: #111827; margin-bottom: 6px; }
+  .modal-sub { font-size: 12px; color: #6b7280; margin-bottom: 20px; }
+  .form-row { margin-bottom: 14px; }
+  .form-label { font-size: 11px; font-weight: 700; color: #374151; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-input { width: 100%; border: 1.5px solid #d1d5db; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #111827; outline: none; transition: border-color 0.15s; }
+  .form-input:focus { border-color: var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- DEMO BANNER -->
+<div id="demo-banner">
+  <div style="display:flex;align-items:center;">
+    <span class="badge">Interactive Demo</span>
+    <span class="info">Simulated data only — no real records shown</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="info" id="tour-progress" style="display:none;">Step <span id="tour-step-num">1</span> of <span id="tour-total">0</span></span>
+    <button class="tour-btn" id="start-tour-btn" onclick="startTour()"><i class="fas fa-map-signs" style="margin-right:5px;"></i>Start Guided Tour</button>
+  </div>
+</div>
+
+<!-- APP SHELL -->
+<div id="app-shell">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sidebar-logo">
+      <img src="/static/lion-logo.png" alt="Lion MD">
+      <div class="sidebar-logo-text">
+        <div class="name">Lion MD Portal</div>
+        <div class="sub">Payroll</div>
+      </div>
+    </div>
+
+    <div style="flex:1;padding:8px 0;">
+      <div class="sidebar-section">Main</div>
+      <div class="nav-item active" id="nav-dashboard" onclick="showScreen('dashboard')">
+        <i class="fas fa-chart-pie"></i><span>Dashboard</span>
+      </div>
+      <div class="nav-item" id="nav-payroll" onclick="showScreen('payroll')">
+        <i class="fas fa-money-bill-wave"></i><span>Contractor Payroll</span>
+      </div>
+      <div class="nav-item" id="nav-consults" onclick="showScreen('consults')">
+        <i class="fas fa-file-medical"></i><span>Consult Records</span>
+      </div>
+      <div class="nav-item" id="nav-contractors" onclick="showScreen('contractors')">
+        <i class="fas fa-user-md"></i><span>Contractors</span>
+      </div>
+      <div class="nav-item" id="nav-onboarding" onclick="showScreen('onboarding')">
+        <i class="fas fa-user-plus"></i><span>Onboarding</span>
+      </div>
+      <div class="sidebar-section" style="margin-top:8px;">Finance</div>
+      <div class="nav-item" id="nav-payments" onclick="showScreen('payments')">
+        <i class="fas fa-credit-card"></i><span>Client Payments</span>
+      </div>
+      <div class="nav-item" id="nav-rates" onclick="showScreen('rates')">
+        <i class="fas fa-sliders-h"></i><span>Payment Rates</span>
+      </div>
+      <div class="sidebar-section" style="margin-top:8px;">Admin</div>
+      <div class="nav-item" id="nav-users" onclick="showScreen('users')">
+        <i class="fas fa-users-cog"></i><span>User Management</span>
+      </div>
+      <div class="nav-item" id="nav-provider" onclick="showScreen('provider')">
+        <i class="fas fa-user-circle"></i><span>Provider View ↗</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="user-avatar">A</div>
+        <div>
+          <div class="user-name">Admin User</div>
+          <div class="user-role">Administrator</div>
+        </div>
+        <i class="fas fa-chevron-right" style="color:rgba(255,255,255,0.2);font-size:10px;margin-left:auto;"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- TOPBAR -->
+    <div id="topbar">
+      <div class="page-title">
+        <span id="page-title-text">Dashboard</span>
+        <span class="period-pill">May 2026</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <select style="border:1.5px solid #e5e7eb;border-radius:8px;padding:5px 10px;font-size:12px;color:#374151;outline:none;cursor:pointer;">
+          <option>May 2026 (2 files)</option>
+          <option>April 2026 (3 files)</option>
+          <option>March 2026 (2 files)</option>
+        </select>
+        <div class="role-badge"><i class="fas fa-crown" style="font-size:9px;"></i> Admin</div>
+      </div>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <div id="content">
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: DASHBOARD                           -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen active" id="screen-dashboard">
+        <!-- KPI cards -->
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi-card gold" id="kpi-cases">
+            <div class="kpi-label">Total Approved Cases</div>
+            <div class="kpi-value">187,432</div>
+            <div class="kpi-sub">↑ 4.2% vs last month</div>
+          </div>
+          <div class="kpi-card blue" id="kpi-cv">
+            <div class="kpi-label">CV Owes Us</div>
+            <div class="kpi-value">$3,421,800</div>
+            <div class="kpi-sub">Total billed this period</div>
+          </div>
+          <div class="kpi-card green" id="kpi-owed">
+            <div class="kpi-label">We Owe Contractors</div>
+            <div class="kpi-value">$1,744,200</div>
+            <div class="kpi-sub">Across 28 active contractors</div>
+          </div>
+          <div class="kpi-card purple" id="kpi-mgmt">
+            <div class="kpi-label">Chris Mgmt Fee</div>
+            <div class="kpi-value">$419,400</div>
+            <div class="kpi-sub">25% of net margin</div>
+          </div>
+          <div class="kpi-card rose" id="kpi-margin">
+            <div class="kpi-label">Net Margin (37.4%)</div>
+            <div class="kpi-value">$1,258,200</div>
+            <div class="kpi-sub">After all payouts</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <!-- Donut chart -->
+          <div class="card" id="donut-card" style="padding:20px;">
+            <div class="section-title" style="margin-bottom:16px;">Visit Type Breakdown</div>
+            <div style="display:flex;align-items:center;gap:24px;">
+              <div class="donut-wrap">
+                <svg class="donut" viewBox="0 0 42 42">
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#f3f4f6" stroke-width="5"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#C9A84C" stroke-width="5" stroke-dasharray="73 27" stroke-dashoffset="0"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#3b82f6" stroke-width="5" stroke-dasharray="14 86" stroke-dashoffset="-73"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#8b5cf6" stroke-width="5" stroke-dasharray="8 92" stroke-dashoffset="-87"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#10b981" stroke-width="5" stroke-dasharray="5 95" stroke-dashoffset="-95"/>
+                </svg>
+                <div class="donut-center">
+                  <div style="font-size:17px;font-weight:800;color:#111827;">187K</div>
+                  <div style="font-size:9px;color:#9ca3af;">cases</div>
+                </div>
+              </div>
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;">
+                  <div style="width:10px;height:10px;border-radius:2px;background:#C9A84C;flex-shrink:0;"></div>
+                  <span style="color:#374151;flex:1;">Async (Text/Email)</span><strong>73%</strong>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;">
+                  <div style="width:10px;height:10px;border-radius:2px;background:#3b82f6;flex-shrink:0;"></div>
+                  <span style="color:#374151;flex:1;">Sync Video</span><strong>14%</strong>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;">
+                  <div style="width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></div>
+                  <span style="color:#374151;flex:1;">Sync Phone</span><strong>8%</strong>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+                  <div style="width:10px;height:10px;border-radius:2px;background:#10b981;flex-shrink:0;"></div>
+                  <span style="color:#374151;flex:1;">In-Person</span><strong>5%</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bar chart -->
+          <div class="card" id="earnings-card" style="padding:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <div class="section-title">Contractor Earnings</div>
+              <div style="display:flex;gap:10px;font-size:10px;">
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:2px;background:#3b82f6;display:inline-block;"></span>CV Pays Us</span>
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:2px;background:#8b5cf6;display:inline-block;"></span>We Pay</span>
+              </div>
+            </div>
+            <div id="bar-chart"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: PAYROLL                             -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-payroll">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+          <div>
+            <div style="font-size:13px;color:#6b7280;">Click any contractor card to view their paystub</div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-outline" onclick="alert('Recalculates all payroll for this period')"><i class="fas fa-sync-alt"></i> Recalculate</button>
+            <button class="btn btn-gold" id="gusto-btn" onclick="showToast('Gusto CSV exported successfully!')"><i class="fas fa-file-export"></i> Export to Gusto CSV</button>
+          </div>
+        </div>
+
+        <!-- Chris mgmt card -->
+        <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:14px;padding:20px 24px;margin-bottom:20px;border:1px solid rgba(201,168,76,0.25);" id="chris-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <span style="background:rgba(201,168,76,0.2);color:var(--gold);font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;letter-spacing:1px;">MGMT FEE EARNER</span>
+              <div style="color:#fff;font-size:18px;font-weight:800;margin-top:6px;">Chris Garcia</div>
+              <div style="color:rgba(255,255,255,0.4);font-size:11px;">25% of (CV Pays Us – We Pay Contractors)</div>
+            </div>
+            <button class="btn btn-outline-gold" onclick="openPaystub('Chris Garcia','Mgmt Fee','$419,400.00')"><i class="fas fa-file-invoice-dollar"></i> Payment Statement</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+            <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:12px;">
+              <div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Mgmt Fee</div>
+              <div style="color:var(--gold);font-size:18px;font-weight:800;">$419,400</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:12px;">
+              <div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total CV</div>
+              <div style="color:#fff;font-size:18px;font-weight:800;">$3,421,800</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:12px;">
+              <div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">We Pay Out</div>
+              <div style="color:#fff;font-size:18px;font-weight:800;">$1,744,200</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:12px;">
+              <div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Net Margin</div>
+              <div style="color:#10b981;font-size:18px;font-weight:800;">37.4%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contractor payout cards -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;" id="payout-grid"></div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: CONSULT RECORDS                     -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-consults">
+        <div class="card" style="padding:18px;margin-bottom:0;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+            <input type="text" placeholder="🔍  Search patient, case ID, org..." class="form-input" style="flex:1;min-width:200px;" oninput="filterConsults(this.value)">
+            <select class="form-input" style="width:140px;" onchange="filterConsultsDoctor(this.value)">
+              <option>All Doctors</option>
+              <option>J. Martinez, NP</option>
+              <option>S. Williams, NP</option>
+              <option>A. Johnson, NP</option>
+              <option>M. Davis, NP</option>
+            </select>
+            <select class="form-input" style="width:120px;">
+              <option>All Types</option>
+              <option>Async</option>
+              <option>Sync Video</option>
+              <option>Sync Phone</option>
+            </select>
+            <button class="btn btn-outline" onclick="showToast('Exporting filtered records…')"><i class="fas fa-download"></i> Export</button>
+            <button class="btn btn-gold" onclick="showToast('Full export queued (187,432 records)…')"><i class="fas fa-database"></i> Full Export</button>
+          </div>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:10px;"><strong id="consult-count" style="color:#111827;">187,432</strong> records</div>
+          <div style="overflow-x:auto;">
+            <table id="consults-table">
+              <thead><tr>
+                <th>Case ID</th><th>Date</th><th>Patient</th><th>Organization</th>
+                <th>Doctor</th><th>Type</th><th>CV Fee</th><th>Contractor Fee</th><th>Status</th>
+              </tr></thead>
+              <tbody id="consults-body"></tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:center;margin-top:12px;gap:6px;" id="consult-pages"></div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: CONTRACTORS                         -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-contractors">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div style="font-size:13px;color:#6b7280;"><strong style="color:#111827;">28 active</strong> · 6 inactive</div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-outline" onclick="showToast('Exporting contractor list to XLSX…')"><i class="fas fa-file-excel"></i> Export XLSX</button>
+            <button class="btn btn-gold" onclick="openAddContractor()"><i class="fas fa-plus"></i> Add Contractor</button>
+          </div>
+        </div>
+        <div class="card" style="overflow:hidden;">
+          <div style="padding:14px 18px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">NPs / ARNPs / PAs — 28</div>
+          <table id="contractors-table">
+            <thead><tr><th>Name</th><th>Company</th><th>EIN / SSN</th><th>Group</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="contractors-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: ONBOARDING                          -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-onboarding">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div style="display:flex;gap:8px;">
+            <span class="badge-pill badge-gray">12 total</span>
+            <span class="badge-pill badge-blue">5 active</span>
+            <span class="badge-pill badge-green">6 hired</span>
+            <span class="badge-pill badge-red">1 rejected</span>
+          </div>
+          <button class="btn btn-gold" onclick="showToast('Add candidate form would open here')"><i class="fas fa-plus"></i> Add Candidate</button>
+        </div>
+        <!-- Tabs -->
+        <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:18px;">
+          <div style="padding:8px 18px;font-size:13px;font-weight:700;color:var(--gold);border-bottom:2px solid var(--gold);margin-bottom:-2px;cursor:pointer;">Pipeline</div>
+          <div style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;" onclick="showScreen('contractors')">Contractors</div>
+          <div style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;">Calendar &amp; Deadlines</div>
+        </div>
+        <div class="kanban" id="kanban-board"></div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: CLIENT PAYMENTS                     -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-payments">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px;">
+          <div class="kpi-card gold"><div class="kpi-label">Total Clients</div><div class="kpi-value">54</div></div>
+          <div class="kpi-card green"><div class="kpi-label">May Revenue</div><div class="kpi-value" style="font-size:16px;">$3,421,800</div></div>
+          <div class="kpi-card blue"><div class="kpi-label">Paid This Month</div><div class="kpi-value">22</div></div>
+          <div class="kpi-card rose"><div class="kpi-label">Past Due</div><div class="kpi-value">2</div></div>
+          <div class="kpi-card purple"><div class="kpi-label">All-Time Revenue</div><div class="kpi-value" style="font-size:14px;">$13.9M</div></div>
+        </div>
+        <div class="card" style="overflow:hidden;">
+          <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e7eb;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-check-circle" style="color:#10b981;"></i>
+              <span style="font-size:13px;font-weight:700;color:#111827;">Paid</span>
+              <span class="badge-pill badge-green">22</span>
+            </div>
+            <button class="btn btn-outline" onclick="showToast('Exporting payment records…')"><i class="fas fa-file-excel"></i> Export XLSX</button>
+          </div>
+          <table id="payments-table">
+            <thead><tr><th>Client</th><th>Status</th><th>Amount</th><th>Date</th><th>Notes</th><th></th></tr></thead>
+            <tbody id="payments-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: RATES                               -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-rates">
+        <div class="card" style="padding:24px;max-width:600px;">
+          <div class="section-title" style="margin-bottom:4px;">Payment Rates</div>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:20px;">Configure per-visit-type rates for CareValidate and contractor payouts</div>
+          <table>
+            <thead><tr><th>Visit Type</th><th>CV Pays Lion MD</th><th>Lion MD Pays Contractor</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge-pill badge-gold">Async</span></td><td style="color:#10b981;font-weight:700;">$18.00</td><td style="color:#3b82f6;font-weight:700;">$10.00</td><td><button class="btn btn-outline" style="padding:4px 10px;font-size:11px;">Edit</button></td></tr>
+              <tr><td><span class="badge-pill badge-blue">Sync Video</span></td><td style="color:#10b981;font-weight:700;">$55.00</td><td style="color:#3b82f6;font-weight:700;">$30.00</td><td><button class="btn btn-outline" style="padding:4px 10px;font-size:11px;">Edit</button></td></tr>
+              <tr><td><span class="badge-pill badge-purple">Sync Phone</span></td><td style="color:#10b981;font-weight:700;">$50.00</td><td style="color:#3b82f6;font-weight:700;">$27.00</td><td><button class="btn btn-outline" style="padding:4px 10px;font-size:11px;">Edit</button></td></tr>
+              <tr><td><span class="badge-pill badge-green">In-Person</span></td><td style="color:#10b981;font-weight:700;">$65.00</td><td style="color:#3b82f6;font-weight:700;">$35.00</td><td><button class="btn btn-outline" style="padding:4px 10px;font-size:11px;">Edit</button></td></tr>
+              <tr><td><span class="badge-pill badge-gray">OrderlyMeds</span></td><td style="color:#10b981;font-weight:700;">$18.00</td><td style="color:#3b82f6;font-weight:700;">$10.00</td><td><button class="btn btn-outline" style="padding:4px 10px;font-size:11px;">Edit</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: USER MANAGEMENT                     -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-users">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div style="font-size:13px;color:#6b7280;">Create users and assign portal access roles</div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-outline" onclick="showToast('Bulk setup allows inviting multiple users at once')"><i class="fas fa-users"></i> Bulk Setup</button>
+            <button class="btn btn-gold" onclick="openAddUser()"><i class="fas fa-user-plus"></i> Add User</button>
+          </div>
+        </div>
+        <div class="card" style="overflow:hidden;">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: PROVIDER PORTAL                     -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-provider">
+        <!-- mini sidebar switcher -->
+        <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px;">
+          <div id="ptab-profile" style="padding:8px 18px;font-size:13px;font-weight:700;color:var(--gold);border-bottom:2px solid var(--gold);margin-bottom:-2px;cursor:pointer;" onclick="showProvTab('profile')">My Profile</div>
+          <div id="ptab-payroll" style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;" onclick="showProvTab('payroll')">My Payroll</div>
+          <div id="ptab-consults" style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;" onclick="showProvTab('consults')">My Consults</div>
+          <div id="ptab-licenses" style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;" onclick="showProvTab('licenses')">State Licenses</div>
+          <div id="ptab-docs" style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;" onclick="showProvTab('docs')">Documents &amp; CV</div>
+        </div>
+
+        <!-- Provider: Profile -->
+        <div id="pscreen-profile">
+          <div class="card" style="padding:20px;margin-bottom:16px;display:flex;align-items:center;gap:16px;">
+            <div style="width:52px;height:52px;border-radius:12px;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#0d0d1e;flex-shrink:0;">S</div>
+            <div style="flex:1;">
+              <div style="font-size:17px;font-weight:800;color:#111827;">Sarah Williams, NP</div>
+              <div style="display:flex;gap:8px;margin-top:5px;"><span class="badge-pill badge-purple">NP</span><span class="badge-pill badge-blue">3 States Licensed</span></div>
+            </div>
+            <button class="btn btn-outline-gold"><i class="fas fa-pencil-alt"></i> Edit Profile</button>
+          </div>
+          <div class="two-col" style="gap:16px;">
+            <div class="card" style="padding:18px;">
+              <div class="section-title" style="margin-bottom:12px;">Contact Information</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
+                <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Email</div><div>s.williams@example.com</div></div>
+                <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Phone</div><div>(555) 234-5678</div></div>
+                <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Address</div><div>Tampa, FL 33602</div></div>
+                <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">NPI Number</div><div>1234567890</div></div>
+              </div>
+            </div>
+            <div class="card" style="padding:18px;">
+              <div class="section-title" style="margin-bottom:12px;">Professional Details</div>
+              <div style="font-size:13px;margin-bottom:10px;"><span style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">Specialty</span>Family Medicine / Weight Management</div>
+              <div style="font-size:13px;"><span style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">States Licensed</span>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;"><span class="badge-pill badge-blue">FL</span><span class="badge-pill badge-blue">TX</span><span class="badge-pill badge-blue">GA</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Provider: Payroll -->
+        <div id="pscreen-payroll" style="display:none;">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
+            <div class="kpi-card gold"><div class="kpi-label">Lifetime Earnings</div><div class="kpi-value">$184,200</div></div>
+            <div class="kpi-card blue"><div class="kpi-label">Total Cases</div><div class="kpi-value">18,420</div></div>
+            <div class="kpi-card green"><div class="kpi-label">Approved</div><div class="kpi-value">18,204</div></div>
+            <div class="kpi-card rose"><div class="kpi-label">Denied</div><div class="kpi-value">216</div></div>
+          </div>
+          <div class="card" style="overflow:hidden;">
+            <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;"><span class="section-title">Pay Period History</span></div>
+            <table><thead><tr><th>Period</th><th>Cases</th><th>Earnings</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td style="font-weight:600;">May 2026</td><td>1,842</td><td style="color:#10b981;font-weight:700;">$18,420</td><td><span class="badge-pill badge-gold">Processing</span></td><td><button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="openPaystub('Sarah Williams','May 2026','$18,420.00')">Paystub</button></td></tr>
+              <tr><td style="font-weight:600;">April 2026</td><td>2,103</td><td style="color:#10b981;font-weight:700;">$21,030</td><td><span class="badge-pill badge-green">Paid</span></td><td><button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="openPaystub('Sarah Williams','April 2026','$21,030.00')">Paystub</button></td></tr>
+              <tr><td style="font-weight:600;">March 2026</td><td>1,956</td><td style="color:#10b981;font-weight:700;">$19,560</td><td><span class="badge-pill badge-green">Paid</span></td><td><button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="openPaystub('Sarah Williams','March 2026','$19,560.00')">Paystub</button></td></tr>
+            </tbody></table>
+          </div>
+        </div>
+
+        <!-- Provider: Consults -->
+        <div id="pscreen-consults" style="display:none;">
+          <div class="card" style="padding:18px;">
+            <div style="display:flex;gap:10px;margin-bottom:12px;">
+              <select class="form-input" style="width:140px;"><option>All Periods</option><option>May 2026</option><option>April 2026</option></select>
+              <input class="form-input" placeholder="Search patient, case ID..." style="flex:1;">
+            </div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:10px;"><strong style="color:#111827;">1,842</strong> cases this period</div>
+            <table><thead><tr><th>Date</th><th>Patient</th><th>Organization</th><th>Type</th><th>Decision</th><th>Fee</th></tr></thead>
+            <tbody>
+              <tr><td>5/20/2026</td><td>M. Thompson</td><td>TrimRx</td><td><span class="badge-pill badge-gold">Async</span></td><td><span class="badge-pill badge-green">Approved</span></td><td style="color:#10b981;font-weight:700;">$10.00</td></tr>
+              <tr><td>5/20/2026</td><td>K. Johnson</td><td>Alt Rx</td><td><span class="badge-pill badge-gold">Async</span></td><td><span class="badge-pill badge-green">Approved</span></td><td style="color:#10b981;font-weight:700;">$10.00</td></tr>
+              <tr><td>5/19/2026</td><td>R. Patel</td><td>TrimRx</td><td><span class="badge-pill badge-blue">Sync Video</span></td><td><span class="badge-pill badge-green">Approved</span></td><td style="color:#10b981;font-weight:700;">$30.00</td></tr>
+              <tr><td>5/19/2026</td><td>L. Garcia</td><td>Good Health</td><td><span class="badge-pill badge-gold">Async</span></td><td><span class="badge-pill badge-green">Approved</span></td><td style="color:#10b981;font-weight:700;">$10.00</td></tr>
+              <tr><td>5/18/2026</td><td>D. Wilson</td><td>Alt Rx</td><td><span class="badge-pill badge-purple">Sync Phone</span></td><td><span class="badge-pill badge-red">Denied</span></td><td style="color:#9ca3af;">—</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+
+        <!-- Provider: Licenses -->
+        <div id="pscreen-licenses" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div style="font-size:13px;color:#6b7280;">3 licenses on file</div>
+            <button class="btn btn-gold" onclick="showToast('Add license form would open here')"><i class="fas fa-plus"></i> Add License</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;" id="licenses-list">
+            <div class="card" style="padding:16px;display:flex;align-items:center;gap:14px;">
+              <div style="width:44px;height:44px;border-radius:8px;background:#d1fae5;display:flex;align-items:center;justify-content:center;font-weight:800;color:#065f46;font-size:14px;">FL</div>
+              <div style="flex:1;"><div style="font-weight:700;color:#111827;">Florida</div><div style="font-size:12px;color:#6b7280;">Lic #NP-2341095 · Expires 12/31/2026</div></div>
+              <span class="badge-pill badge-green">Active</span>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+            <div class="card" style="padding:16px;display:flex;align-items:center;gap:14px;">
+              <div style="width:44px;height:44px;border-radius:8px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-weight:800;color:#1e40af;font-size:14px;">TX</div>
+              <div style="flex:1;"><div style="font-weight:700;color:#111827;">Texas</div><div style="font-size:12px;color:#6b7280;">Lic #NP-TX-88821 · Expires 06/30/2027</div></div>
+              <span class="badge-pill badge-green">Active</span>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+            <div class="card" style="padding:16px;display:flex;align-items:center;gap:14px;">
+              <div style="width:44px;height:44px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-weight:800;color:#92400e;font-size:14px;">GA</div>
+              <div style="flex:1;"><div style="font-weight:700;color:#111827;">Georgia</div><div style="font-size:12px;color:#6b7280;">Lic #GA-NP-45521 · Expires 03/31/2027</div></div>
+              <span class="badge-pill badge-green">Active</span>
+              <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Provider: Documents -->
+        <div id="pscreen-docs" style="display:none;">
+          <div class="card" style="padding:24px;max-width:560px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <div class="section-title">CV / Résumé</div>
+              <button class="btn btn-gold" onclick="showToast('File picker would open here')"><i class="fas fa-upload"></i> Upload</button>
+            </div>
+            <div style="font-size:12px;color:#9ca3af;margin-bottom:16px;">PDF, Word documents up to 5 MB</div>
+            <div style="border:2px dashed #e5e7eb;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all 0.15s;" onmouseenter="this.style.borderColor='var(--gold)'" onmouseleave="this.style.borderColor='#e5e7eb'">
+              <i class="fas fa-file-pdf" style="font-size:32px;color:#e5e7eb;margin-bottom:10px;display:block;"></i>
+              <div style="font-weight:700;color:#374151;margin-bottom:4px;">Sarah_Williams_CV_2026.pdf</div>
+              <div style="font-size:11px;color:#9ca3af;">Uploaded 4/15/2026 · 248 KB · <span style="color:var(--gold);cursor:pointer;">Replace</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app-shell -->
+
+<!-- TOUR OVERLAY -->
+<div id="tour-overlay">
+  <div class="tour-backdrop" onclick="endTour()"></div>
+  <div class="tour-spotlight" id="tour-spotlight"></div>
+  <div class="tour-tooltip" id="tour-tooltip">
+    <div class="tour-step-num" id="tt-step"></div>
+    <div class="tour-title"   id="tt-title"></div>
+    <div class="tour-body"    id="tt-body"></div>
+    <div class="tour-actions">
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div class="tour-dots" id="tt-dots"></div>
+        <button class="tour-btn-skip" onclick="endTour()">✕ Skip tour</button>
+      </div>
+      <button class="tour-btn-next" id="tt-next" onclick="nextTourStep()">
+        Next <i class="fas fa-arrow-right"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#1a1a2e;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;border-left:3px solid var(--gold);box-shadow:0 8px 24px rgba(0,0,0,0.25);z-index:2000;transition:all 0.3s;"></div>
+
+<script>
+// ─── FAKE DATA ─────────────────────────────────────────────
+
+const contractors = [
+  { id:1,  name:'Sarah Williams',    co:'Williams Clinical LLC',   ein:'**5823', grp:'NP',  email:'s.williams@example.com',  active:true  },
+  { id:2,  name:'James Martinez',    co:'Martinez NP Services',    ein:'**7741', grp:'NP',  email:'j.martinez@example.com',  active:true  },
+  { id:3,  name:'Anna Johnson',      co:'Johnson Health PLLC',     ein:'**3392', grp:'NP',  email:'a.johnson@example.com',   active:true  },
+  { id:4,  name:'Marcus Davis',      co:'Davis Care Group LLC',    ein:'**8814', grp:'NP',  email:'m.davis@example.com',     active:true  },
+  { id:5,  name:'Lisa Nguyen',       co:'Nguyen Clinical PLLC',    ein:'**2267', grp:'ARNP',email:'l.nguyen@example.com',    active:true  },
+  { id:6,  name:'Robert Chen',       co:'Chen Wellness LLC',       ein:'**9931', grp:'PA',  email:'r.chen@example.com',      active:true  },
+  { id:7,  name:'Priya Patel',       co:'Patel Health Services',   ein:'**4456', grp:'NP',  email:'p.patel@example.com',     active:true  },
+  { id:8,  name:'David Thompson',    co:'Thompson NP Group',       ein:'**6678', grp:'NP',  email:'d.thompson@example.com',  active:false },
+];
+
+const payoutData = [
+  { name:'Sarah Williams',  cases:18420, pay:184200, cv:331560, type:'Regular' },
+  { name:'James Martinez',  cases:15630, pay:156300, cv:281340, type:'Regular' },
+  { name:'Anna Johnson',    cases:12840, pay:128400, cv:231120, type:'Regular' },
+  { name:'Marcus Davis',    cases:11250, pay:112500, cv:202500, type:'Regular' },
+  { name:'Lisa Nguyen',     cases:9870,  pay:98700,  cv:177660, type:'Regular' },
+  { name:'Robert Chen',     cases:8340,  pay:83400,  cv:150120, type:'Regular' },
+  { name:'Priya Patel',     cases:7620,  pay:76200,  cv:137160, type:'Regular' },
+  { name:'Ana Lisa Carr',   cases:11286, pay:0,      cv:203148, type:'Owner'   },
+];
+
+const colors = ['#6366f1','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+
+const consultRows = [
+  { id:'TRM-A0042',date:'5/20/2026',patient:'Marcus Thompson',org:'TrimRx',      doctor:'S. Williams, NP', type:'Async',      cv:18, fee:10, status:'Approved' },
+  { id:'ALT-B1193',date:'5/20/2026',patient:'Keisha Johnson', org:'Alt Rx',       doctor:'J. Martinez, NP', type:'Async',      cv:18, fee:10, status:'Approved' },
+  { id:'TRM-C2284',date:'5/19/2026',patient:'Raj Patel',      org:'TrimRx',      doctor:'A. Johnson, NP',  type:'Sync Video', cv:55, fee:30, status:'Approved' },
+  { id:'ALT-D3375',date:'5/19/2026',patient:'Linda Garcia',   org:'Good Health',  doctor:'S. Williams, NP', type:'Async',      cv:18, fee:10, status:'Approved' },
+  { id:'TRM-E4466',date:'5/18/2026',patient:'Derek Wilson',   org:'Alt Rx',       doctor:'M. Davis, NP',    type:'Sync Phone', cv:50, fee:27, status:'Denied'   },
+  { id:'GH-F5557', date:'5/18/2026',patient:'Amara Osei',     org:'Good Health',  doctor:'L. Nguyen, ARNP', type:'Async',      cv:18, fee:10, status:'Approved' },
+  { id:'TRM-G6648',date:'5/17/2026',patient:'Chris Reyes',    org:'TrimRx',      doctor:'J. Martinez, NP', type:'Async',      cv:18, fee:10, status:'Approved' },
+  { id:'ALT-H7739',date:'5/17/2026',patient:'Sophie Lee',     org:'Alt Rx',       doctor:'A. Johnson, NP',  type:'Sync Video', cv:55, fee:30, status:'Approved' },
+  { id:'TRM-I8820',date:'5/16/2026',patient:'Tony Morales',   org:'TrimRx',      doctor:'S. Williams, NP', type:'Async',      cv:18, fee:10, status:'Approved' },
+  { id:'GH-J9911', date:'5/16/2026',patient:'Rachel Kim',     org:'Good Health',  doctor:'P. Patel, NP',    type:'Async',      cv:18, fee:10, status:'Approved' },
+];
+
+const paymentClients = [
+  { name:'CareValidate',        amount:'$3,421,800.00', date:'5/4/2026',  status:'Paid' },
+  { name:'TrimRx',              amount:'$12,400.00',    date:'5/6/2026',  status:'Paid' },
+  { name:'Alt Rx',              amount:'$9,800.00',     date:'5/5/2026',  status:'Paid' },
+  { name:'Good Health Network', amount:'$7,200.00',     date:'5/5/2026',  status:'Paid' },
+  { name:'Healthy Haus',        amount:'$11,144.04',    date:'5/1/2026',  status:'Paid' },
+  { name:'Laser Fresh Aesth.',  amount:'$4,200.00',     date:'5/1/2026',  status:'Paid' },
+  { name:'WellPath Clinic',     amount:'$3,800.00',     date:'5/8/2026',  status:'Paid' },
+  { name:'Homewood Health',     amount:'$2,500.00',     date:'5/1/2026',  status:'Paid' },
+  { name:'Sunrise Medical',     amount:'$1,800.00',     date:null,        status:'Pending' },
+  { name:'BlueSky Health',      amount:'$950.00',       date:null,        status:'Past Due' },
+];
+
+const kanbanCols = [
+  { id:'new',        label:'New',                color:'#6366f1', cards:['Jordan Hayes — TrimRx','Alex Rivera — Alt Rx'] },
+  { id:'contacted',  label:'Contacted',          color:'#3b82f6', cards:['Casey Morgan — Good Health'] },
+  { id:'interview',  label:'Interview Scheduled',color:'#f59e0b', cards:['Taylor Brooks — TrimRx','Quinn Walker — Alt Rx'] },
+  { id:'offer',      label:'Offer Sent',         color:'#8b5cf6', cards:[] },
+  { id:'hired',      label:'Hired',              color:'#10b981', cards:['Sam Patterson','Dana Flores','Chris Kim','Lee Nguyen','Pat Simmons','Ryan Ortiz'] },
+];
+
+const usersData = [
+  { name:'Laura Camargo',  email:'admin@lionmd.com',       role:'Admin',      active:true,  login:'5/20/2026' },
+  { name:'Paula Reyes',    email:'paula@lionmd.com',       role:'Admin',      active:true,  login:'5/20/2026' },
+  { name:'Kelly B.',       email:'kelly@lionmd.com',       role:'Admin',      active:true,  login:'5/18/2026' },
+  { name:'Sarah Williams', email:'s.williams@example.com', role:'Provider',   active:true,  login:'5/19/2026' },
+  { name:'James Martinez', email:'j.martinez@example.com', role:'Provider',   active:true,  login:'5/18/2026' },
+  { name:'CV Reviewer',    email:'cv@carevalidate.com',    role:'CareValidate',active:true, login:'5/17/2026' },
+  { name:'Onboard Mgr',    email:'ob@lionmd.com',          role:'Onboarding', active:true,  login:'5/15/2026' },
+];
+
+// ─── RENDERING ─────────────────────────────────────────────
+
+function initBarChart() {
+  const el = document.getElementById('bar-chart');
+  const max = Math.max(...payoutData.map(d => d.cv));
+  el.innerHTML = payoutData.map(d => `
+    <div class="bar-row">
+      <div class="bar-label">${d.name.split(' ')[0]} ${d.name.split(' ').slice(-1)[0]}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(d.cv/max*100).toFixed(1)}%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div>
+      </div>
+      <div class="bar-val">$${(d.pay/1000).toFixed(0)}K</div>
+    </div>`).join('');
+}
+
+function initPayoutGrid() {
+  const el = document.getElementById('payout-grid');
+  el.innerHTML = payoutData.map((d,i) => `
+    <div class="card" style="padding:16px;cursor:pointer;transition:all 0.15s;" onclick="openPaystub('${d.name}','${d.type}','$${d.pay.toLocaleString()}.00')"
+         onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.1)'"
+         onmouseleave="this.style.transform='';this.style.boxShadow=''">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div style="width:34px;height:34px;border-radius:8px;background:${colors[i%colors.length]};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;">${d.name.charAt(0)}</div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#111827;">${d.name}</div>
+          <span class="badge-pill ${d.type==='Owner'?'badge-gold':'badge-blue'}" style="font-size:9px;">${d.type}</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:6px;">${d.cases.toLocaleString()} cases</div>
+      <div style="font-size:16px;font-weight:800;color:${d.pay===0?'#9ca3af':'#10b981'};">${d.pay===0?'Owner — Not Paid':'$'+d.pay.toLocaleString()}</div>
+      <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+        <button class="btn btn-outline" style="padding:3px 10px;font-size:10px;" onclick="event.stopPropagation();openPaystub('${d.name}','${d.type}','$${d.pay.toLocaleString()}.00')"><i class="fas fa-file-invoice"></i> Paystub</button>
+      </div>
+    </div>`).join('');
+}
+
+function initConsultsTable(filter='', doctorFilter='') {
+  const rows = consultRows.filter(r =>
+    (!filter || r.patient.toLowerCase().includes(filter.toLowerCase()) || r.id.toLowerCase().includes(filter.toLowerCase()) || r.org.toLowerCase().includes(filter.toLowerCase())) &&
+    (!doctorFilter || doctorFilter==='All Doctors' || r.doctor.includes(doctorFilter.split(' ')[0]))
+  );
+  document.getElementById('consult-count').textContent = filter||doctorFilter ? rows.length : '187,432';
+  document.getElementById('consults-body').innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-family:monospace;font-size:11px;color:#6b7280;">${r.id}</td>
+      <td style="font-size:12px;">${r.date}</td>
+      <td style="font-weight:600;">${r.patient}</td>
+      <td><span class="badge-pill badge-gray">${r.org}</span></td>
+      <td style="font-size:12px;">${r.doctor}</td>
+      <td><span class="badge-pill ${r.type==='Async'?'badge-gold':r.type==='Sync Video'?'badge-blue':'badge-purple'}">${r.type}</span></td>
+      <td style="color:#10b981;font-weight:700;">$${r.cv}.00</td>
+      <td style="color:#3b82f6;font-weight:700;">$${r.fee}.00</td>
+      <td><span class="badge-pill ${r.status==='Approved'?'badge-green':'badge-red'}">${r.status}</span></td>
+    </tr>`).join('');
+}
+
+function filterConsults(v) { initConsultsTable(v); }
+function filterConsultsDoctor(v) { initConsultsTable('',v); }
+
+function initContractorsTable() {
+  document.getElementById('contractors-body').innerHTML = contractors.map((c,i) => `
+    <tr>
+      <td><div class="avatar-cell">
+        <div class="tbl-avatar" style="background:${colors[i%colors.length]};">${c.name.charAt(0)}</div>
+        <span style="font-weight:600;">${c.name}</span>
+      </div></td>
+      <td style="font-size:12px;">${c.co}</td>
+      <td style="font-family:monospace;font-size:11px;color:#6b7280;">${c.ein}</td>
+      <td><span class="badge-pill badge-purple">${c.grp}</span></td>
+      <td style="font-size:12px;color:#6b7280;">${c.email}</td>
+      <td><span class="badge-pill ${c.active?'badge-green':'badge-gray'}">${c.active?'Active':'Inactive'}</span></td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="showToast('Opening ${c.name} profile…')"><i class="fas fa-user"></i> Profile</button>
+        <button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="showToast('Edit form for ${c.name}')"><i class="fas fa-pencil-alt"></i> Edit</button>
+      </td>
+    </tr>`).join('');
+}
+
+function initKanban() {
+  const el = document.getElementById('kanban-board');
+  el.innerHTML = kanbanCols.map(col => `
+    <div class="kanban-col">
+      <div class="kanban-header">
+        <span class="kanban-title" style="color:${col.color};">${col.label}</span>
+        <span class="kanban-count">${col.cards.length}</span>
+      </div>
+      ${col.cards.length === 0
+        ? `<div style="border:2px dashed #e5e7eb;border-radius:10px;padding:16px;text-align:center;font-size:11px;color:#d1d5db;">Drop here</div>`
+        : col.cards.map(name => `
+          <div class="kanban-card stage-${col.id}" onclick="showToast('Opening ${name} candidate file…')">
+            <div class="kc-name">${name}</div>
+            <div class="kc-sub">${col.label} · NP</div>
+          </div>`).join('')
+      }
+    </div>`).join('');
+}
+
+function initPaymentsTable() {
+  document.getElementById('payments-body').innerHTML = paymentClients.map(p => `
+    <tr>
+      <td style="font-weight:600;">${p.name}</td>
+      <td><span class="badge-pill ${p.status==='Paid'?'badge-green':p.status==='Pending'?'badge-gold':'badge-red'}">${p.status}</span></td>
+      <td style="font-weight:700;color:${p.status==='Paid'?'#10b981':'#374151'};">${p.amount}</td>
+      <td style="font-size:12px;color:#6b7280;">${p.date||'—'}</td>
+      <td style="font-size:12px;color:#9ca3af;">${p.status==='Past Due'?'⚠️ Invoice sent 5/1':'—'}</td>
+      <td><button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="showToast('Edit payment entry for ${p.name}')"><i class="fas fa-pencil-alt"></i></button></td>
+    </tr>`).join('');
+}
+
+function initUsersTable() {
+  document.getElementById('users-body').innerHTML = usersData.map(u => `
+    <tr>
+      <td style="font-weight:600;">${u.name}</td>
+      <td style="font-size:12px;color:#6b7280;">${u.email}</td>
+      <td><span class="badge-pill ${u.role==='Admin'?'badge-gold':u.role==='Provider'?'badge-purple':u.role==='CareValidate'?'badge-blue':'badge-green'}">${u.role}</span></td>
+      <td><span class="badge-pill badge-green">Active</span></td>
+      <td style="font-size:12px;color:#6b7280;">${u.login}</td>
+      <td style="display:flex;gap:5px;">
+        <button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="showToast('Edit ${u.name}')"><i class="fas fa-pencil-alt"></i></button>
+        <button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="showToast('Reset invite for ${u.name}')"><i class="fas fa-paper-plane"></i></button>
+        <button class="btn btn-outline" style="padding:3px 8px;font-size:11px;color:#ef4444;border-color:#fca5a5;" onclick="showToast('Disable ${u.name} account')"><i class="fas fa-user-slash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+// ─── SCREEN SWITCHING ───────────────────────────────────────
+
+const screenTitles = {
+  dashboard:'Dashboard', payroll:'Contractor Payroll', consults:'Consult Records',
+  contractors:'Contractors', onboarding:'Onboarding', payments:'Client Payments',
+  rates:'Payment Rates', users:'User Management', provider:'Provider Portal'
+};
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const sc = document.getElementById('screen-'+name);
+  if (sc) sc.classList.add('active');
+  const nav = document.getElementById('nav-'+name);
+  if (nav) nav.classList.add('active');
+  document.getElementById('page-title-text').textContent = screenTitles[name]||name;
+  if (name==='provider') {
+    document.getElementById('page-title-text').textContent = 'Provider Portal';
+    showProvTab('profile');
+  }
+}
+
+function showProvTab(tab) {
+  ['profile','payroll','consults','licenses','docs'].forEach(t => {
+    document.getElementById('pscreen-'+t).style.display = t===tab ? '' : 'none';
+    const el = document.getElementById('ptab-'+t);
+    if (el) {
+      el.style.color = t===tab ? 'var(--gold)' : '#6b7280';
+      el.style.borderBottom = t===tab ? '2px solid var(--gold)' : 'none';
+      el.style.marginBottom = t===tab ? '-2px' : '0';
+    }
+  });
+}
+
+// ─── MODALS ────────────────────────────────────────────────
+
+function openPaystub(name, type, amount) {
+  document.getElementById('modal-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:10px;font-weight:800;letter-spacing:1px;color:var(--gold);text-transform:uppercase;margin-bottom:4px;">Payment Statement</div>
+        <div class="modal-title">${name}</div>
+        <div class="modal-sub">${type} · May 2026</div>
+      </div>
+      <button onclick="closeModal()" style="background:none;border:none;font-size:18px;color:#9ca3af;cursor:pointer;">✕</button>
+    </div>
+    <div style="background:#f9fafb;border-radius:10px;padding:16px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:12px;color:#6b7280;">Period</span><span style="font-size:12px;font-weight:600;">May 2026</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:12px;color:#6b7280;">Total Cases</span><span style="font-size:12px;font-weight:600;">1,842</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:12px;color:#6b7280;">Rate (Async)</span><span style="font-size:12px;font-weight:600;">$10.00 / case</span></div>
+      <div style="height:1px;background:#e5e7eb;margin:10px 0;"></div>
+      <div style="display:flex;justify-content:space-between;"><span style="font-size:14px;font-weight:700;color:#111827;">Total Payout</span><span style="font-size:18px;font-weight:800;color:#10b981;">${amount}</span></div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="showToast('PDF downloaded!');closeModal()"><i class="fas fa-download"></i> Download PDF</button>
+      <button class="btn btn-gold" style="flex:1;" onclick="showToast('Sent to Gusto!');closeModal()"><i class="fas fa-paper-plane"></i> Send to Gusto</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function openAddContractor() {
+  document.getElementById('modal-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
+      <div class="modal-title">Add Contractor</div>
+      <button onclick="closeModal()" style="background:none;border:none;font-size:18px;color:#9ca3af;cursor:pointer;">✕</button>
+    </div>
+    <div class="form-row"><div class="form-label">Full Name</div><input class="form-input" placeholder="e.g. Jane Smith"></div>
+    <div class="form-row"><div class="form-label">Company Name</div><input class="form-input" placeholder="e.g. Smith NP Services LLC"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-row"><div class="form-label">EIN / SSN (last 4)</div><input class="form-input" placeholder="****"></div>
+      <div class="form-row"><div class="form-label">Group</div>
+        <select class="form-input"><option>NP</option><option>ARNP</option><option>PA</option><option>MD</option></select>
+      </div>
+    </div>
+    <div class="form-row"><div class="form-label">Email</div><input class="form-input" type="email" placeholder="jane@example.com"></div>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" style="flex:1;" onclick="showToast('Contractor added successfully!');closeModal()"><i class="fas fa-plus"></i> Add Contractor</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function openAddUser() {
+  document.getElementById('modal-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
+      <div class="modal-title">Add Portal User</div>
+      <button onclick="closeModal()" style="background:none;border:none;font-size:18px;color:#9ca3af;cursor:pointer;">✕</button>
+    </div>
+    <div class="form-row"><div class="form-label">Full Name</div><input class="form-input" placeholder="e.g. Jane Smith"></div>
+    <div class="form-row"><div class="form-label">Email Address</div><input class="form-input" type="email" placeholder="jane@example.com"></div>
+    <div class="form-row"><div class="form-label">Role</div>
+      <select class="form-input">
+        <option>Admin</option><option>CareValidate</option><option>Onboarding</option>
+        <option>Provider</option><option>Candidate</option>
+      </select>
+    </div>
+    <div style="background:#fef9ee;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:14px;">
+      <i class="fas fa-envelope" style="margin-right:6px;"></i>An invite email will be sent automatically
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" style="flex:1;" onclick="showToast('Invite sent!');closeModal()"><i class="fas fa-paper-plane"></i> Send Invite</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ─── TOAST ─────────────────────────────────────────────────
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block'; t.style.opacity = '1';
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.style.display='none',300); }, 2800);
+}
+
+// ─── GUIDED TOUR ───────────────────────────────────────────
+
+const tourSteps = [
+  {
+    screen: 'dashboard',
+    target: '#kpi-grid',
+    title: 'Live KPI Summary',
+    body: 'The dashboard shows real-time totals for every period — total cases, what CareValidate owes you, what you owe contractors, and your net margin — all calculated automatically.',
+    arrow: 'top',
+  },
+  {
+    screen: 'dashboard',
+    target: '#donut-card',
+    title: 'Visit Type Breakdown',
+    body: 'See at a glance how your consults break down by type: Async, Sync Video, Sync Phone, and In-Person. Each type has different billing rates.',
+    arrow: 'top',
+  },
+  {
+    screen: 'dashboard',
+    target: '#earnings-card',
+    title: 'Contractor Earnings',
+    body: 'Side-by-side view of what CareValidate pays you vs. what you pay each contractor — instantly showing your margin per provider.',
+    arrow: 'top',
+  },
+  {
+    screen: 'payroll',
+    target: '#chris-card',
+    title: 'Management Fee Card',
+    body: 'Chris Garcia\'s management fee is auto-calculated as 25% of the net margin each period. No manual math needed — the system computes it from the uploaded report.',
+    arrow: 'bottom',
+  },
+  {
+    screen: 'payroll',
+    target: '#payout-grid',
+    title: 'Contractor Payout Cards',
+    body: 'Every contractor gets their own card showing their case count, total payout, and a Paystub button. Click any card to open the detailed payment statement.',
+    arrow: 'bottom',
+  },
+  {
+    screen: 'payroll',
+    target: '#gusto-btn',
+    title: 'One-Click Gusto Export',
+    body: 'Click once to export every contractor\'s payroll data as a Gusto-formatted CSV. Upload directly to Gusto to process payroll — no reformatting required.',
+    arrow: 'bottom',
+  },
+  {
+    screen: 'consults',
+    target: '#screen-consults',
+    title: '187,000+ Consult Records',
+    body: 'Every single consult from every uploaded file is searchable here. Filter by doctor, visit type, organization, or date range. Export any subset to XLSX instantly.',
+    arrow: 'top',
+  },
+  {
+    screen: 'contractors',
+    target: '#screen-contractors',
+    title: 'Contractor Directory',
+    body: 'All contractors in one place — company name, EIN/SSN (masked), group type, and status. Click Profile to see a contractor\'s full history, payroll, and licenses.',
+    arrow: 'top',
+  },
+  {
+    screen: 'onboarding',
+    target: '#kanban-board',
+    title: 'Onboarding Pipeline',
+    body: 'New provider candidates move through stages on a Kanban board: New → Contacted → Interview → Offer → Hired. See the full pipeline at a glance.',
+    arrow: 'top',
+  },
+  {
+    screen: 'payments',
+    target: '#screen-payments',
+    title: 'Client Payments',
+    body: 'Track all incoming revenue from client organizations — CareValidate, TrimRx, Alt Rx, and more. See what\'s been paid, what\'s pending, and what\'s past due.',
+    arrow: 'top',
+  },
+  {
+    screen: 'users',
+    target: '#screen-users',
+    title: 'Role-Based Access',
+    body: '5 role types: Admin, CareValidate, Onboarding, Provider, and Candidate. Each role sees only their section of the portal. New users are invited by email automatically.',
+    arrow: 'top',
+  },
+  {
+    screen: 'provider',
+    target: '#pscreen-profile',
+    title: 'Provider Portal',
+    body: 'When a contractor logs in, they see their own private portal — profile, payroll history, consult records, state licenses, and CV upload. No access to other providers\' data.',
+    arrow: 'top',
+    last: true,
+  },
+];
+
+let tourIdx = 0;
+
+function startTour() {
+  tourIdx = 0;
+  document.getElementById('tour-overlay').classList.add('active');
+  document.getElementById('start-tour-btn').textContent = 'Restart Tour';
+  document.getElementById('tour-progress').style.display = 'inline';
+  document.getElementById('tour-total').textContent = tourSteps.length;
+  showTourStep(0);
+}
+
+function endTour() {
+  document.getElementById('tour-overlay').classList.remove('active');
+  document.getElementById('tour-progress').style.display = 'none';
+}
+
+function nextTourStep() {
+  if (tourIdx >= tourSteps.length - 1) { endTour(); showToast('Tour complete! Feel free to explore freely.'); return; }
+  tourIdx++;
+  showTourStep(tourIdx);
+}
+
+function showTourStep(idx) {
+  const step = tourSteps[idx];
+  document.getElementById('tour-step-num').textContent = `Step ${idx+1} of ${tourSteps.length}`;
+  document.getElementById('tt-step').textContent = `Step ${idx+1} of ${tourSteps.length}`;
+  document.getElementById('tt-title').textContent = step.title;
+  document.getElementById('tt-body').textContent = step.body;
+  document.getElementById('tour-step-num').textContent = idx + 1;
+  document.getElementById('tt-next').innerHTML = step.last
+    ? 'Finish <i class="fas fa-check"></i>'
+    : 'Next <i class="fas fa-arrow-right"></i>';
+  // dots
+  const dots = document.getElementById('tt-dots');
+  dots.innerHTML = tourSteps.map((_,i) => `<div class="tour-dot${i<=idx?' done':''}"></div>`).join('');
+  // navigate to correct screen
+  showScreen(step.screen);
+  // position after render
+  requestAnimationFrame(() => requestAnimationFrame(() => positionTourStep(step)));
+}
+
+function positionTourStep(step) {
+  const target = document.querySelector(step.target);
+  const tip    = document.getElementById('tour-tooltip');
+  const spot   = document.getElementById('tour-spotlight');
+  if (!target) return;
+
+  const r = target.getBoundingClientRect();
+  const pad = 8;
+  // spotlight
+  spot.style.left   = (r.left   - pad) + 'px';
+  spot.style.top    = (r.top    - pad) + 'px';
+  spot.style.width  = (r.width  + pad*2) + 'px';
+  spot.style.height = (r.height + pad*2) + 'px';
+
+  // tooltip placement
+  tip.className = 'tour-tooltip';
+  const tw = 300, th = 180;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let tx, ty;
+
+  if (step.arrow === 'top' && r.bottom + th + 24 < vh) {
+    // below target
+    tx = Math.min(Math.max(r.left, 12), vw - tw - 12);
+    ty = r.bottom + 16;
+    tip.classList.add('arrow-top');
+  } else if (r.top - th - 24 > 0) {
+    // above target
+    tx = Math.min(Math.max(r.left, 12), vw - tw - 12);
+    ty = r.top - th - 16;
+    tip.classList.add('arrow-bottom');
+  } else if (r.right + tw + 24 < vw) {
+    tx = r.right + 16;
+    ty = Math.min(Math.max(r.top, 12), vh - th - 12);
+    tip.classList.add('arrow-left');
+  } else {
+    tx = r.left - tw - 16;
+    ty = Math.min(Math.max(r.top, 12), vh - th - 12);
+    tip.classList.add('arrow-right');
+  }
+  tip.style.left = tx + 'px';
+  tip.style.top  = ty + 'px';
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+
+initBarChart();
+initPayoutGrid();
+initConsultsTable();
+initContractorsTable();
+initKanban();
+initPaymentsTable();
+initUsersTable();
+
+// Start tour automatically after 1.5s
+setTimeout(startTour, 1500);
+</script>
+</body>
+</html>

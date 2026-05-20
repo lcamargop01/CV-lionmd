@@ -4303,6 +4303,15 @@ app.post('/api/client-payments/seed', requireAdmin, async (c) => {
   return c.json({ ok: true, clients: clientNames.length, entries_inserted: inserted, skipped })
 })
 
+// ── Demo route ──────────────────────────────────────────────────
+// Serve demo.html at /demo
+app.get('/demo', async (c) => {
+  if ((c.env as any).ASSETS) {
+    return (c.env as any).ASSETS.fetch(new Request(new URL('/demo.html', c.req.url)))
+  }
+  return c.redirect('/demo.html', 302)
+})
+
 // ── Clean path routing ───────────────────────────────────────────
 // Serve index.html for all frontend routes so lion.md/apply,
 // lion.md/contractors, lion.md/portal/profile etc. all work directly.
