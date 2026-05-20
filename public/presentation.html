@@ -40,6 +40,7 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    /* paddingBottom set by scaleSlides() to clear fixed controls */
   }
 
   /* ── SLIDE VIEWPORT ─────────────────────────── */
@@ -499,12 +500,10 @@
 
   /* ── RESPONSIVE SCALE ───────────────────────── */
   #scaler {
-    /* transform-origin and transform set by scaleSlides() */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
+    /* width/height set to scaled px by scaleSlides() — layout box = visual box */
+    position: relative;
     flex-shrink: 0;
+    overflow: visible;
   }
 
   /* ── SCREENSHOT SLIDES ──────────────────────── */
@@ -1784,40 +1783,52 @@
 
   /* ── Responsive scale ──────────────────────── */
   function scaleSlides() {
-    const W = window.innerWidth
-    const H = window.innerHeight
+    const W      = window.innerWidth
+    const H      = window.innerHeight
     const slideW = 1000
     const slideH = 600
-    const controlH = 110  // fixed controls bar height + clearance
+    const ctrlH  = 110   // fixed controls bar height + bottom clearance
 
-    // Available vertical space above the fixed controls bar
-    const availH = H - controlH
+    // Space available to the slide (above the fixed controls bar)
+    const availW = W
+    const availH = H - ctrlH
 
-    // Scale to fit the available area (96% margin on both axes)
-    const s = Math.min((W * 0.96) / slideW, (availH * 0.96) / slideH, 1.2)
+    // Uniform scale factor — cap at 1.2× on large screens
+    const s = Math.min((availW * 0.96) / slideW,
+                       (availH * 0.96) / slideH,
+                       1.2)
+
+    const scaledW = slideW * s
+    const scaledH = slideH * s
 
     const scaler = document.getElementById('scaler')
+    const vp     = document.getElementById('viewport')
     const deck   = document.getElementById('deck')
 
-    // transform-origin: top center so scaling grows/shrinks downward
-    scaler.style.transformOrigin = 'top center'
-    scaler.style.transform = `scale(${s})`
+    // KEY INSIGHT: transform:scale() does NOT shrink the layout box.
+    // Instead, set #scaler to the SCALED pixel size, then use
+    // transform:scale() with transform-origin:top left to scale #viewport
+    // (which stays at 1000×600) — the layout box now matches the visual box.
+    scaler.style.width  = scaledW + 'px'
+    scaler.style.height = scaledH + 'px'
 
-    // After scale, the element still occupies slideH px in layout.
-    // Collapse that dead space with a negative bottom margin:
-    //   visual height = slideH * s
-    //   excess layout height = slideH - slideH * s
-    //   → pull everything below it up by that amount
-    const scaledH = slideH * s
-    const excess  = slideH - scaledH      // layout height minus visual height
-    scaler.style.marginBottom = `-${excess}px`
-    scaler.style.marginTop    = '0px'
+    // Scale #viewport (1000×600) down to fit inside #scaler
+    vp.style.transformOrigin = 'top left'
+    vp.style.transform       = `scale(${s})`
+    // #viewport layout box is still 1000×600, but #scaler clips it visually.
+    // Position viewport at top-left of scaler; overflow on scaler is visible
+    // so SVG callout arrows can escape, but the visual is contained by the
+    // scaled dimensions we set on #scaler.
+    vp.style.position = 'absolute'
+    vp.style.top      = '0'
+    vp.style.left     = '0'
 
-    // Center the scaled slide vertically in the available area
-    const topPad = Math.max(0, (availH - scaledH) / 2)
-    deck.style.paddingTop    = topPad + 'px'
-    deck.style.paddingBottom = '0px'
-    deck.style.justifyContent = 'flex-start'
+    // #deck is position:fixed; inset:0 — use padding to reserve space for
+    // the fixed controls bar, then flex-centering handles the rest.
+    deck.style.paddingBottom = ctrlH + 'px'
+    deck.style.paddingTop    = '0'
+    deck.style.justifyContent = 'center'
+    deck.style.alignItems     = 'center'
   }
   window.addEventListener('resize', scaleSlides)
   scaleSlides()
