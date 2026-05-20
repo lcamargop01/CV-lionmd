@@ -2621,8 +2621,10 @@ app.post('/api/auth/login', async (c) => {
 
   if (!user) return c.json({ error: 'Invalid email or password' }, 401)
 
-  // If must_set_password, they should use setup flow
-  if (user.must_set_password || !user.password_hash) {
+  // If must_set_password flag is set OR no password hash exists yet, send to setup flow.
+  // Note: must_set_password should only be 1 for users who have never completed setup.
+  // It must NOT be reset to 1 for established providers (that caused repeated setup prompts).
+  if (user.must_set_password === 1 || !user.password_hash) {
     return c.json({ must_set_password: true, invite_token: user.invite_token, user_id: user.id })
   }
 
@@ -2821,13 +2823,28 @@ app.post('/api/admin/users/bulk-portal-setup', requireAdmin, async (c) => {
 })
 
 // ── POST /api/admin/users/:id/reset-invite ───────────────────────
-// Re-generate an invite token so admin can copy or manually email the link
+// Re-generate an invite token so admin can copy or manually email the link.
+// IMPORTANT: never wipe password_hash or reset must_set_password if the
+// user already has a password set — that would lock out established providers.
 app.post('/api/admin/users/:id/reset-invite', requireAdmin, async (c) => {
   const inviteToken = generateInviteToken()
   const id = c.req.param('id')
-  await c.env.DB.prepare(
-    `UPDATE portal_users SET invite_token=?, must_set_password=1, password_hash=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
-  ).bind(inviteToken, id).run()
+  const existing = await c.env.DB.prepare(
+    'SELECT must_set_password, password_hash FROM portal_users WHERE id=?'
+  ).bind(id).first() as any
+  // Only clear password if the user has never set one (true first-time invite reset)
+  const alreadySetup = existing && existing.password_hash && !existing.must_set_password
+  if (alreadySetup) {
+    // Established user: just refresh the token, leave auth state untouched
+    await c.env.DB.prepare(
+      `UPDATE portal_users SET invite_token=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(inviteToken, id).run()
+  } else {
+    // First-time or pending user: reset fully so they go through setup
+    await c.env.DB.prepare(
+      `UPDATE portal_users SET invite_token=?, must_set_password=1, password_hash=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(inviteToken, id).run()
+  }
   return c.json({ ok: true, invite_token: inviteToken })
 })
 
@@ -2844,13 +2861,26 @@ app.post('/api/admin/send-invite-email', requireAdmin, async (c) => {
   if (!user) return c.json({ error: 'User not found' }, 404)
   if (!user.email) return c.json({ error: 'User has no email address' }, 400)
 
-  // Regenerate token if missing
+  // Regenerate token if missing — but never touch must_set_password or password_hash
+  // for users who already completed setup (they should log in normally, not re-setup)
   let token = user.invite_token
   if (!token) {
     token = generateInviteToken()
-    await c.env.DB.prepare(
-      'UPDATE portal_users SET invite_token=?, must_set_password=1, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(token, user.id).run()
+    const existingUser = await c.env.DB.prepare(
+      'SELECT must_set_password, password_hash FROM portal_users WHERE id=?'
+    ).bind(user.id).first() as any
+    const alreadySetup = existingUser && existingUser.password_hash && !existingUser.must_set_password
+    if (alreadySetup) {
+      // Established user: just store the token for the link — don't touch auth state
+      await c.env.DB.prepare(
+        'UPDATE portal_users SET invite_token=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(token, user.id).run()
+    } else {
+      // First-time user: set must_set_password so they go through setup flow
+      await c.env.DB.prepare(
+        'UPDATE portal_users SET invite_token=?, must_set_password=1, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(token, user.id).run()
+    }
   }
 
   const portalOrigin = new URL(c.req.url).origin
