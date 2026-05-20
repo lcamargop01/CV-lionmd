@@ -514,6 +514,7 @@
     background: #090914;
     display: flex;
     flex-direction: column;
+    overflow: visible; /* allow callout arrows to escape */
   }
   .ss-topbar {
     flex-shrink: 0;
@@ -540,7 +541,14 @@
   .ss-body {
     flex: 1;
     position: relative;
+    overflow: visible; /* must be visible so arrow ::after lines aren't clipped */
+  }
+  /* clip only the image, not the callout arrows */
+  .ss-img-clip {
+    position: absolute;
+    inset: 0;
     overflow: hidden;
+    border-radius: 0 0 18px 18px; /* match viewport border-radius at bottom */
   }
   .ss-img {
     position: absolute;
@@ -554,10 +562,13 @@
   .ss-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg,rgba(0,0,0,0.12) 0%,rgba(0,0,0,0) 60%);
+    background: linear-gradient(135deg,rgba(0,0,0,0.18) 0%,rgba(0,0,0,0) 60%);
     pointer-events: none;
+    z-index: 1;
   }
-  /* callout label box */
+  /* ── CALLOUT LABELS ────────────────────────────
+     Arrow lines are drawn by JS into an inline SVG
+     that sits inside .ss-body — never clips at edges */
   .callout {
     position: absolute;
     background: var(--gold);
@@ -570,34 +581,19 @@
     border-radius: 4px;
     white-space: nowrap;
     box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-    z-index: 10;
+    z-index: 20;
     line-height: 1.4;
+    /* no ::before/::after — arrows drawn by SVG */
   }
-  .callout::after {
-    content: '';
+  .callout-svg {
     position: absolute;
-    width: 2px;
-    background: var(--gold);
-    z-index: 9;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 15;
+    overflow: visible;
   }
-  /* arrow line directions */
-  .callout.arrow-down::after  { top: 100%; left: 50%; transform: translateX(-50%); height: var(--arrow-len, 20px); }
-  .callout.arrow-up::after    { bottom: 100%; left: 50%; transform: translateX(-50%); height: var(--arrow-len, 20px); }
-  .callout.arrow-right::after { top: 50%; left: 100%; transform: translateY(-50%); width: var(--arrow-len, 20px); height: 2px; }
-  .callout.arrow-left::after  { top: 50%; right: 100%; width: var(--arrow-len, 20px); height: 2px; }
-  /* arrowhead dot at tip */
-  .callout::before {
-    content: '';
-    position: absolute;
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--gold);
-    z-index: 10;
-  }
-  .callout.arrow-down::before  { top: calc(100% + var(--arrow-len, 20px) - 3px); left: 50%; transform: translateX(-50%); }
-  .callout.arrow-up::before    { bottom: calc(100% + var(--arrow-len, 20px) - 3px); left: 50%; transform: translateX(-50%); }
-  .callout.arrow-right::before { top: 50%; left: calc(100% + var(--arrow-len, 20px) - 3px); transform: translateY(-50%); }
-  .callout.arrow-left::before  { top: 50%; right: calc(100% + var(--arrow-len, 20px) - 3px); transform: translateY(-50%); }
 </style>
 </head>
 <body>
@@ -1240,14 +1236,14 @@
             <span class="ss-topbar-sub">Real-time payroll analytics for the current period</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/03-dashboard.png" alt="Dashboard screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/03-dashboard.png" alt="Dashboard screenshot"></div>
             <div class="ss-overlay"></div>
             <!-- Callouts -->
-            <div class="callout arrow-down" style="left:19%;top:7%;--arrow-len:18px;">Period Selector</div>
-            <div class="callout arrow-down" style="left:32%;top:7%;--arrow-len:30px;">KPI Summary Cards</div>
-            <div class="callout arrow-down" style="left:55%;top:7%;--arrow-len:32px;">Visit Type Donut Chart</div>
-            <div class="callout arrow-down" style="left:78%;top:7%;--arrow-len:28px;">Contractor Earnings Bar</div>
-            <div class="callout arrow-right" style="left:0.5%;top:50%;--arrow-len:12px;">Navigation Sidebar</div>
+            <div class="callout" data-dir="down" data-lx="19" data-ly="7" data-len="18">Period Selector</div>
+            <div class="callout" data-dir="down" data-lx="32" data-ly="7" data-len="30">KPI Summary Cards</div>
+            <div class="callout" data-dir="down" data-lx="55" data-ly="7" data-len="32">Visit Type Donut Chart</div>
+            <div class="callout" data-dir="down" data-lx="78" data-ly="7" data-len="28">Contractor Earnings Bar</div>
+            <div class="callout" data-dir="right" data-lx="0.5" data-ly="50" data-len="12">Navigation Sidebar</div>
           </div>
         </div>
         <div class="slide-num-badge">11 / 23</div>
@@ -1264,12 +1260,12 @@
             <span class="ss-topbar-sub">Auto-calculated paystubs per contractor per period</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/04-payroll.png" alt="Payroll screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/04-payroll.png" alt="Payroll screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:24%;top:7%;--arrow-len:32px;">Chris Garcia Mgmt Fee Card</div>
-            <div class="callout arrow-down" style="left:50%;top:7%;--arrow-len:28px;">Per-Contractor Payout Cards</div>
-            <div class="callout arrow-down" style="left:74%;top:7%;--arrow-len:24px;">Paystub Button</div>
-            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">Export to Gusto CSV</div>
+            <div class="callout" data-dir="down" data-lx="24" data-ly="7" data-len="32">Chris Garcia Mgmt Fee Card</div>
+            <div class="callout" data-dir="down" data-lx="50" data-ly="7" data-len="28">Per-Contractor Payout Cards</div>
+            <div class="callout" data-dir="down" data-lx="74" data-ly="7" data-len="24">Paystub Button</div>
+            <div class="callout" data-dir="left" data-lx="99.0" data-ly="12" data-len="14">Export to Gusto CSV</div>
           </div>
         </div>
         <div class="slide-num-badge">12 / 23</div>
@@ -1286,13 +1282,13 @@
             <span class="ss-topbar-sub">Full contractor directory with profiles, EINs, and group assignments</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/05-contractors.png" alt="Contractors screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/05-contractors.png" alt="Contractors screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:14%;top:7%;--arrow-len:36px;">Contractor Table</div>
-            <div class="callout arrow-down" style="left:36%;top:7%;--arrow-len:30px;">Company & EIN / SSN</div>
-            <div class="callout arrow-down" style="left:55%;top:7%;--arrow-len:26px;">Active / Inactive Count</div>
-            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">Add / Export / Sync</div>
-            <div class="callout arrow-down" style="left:76%;top:7%;--arrow-len:36px;">Profile &amp; Edit Actions</div>
+            <div class="callout" data-dir="down" data-lx="14" data-ly="7" data-len="36">Contractor Table</div>
+            <div class="callout" data-dir="down" data-lx="36" data-ly="7" data-len="30">Company & EIN / SSN</div>
+            <div class="callout" data-dir="down" data-lx="55" data-ly="7" data-len="26">Active / Inactive Count</div>
+            <div class="callout" data-dir="left" data-lx="99.0" data-ly="12" data-len="14">Add / Export / Sync</div>
+            <div class="callout" data-dir="down" data-lx="76" data-ly="7" data-len="36">Profile &amp; Edit Actions</div>
           </div>
         </div>
         <div class="slide-num-badge">13 / 23</div>
@@ -1309,14 +1305,14 @@
             <span class="ss-topbar-sub">203,000+ records searchable, filterable, and exportable</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/06-consults.png" alt="Consults screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/06-consults.png" alt="Consults screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:16%;top:7%;--arrow-len:22px;">Search Bar</div>
-            <div class="callout arrow-down" style="left:38%;top:7%;--arrow-len:28px;">Filter Dropdowns</div>
-            <div class="callout arrow-down" style="left:58%;top:7%;--arrow-len:24px;">Date Range Filter</div>
-            <div class="callout arrow-left" style="right:1%;top:10%;--arrow-len:14px;">Export / Full Export</div>
-            <div class="callout arrow-down" style="left:50%;top:30%;--arrow-len:20px;">203,432 Records</div>
-            <div class="callout arrow-down" style="left:72%;top:43%;--arrow-len:18px;">CV Fee &amp; Contractor Fee</div>
+            <div class="callout" data-dir="down" data-lx="16" data-ly="7" data-len="22">Search Bar</div>
+            <div class="callout" data-dir="down" data-lx="38" data-ly="7" data-len="28">Filter Dropdowns</div>
+            <div class="callout" data-dir="down" data-lx="58" data-ly="7" data-len="24">Date Range Filter</div>
+            <div class="callout" data-dir="left" data-lx="99.0" data-ly="10" data-len="14">Export / Full Export</div>
+            <div class="callout" data-dir="down" data-lx="50" data-ly="30" data-len="20">203,432 Records</div>
+            <div class="callout" data-dir="down" data-lx="72" data-ly="43" data-len="18">CV Fee &amp; Contractor Fee</div>
           </div>
         </div>
         <div class="slide-num-badge">14 / 23</div>
@@ -1333,13 +1329,13 @@
             <span class="ss-topbar-sub">Kanban board tracking every candidate from application to hired</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/07-onboarding.png" alt="Onboarding screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/07-onboarding.png" alt="Onboarding screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:15%;top:7%;--arrow-len:24px;">Pipeline / Contractors / Calendar Tabs</div>
-            <div class="callout arrow-down" style="left:38%;top:7%;--arrow-len:30px;">Status Summary Chips</div>
-            <div class="callout arrow-down" style="left:22%;top:30%;--arrow-len:20px;">Kanban Stage Columns</div>
-            <div class="callout arrow-down" style="left:48%;top:30%;--arrow-len:22px;">Candidate Card</div>
-            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">+ Add Candidate</div>
+            <div class="callout" data-dir="down" data-lx="15" data-ly="7" data-len="24">Pipeline / Contractors / Calendar Tabs</div>
+            <div class="callout" data-dir="down" data-lx="38" data-ly="7" data-len="30">Status Summary Chips</div>
+            <div class="callout" data-dir="down" data-lx="22" data-ly="30" data-len="20">Kanban Stage Columns</div>
+            <div class="callout" data-dir="down" data-lx="48" data-ly="30" data-len="22">Candidate Card</div>
+            <div class="callout" data-dir="left" data-lx="99.0" data-ly="12" data-len="14">+ Add Candidate</div>
           </div>
         </div>
         <div class="slide-num-badge">15 / 23</div>
@@ -1356,13 +1352,13 @@
             <span class="ss-topbar-sub">Track revenue from 54 clients — $14M+ all-time</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/08-payments.png" alt="Client Payments screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/08-payments.png" alt="Client Payments screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:10%;top:7%;--arrow-len:28px;">KPI Cards (Revenue, Paid, Past Due)</div>
-            <div class="callout arrow-down" style="left:42%;top:7%;--arrow-len:24px;">Monthly / Clients View Toggle</div>
-            <div class="callout arrow-down" style="left:64%;top:7%;--arrow-len:30px;">Per-Client Payment Rows</div>
-            <div class="callout arrow-down" style="left:48%;top:55%;--arrow-len:18px;">Paid Status Badge</div>
-            <div class="callout arrow-left" style="right:1%;top:12%;--arrow-len:14px;">Export XLSX</div>
+            <div class="callout" data-dir="down" data-lx="10" data-ly="7" data-len="28">KPI Cards (Revenue, Paid, Past Due)</div>
+            <div class="callout" data-dir="down" data-lx="42" data-ly="7" data-len="24">Monthly / Clients View Toggle</div>
+            <div class="callout" data-dir="down" data-lx="64" data-ly="7" data-len="30">Per-Client Payment Rows</div>
+            <div class="callout" data-dir="down" data-lx="48" data-ly="55" data-len="18">Paid Status Badge</div>
+            <div class="callout" data-dir="left" data-lx="99.0" data-ly="12" data-len="14">Export XLSX</div>
           </div>
         </div>
         <div class="slide-num-badge">16 / 23</div>
@@ -1379,13 +1375,13 @@
             <span class="ss-topbar-sub">Isolated view of what CareValidate owes Lion MD — by contractor</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/11-carevalidate.png" alt="CareValidate screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/11-carevalidate.png" alt="CareValidate screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:10%;top:7%;--arrow-len:30px;">Total CV Owes Lion MD</div>
-            <div class="callout arrow-down" style="left:30%;top:7%;--arrow-len:28px;">Async Revenue</div>
-            <div class="callout arrow-down" style="left:54%;top:7%;--arrow-len:28px;">Sync Revenue</div>
-            <div class="callout arrow-down" style="left:75%;top:7%;--arrow-len:28px;">OrderlyMeds Revenue</div>
-            <div class="callout arrow-down" style="left:35%;top:42%;--arrow-len:18px;">Breakdown by Contractor</div>
+            <div class="callout" data-dir="down" data-lx="10" data-ly="7" data-len="30">Total CV Owes Lion MD</div>
+            <div class="callout" data-dir="down" data-lx="30" data-ly="7" data-len="28">Async Revenue</div>
+            <div class="callout" data-dir="down" data-lx="54" data-ly="7" data-len="28">Sync Revenue</div>
+            <div class="callout" data-dir="down" data-lx="75" data-ly="7" data-len="28">OrderlyMeds Revenue</div>
+            <div class="callout" data-dir="down" data-lx="35" data-ly="42" data-len="18">Breakdown by Contractor</div>
           </div>
         </div>
         <div class="slide-num-badge">17 / 23</div>
@@ -1433,14 +1429,14 @@
             <span class="ss-topbar-sub">Contractors see their own info, specialty, NPI, and licensed states</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/p1-provider-profile.png" alt="Provider Profile screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/p1-provider-profile.png" alt="Provider Profile screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-right" style="left:0.5%;top:22%;--arrow-len:14px;">Provider-Only Sidebar</div>
-            <div class="callout arrow-down" style="left:28%;top:7%;--arrow-len:28px;">Name, Role &amp; License Count</div>
-            <div class="callout arrow-down" style="left:52%;top:7%;--arrow-len:44px;">Contact Info Card</div>
-            <div class="callout arrow-down" style="left:52%;top:42%;--arrow-len:22px;">Specialty &amp; NPI Fields</div>
-            <div class="callout arrow-down" style="left:30%;top:60%;--arrow-len:18px;">States Licensed</div>
-            <div class="callout arrow-left" style="right:1%;top:14%;--arrow-len:16px;">Edit Profile</div>
+            <div class="callout" data-dir="right" data-lx="0.5" data-ly="22" data-len="14">Provider-Only Sidebar</div>
+            <div class="callout" data-dir="down" data-lx="28" data-ly="7" data-len="28">Name, Role &amp; License Count</div>
+            <div class="callout" data-dir="down" data-lx="52" data-ly="7" data-len="44">Contact Info Card</div>
+            <div class="callout" data-dir="down" data-lx="52" data-ly="42" data-len="22">Specialty &amp; NPI Fields</div>
+            <div class="callout" data-dir="down" data-lx="30" data-ly="60" data-len="18">States Licensed</div>
+            <div class="callout" data-dir="left" data-lx="99.0" data-ly="14" data-len="16">Edit Profile</div>
           </div>
         </div>
         <div class="slide-num-badge">19 / 23</div>
@@ -1457,13 +1453,13 @@
             <span class="ss-topbar-sub">Lifetime earnings summary and full pay period history</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/p2-provider-payroll.png" alt="Provider Payroll screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/p2-provider-payroll.png" alt="Provider Payroll screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:14%;top:10%;--arrow-len:26px;">Lifetime Earnings Card</div>
-            <div class="callout arrow-down" style="left:36%;top:10%;--arrow-len:26px;">Total Cases</div>
-            <div class="callout arrow-down" style="left:57%;top:10%;--arrow-len:26px;">Approved Count</div>
-            <div class="callout arrow-down" style="left:76%;top:10%;--arrow-len:26px;">Denied Count</div>
-            <div class="callout arrow-down" style="left:40%;top:36%;--arrow-len:22px;">Pay Period History List</div>
+            <div class="callout" data-dir="down" data-lx="14" data-ly="10" data-len="26">Lifetime Earnings Card</div>
+            <div class="callout" data-dir="down" data-lx="36" data-ly="10" data-len="26">Total Cases</div>
+            <div class="callout" data-dir="down" data-lx="57" data-ly="10" data-len="26">Approved Count</div>
+            <div class="callout" data-dir="down" data-lx="76" data-ly="10" data-len="26">Denied Count</div>
+            <div class="callout" data-dir="down" data-lx="40" data-ly="36" data-len="22">Pay Period History List</div>
           </div>
         </div>
         <div class="slide-num-badge">20 / 23</div>
@@ -1480,12 +1476,12 @@
             <span class="ss-topbar-sub">Filterable consult history — only this provider's cases, never others'</span>
           </div>
           <div class="ss-body">
-            <img class="ss-img" src="/static/screens/p3-provider-consults.png" alt="Provider Consults screenshot">
+            <div class="ss-img-clip"><img class="ss-img" src="/static/screens/p3-provider-consults.png" alt="Provider Consults screenshot"></div>
             <div class="ss-overlay"></div>
-            <div class="callout arrow-down" style="left:14%;top:8%;--arrow-len:26px;">Period Filter</div>
-            <div class="callout arrow-down" style="left:40%;top:8%;--arrow-len:26px;">Patient Search</div>
-            <div class="callout arrow-right" style="left:0.5%;top:45%;--arrow-len:14px;">Date / Patient / Org / Type / Fee</div>
-            <div class="callout arrow-down" style="left:60%;top:8%;--arrow-len:22px;">Case Count</div>
+            <div class="callout" data-dir="down" data-lx="14" data-ly="8" data-len="26">Period Filter</div>
+            <div class="callout" data-dir="down" data-lx="40" data-ly="8" data-len="26">Patient Search</div>
+            <div class="callout" data-dir="right" data-lx="0.5" data-ly="45" data-len="14">Date / Patient / Org / Type / Fee</div>
+            <div class="callout" data-dir="down" data-lx="60" data-ly="8" data-len="22">Case Count</div>
           </div>
         </div>
         <div class="slide-num-badge">21 / 23</div>
@@ -1507,18 +1503,18 @@
               <div style="flex:1;position:relative;overflow:hidden;border-right:1px solid rgba(255,255,255,0.06);">
                 <img style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top left;" src="/static/screens/p4-provider-licenses.png" alt="Licenses">
                 <div class="ss-overlay"></div>
-                <div class="callout arrow-down" style="left:12%;top:8%;--arrow-len:28px;">State License Card</div>
-                <div class="callout arrow-down" style="left:42%;top:8%;--arrow-len:36px;">Active Status</div>
-                <div class="callout arrow-down" style="left:55%;top:8%;--arrow-len:30px;">License # &amp; Expiry</div>
-                <div class="callout arrow-left" style="right:2%;top:12%;--arrow-len:16px;">+ Add License</div>
+                <div class="callout" data-dir="down" data-lx="12" data-ly="8" data-len="28">State License Card</div>
+                <div class="callout" data-dir="down" data-lx="42" data-ly="8" data-len="36">Active Status</div>
+                <div class="callout" data-dir="down" data-lx="55" data-ly="8" data-len="30">License # &amp; Expiry</div>
+                <div class="callout" data-dir="left" data-lx="98.0" data-ly="12" data-len="16">+ Add License</div>
                 <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.3);">State Licenses</div>
               </div>
               <div style="flex:1;position:relative;overflow:hidden;">
                 <img style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top left;" src="/static/screens/p5-provider-documents.png" alt="Documents">
                 <div class="ss-overlay"></div>
-                <div class="callout arrow-down" style="left:18%;top:8%;--arrow-len:32px;">CV / Résumé Upload Zone</div>
-                <div class="callout arrow-down" style="left:55%;top:8%;--arrow-len:44px;">Drag-and-Drop Area</div>
-                <div class="callout arrow-down" style="left:38%;top:55%;--arrow-len:16px;">Document Tips Panel</div>
+                <div class="callout" data-dir="down" data-lx="18" data-ly="8" data-len="32">CV / Résumé Upload Zone</div>
+                <div class="callout" data-dir="down" data-lx="55" data-ly="8" data-len="44">Drag-and-Drop Area</div>
+                <div class="callout" data-dir="down" data-lx="38" data-ly="55" data-len="16">Document Tips Panel</div>
                 <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.3);">Documents &amp; CV</div>
               </div>
             </div>
@@ -1659,6 +1655,8 @@
       current = idx
       updateUI()
       animating = false
+      // Re-draw callout arrows for the newly active slide
+      setTimeout(renderCalloutArrows, 60)
     }, 420)
   }
 
@@ -1682,6 +1680,107 @@
     if (Math.abs(dx) > 40) dx < 0 ? nextSlide() : prevSlide()
     touchX = null
   }, { passive: true })
+
+  /* ── Callout SVG Arrow Renderer ────────────── */
+  // Draws arrow lines as inline SVG inside each .ss-body.
+  // All coordinates are percentages of the body element,
+  // so lines are always fully contained — never clipped.
+  function renderCalloutArrows() {
+    document.querySelectorAll('.ss-body').forEach(body => {
+      // Remove any previously drawn SVG
+      const old = body.querySelector('.callout-svg')
+      if (old) old.remove()
+
+      const callouts = body.querySelectorAll('.callout[data-dir]')
+      if (!callouts.length) return
+
+      const bw = body.offsetWidth
+      const bh = body.offsetHeight
+      if (!bw || !bh) return
+
+      const svgNS = 'http://www.w3.org/2000/svg'
+      const svg = document.createElementNS(svgNS, 'svg')
+      svg.setAttribute('class', 'callout-svg')
+      svg.setAttribute('viewBox', `0 0 ${bw} ${bh}`)
+      svg.setAttribute('preserveAspectRatio', 'none')
+
+      // gold colour
+      const gold = '#C9A84C'
+
+      callouts.forEach(el => {
+        const dir  = el.dataset.dir  || 'down'
+        const lxPc = parseFloat(el.dataset.lx  || 50)
+        const lyPc = parseFloat(el.dataset.ly  || 50)
+        const len  = parseFloat(el.dataset.len || 24)
+
+        // pixel position of the callout label anchor
+        const labelX = bw * lxPc / 100
+        const labelY = bh * lyPc / 100
+
+        // label bounding box (approximate — read from DOM)
+        const rect = el.getBoundingClientRect()
+        const bodyRect = body.getBoundingClientRect()
+        const lLeft   = rect.left   - bodyRect.left
+        const lTop    = rect.top    - bodyRect.top
+        const lRight  = rect.right  - bodyRect.left
+        const lBottom = rect.bottom - bodyRect.top
+        const lCX = (lLeft + lRight)  / 2
+        const lCY = (lTop  + lBottom) / 2
+
+        // line start (edge of label) and end (tip of arrow)
+        let x1, y1, x2, y2
+        if (dir === 'down') {
+          x1 = lCX;  y1 = lBottom
+          x2 = lCX;  y2 = Math.min(lBottom + len, bh - 4)
+        } else if (dir === 'up') {
+          x1 = lCX;  y1 = lTop
+          x2 = lCX;  y2 = Math.max(lTop - len, 4)
+        } else if (dir === 'right') {
+          x1 = lRight;  y1 = lCY
+          x2 = Math.min(lRight + len, bw - 4);  y2 = lCY
+        } else { // left
+          x1 = lLeft;   y1 = lCY
+          x2 = Math.max(lLeft - len, 4);  y2 = lCY
+        }
+
+        // line
+        const line = document.createElementNS(svgNS, 'line')
+        line.setAttribute('x1', x1); line.setAttribute('y1', y1)
+        line.setAttribute('x2', x2); line.setAttribute('y2', y2)
+        line.setAttribute('stroke', gold)
+        line.setAttribute('stroke-width', '1.8')
+        svg.appendChild(line)
+
+        // dot at tip
+        const dot = document.createElementNS(svgNS, 'circle')
+        dot.setAttribute('cx', x2); dot.setAttribute('cy', y2)
+        dot.setAttribute('r', '3.5')
+        dot.setAttribute('fill', gold)
+        svg.appendChild(dot)
+      })
+
+      // Insert SVG — before first callout if present, else append
+      const firstCallout = body.querySelector('.callout')
+      if (firstCallout && firstCallout.parentNode === body) {
+        body.insertBefore(svg, firstCallout)
+      } else {
+        body.appendChild(svg)
+      }
+    })
+  }
+
+  // Position callout labels from data attributes (replaces inline styles)
+  function positionCallouts() {
+    document.querySelectorAll('.callout[data-lx]').forEach(el => {
+      el.style.left = el.dataset.lx + '%'
+      el.style.top  = el.dataset.ly + '%'
+      el.style.transform = 'translateX(-50%)'
+    })
+  }
+  positionCallouts()
+
+  // Re-render arrows on resize
+  window.addEventListener('resize', () => setTimeout(renderCalloutArrows, 80))
 
   /* ── Responsive scale ──────────────────────── */
   function scaleSlides() {
@@ -1709,6 +1808,9 @@
   scaleSlides()
 
   updateUI()
+
+  // Draw callout arrows after everything is laid out
+  setTimeout(renderCalloutArrows, 150)
 </script>
 </body>
 </html>
