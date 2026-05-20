@@ -1819,6 +1819,10 @@ function logout() {
   localStorage.removeItem('lmd_admin_view')
   localStorage.removeItem('lmd_last_page')
   state = { role: null, user: null, token: null, periods: [], currentPeriod: null, currentSummary: null, contractors: [], rates: [], currentPage: 'dashboard' }
+  // Always release any body scroll-lock left by the mobile sidebar
+  document.body.style.overflow = ''
+  $('sidebar').classList.remove('sidebar-open')
+  $('mobileOverlay').classList.remove('active')
   // Return to landing page, not directly to login card
   $('app').classList.add('hidden')
   $('loginScreen').classList.remove('hidden')
