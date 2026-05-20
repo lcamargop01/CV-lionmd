@@ -4312,6 +4312,15 @@ app.get('/demo', async (c) => {
   return c.redirect('/demo.html', 302)
 })
 
+// ── Presentation route ───────────────────────────────────────────
+// Serve presentation.html at /presentation
+app.get('/presentation', async (c) => {
+  if ((c.env as any).ASSETS) {
+    return (c.env as any).ASSETS.fetch(new Request(new URL('/presentation.html', c.req.url)))
+  }
+  return c.redirect('/presentation.html', 302)
+})
+
 // ── Clean path routing ───────────────────────────────────────────
 // Serve index.html for all frontend routes so lion.md/apply,
 // lion.md/contractors, lion.md/portal/profile etc. all work directly.
