@@ -1412,17 +1412,14 @@ function applySession(token, user) {
   } else if (user.role === 'provider') {
     $('loginScreen').classList.add('hidden')
     $('app').style.display='flex'
-    if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
     renderProviderPortal()
   } else if (user.role === 'candidate') {
     $('loginScreen').classList.add('hidden')
     $('app').style.display='flex'
-    if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
     renderCandidatePortal()
   } else {
     $('loginScreen').classList.add('hidden')
     $('app').style.display='flex'
-    if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
     loadInitialData()
   }
 }
@@ -1432,7 +1429,6 @@ function vpGo(view) {
   $('loginScreen').classList.add('hidden')
   $('viewPickerCard').classList.add('hidden')
   $('app').style.display='flex'
-  if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
   state.adminView = view
   localStorage.setItem('lmd_admin_view', view)  // persist across refreshes
   // Rebuild nav and subtitle immediately so sidebar reflects the chosen view
@@ -1868,8 +1864,7 @@ async function tryRestoreSession() {
         buildNav()
         $('loginScreen').classList.add('hidden')
         $('app').style.display='flex'
-        if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
-        loadInitialData()
+            loadInitialData()
       } else {
         // First login — show the view picker
         $('loginCard').classList.add('hidden')
@@ -1883,18 +1878,15 @@ async function tryRestoreSession() {
     } else if (me.role === 'provider') {
       $('loginScreen').classList.add('hidden')
       $('app').style.display='flex'
-      if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
-      renderProviderPortal()
+        renderProviderPortal()
     } else if (me.role === 'candidate') {
       $('loginScreen').classList.add('hidden')
       $('app').style.display='flex'
-      if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
-      renderCandidatePortal()
+        renderCandidatePortal()
     } else {
       $('loginScreen').classList.add('hidden')
       $('app').style.display='flex'
-      if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
-      loadInitialData()
+        loadInitialData()
     }
     return true
   } catch(e) {
@@ -1933,6 +1925,7 @@ async function doChangePw() {
 function isMobile() { return window.innerWidth < 768 }
 
 function openMobileSidebar() {
+  $('sidebar').style.transform = ''  // clear any lingering inline style
   $('sidebar').classList.add('sidebar-open')
   $('mobileOverlay').classList.add('active')
   document.body.style.overflow = 'hidden'
