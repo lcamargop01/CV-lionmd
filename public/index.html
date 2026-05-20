@@ -667,7 +667,7 @@
         </button>
 
         <!-- Contact Us -->
-        <a href="mailto:contact@lion.md" class="cta-card">
+        <button onclick="openContactEmail()" class="cta-card">
           <div class="cta-icon" style="background:#f0fdf4;">
             <i class="fas fa-envelope-open-text" style="color:#16a34a;font-size:17px;"></i>
           </div>
@@ -676,7 +676,7 @@
             <div class="text-gray-400 text-xs mt-0.5" style="white-space:normal;">Reach our team at contact@lion.md</div>
           </div>
           <div class="cta-arrow"><i class="fas fa-arrow-right text-gray-400 text-[11px]"></i></div>
-        </a>
+        </button>
       </div>
 
       <!-- Trust bar -->
@@ -1244,12 +1244,15 @@ const $ = id => document.getElementById(id)
 const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0)
 const fmtNum = (n) => new Intl.NumberFormat('en-US').format(n || 0)
 
-function showToast(msg, type = 'success') {
+function showToast(msg, type = 'success', duration = 3500) {
   const icons = { success: 'fa-check-circle text-green-500', error: 'fa-times-circle text-red-500', info: 'fa-info-circle text-blue-500', warning: 'fa-exclamation-triangle text-yellow-500' }
   $('toastIcon').className = `fas ${icons[type] || icons.success} text-xl`
   $('toastMsg').textContent = msg
+  $('toastMsg').style.cursor = ''
+  $('toastMsg').onclick = null
   $('toast').classList.remove('hidden')
-  setTimeout(() => $('toast').classList.add('hidden'), 3500)
+  clearTimeout(window._toastTimer)
+  window._toastTimer = setTimeout(() => $('toast').classList.add('hidden'), duration)
 }
 
 function showLoading(msg = 'Processing...', showProgress = false) {
@@ -1430,6 +1433,38 @@ function showLoginCard() {
 }
 
 // Show the login panel from the landing page
+function openContactEmail() {
+  const email = 'contact@lion.md'
+  // Try mailto — works in most desktop browsers and native mobile mail apps
+  const mailto = `mailto:${email}?subject=${encodeURIComponent('Lion MD Portal — Support Request')}`
+  let opened = false
+  try {
+    // Use a hidden <a> click — more reliable than window.location.href in WebViews
+    const a = document.createElement('a')
+    a.href = mailto
+    a.target = '_blank'   // needed in some WebView/PWA contexts
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    opened = true
+  } catch(e) { opened = false }
+  // Always show the email address in a toast so users can copy it manually
+  // in browsers/environments where no mail client is configured
+  setTimeout(() => {
+    showToast('📧 contact@lion.md — tap to copy', 'info', 7000)
+    const toastEl = $('toastMsg')
+    if (toastEl) {
+      toastEl.style.cursor = 'pointer'
+      toastEl.onclick = () => {
+        navigator.clipboard?.writeText(email)
+          .then(() => showToast('Email address copied!', 'success'))
+          .catch(() => {})
+      }
+    }
+  }, opened ? 400 : 0)
+}
+
 function showLoginForm() {
   $('landingPage').classList.add('hidden')
   $('loginPanel').classList.remove('hidden')
