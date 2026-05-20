@@ -2637,6 +2637,88 @@ app.post('/api/auth/login', async (c) => {
   return c.json({ ok: true, token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
 })
 
+// ── POST /api/auth/forgot-password ──────────────────────────────
+// Provider-facing: send a password-reset link to the given email.
+// Always returns 200 (no user-enumeration). Reuses the invite_token
+// column and setup-password flow — the reset link is identical to a
+// first-time invite link.
+app.post('/api/auth/forgot-password', async (c) => {
+  await ensureAuthSchema(c.env.DB)
+  if (!c.env.RESEND_API_KEY) return c.json({ ok: true }) // silently ok if email not configured
+
+  const { email } = await c.req.json() as any
+  if (!email) return c.json({ error: 'email required' }, 400)
+
+  const user = await c.env.DB.prepare(
+    `SELECT id, name, email, role, password_hash FROM portal_users WHERE LOWER(email)=? AND is_active=1`
+  ).bind(email.toLowerCase().trim()).first() as any
+
+  // Always return ok — don't reveal whether the email exists
+  if (!user) return c.json({ ok: true })
+
+  // Generate a reset token and mark must_set_password so the setup flow accepts it
+  const resetToken = generateInviteToken()
+  await c.env.DB.prepare(
+    `UPDATE portal_users SET invite_token=?, must_set_password=1, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(resetToken, user.id).run()
+
+  const origin = new URL(c.req.url).origin
+  const resetLink = `${origin}/?token=${resetToken}`
+
+  // Send reset email (reuse sendInviteEmail with reset-specific copy)
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Reset Your Password</title></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#1a1a2e;padding:28px 40px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:#d4a017;letter-spacing:0.5px;">Lion MD Portal</div>
+            <div style="font-size:11px;color:#8888aa;margin-top:4px;letter-spacing:1px;">PROVIDER ACCESS</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px 40px 32px;">
+            <p style="margin:0 0 16px;font-size:16px;color:#374151;">Hi <strong>${user.name}</strong>,</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">
+              We received a request to reset your <strong>Lion MD Portal</strong> password. Click the button below to choose a new one.
+            </p>
+            <table cellpadding="0" cellspacing="0" width="100%">
+              <tr><td align="center" style="padding:8px 0 28px;">
+                <a href="${resetLink}" style="display:inline-block;background:#d4a017;color:#1a1a2e;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:8px;letter-spacing:0.3px;">
+                  Reset My Password →
+                </a>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Or copy and paste this link into your browser:</p>
+            <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:10px 14px;border-radius:6px;border:1px solid #e5e7eb;">${resetLink}</p>
+            <p style="margin:0;font-size:13px;color:#9ca3af;">If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">© 2026 Lion MD Portal™</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${c.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'Lion MD Portal <noreply@lion.md>', to: user.email, subject: 'Reset your Lion MD Portal password', html })
+    })
+  } catch(_) { /* fire-and-forget — always return ok */ }
+
+  return c.json({ ok: true })
+})
+
 // ── POST /api/auth/setup-password ───────────────────────────────
 // Used when a new user clicks their invite link to set their password
 app.post('/api/auth/setup-password', async (c) => {

@@ -737,6 +737,42 @@
           <span id="loginBtnText">Sign In</span>
           <i id="loginBtnSpin" class="fas fa-circle-notch fa-spin hidden ml-2"></i>
         </button>
+        <div class="text-center mt-3">
+          <button onclick="showForgotCard()" class="text-blue-300 hover:text-white text-xs transition-colors underline underline-offset-2">
+            Forgot password?
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forgot Password Card -->
+    <div id="forgotCard" class="hidden bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-2xl">
+      <div class="text-center mb-5">
+        <div class="w-12 h-12 rounded-full bg-yellow-400/20 flex items-center justify-center mx-auto mb-3">
+          <i class="fas fa-envelope text-yellow-400 text-xl"></i>
+        </div>
+        <h2 class="text-white font-bold text-lg">Reset Password</h2>
+        <p class="text-blue-300 text-sm mt-1">Enter your email and we'll send a reset link.</p>
+      </div>
+      <div id="forgotSuccess" class="hidden mb-4 p-3 bg-green-500/20 border border-green-500/40 rounded-lg text-green-200 text-sm text-center"></div>
+      <div id="forgotError" class="hidden mb-4 p-3 bg-red-500/20 border border-red-500/40 rounded-lg text-red-200 text-sm"></div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-blue-200 text-xs font-semibold uppercase tracking-wider mb-1.5">Email Address</label>
+          <input id="forgotEmail" type="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doForgotPassword()"
+            class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-blue-300/60 focus:outline-none focus:border-yellow-400 focus:bg-white/15 transition-all text-sm"/>
+        </div>
+        <button onclick="doForgotPassword()" id="forgotBtn"
+          class="w-full py-3 rounded-xl font-semibold text-sm transition-all"
+          style="background:linear-gradient(135deg,#C9A84C,#f59e0b);color:white;">
+          <span id="forgotBtnText">Send Reset Link</span>
+          <i id="forgotBtnSpin" class="fas fa-circle-notch fa-spin hidden ml-2"></i>
+        </button>
+        <div class="text-center">
+          <button onclick="showLoginCard()" class="text-blue-300 hover:text-white text-xs transition-colors">
+            <i class="fas fa-arrow-left mr-1"></i>Back to Sign In
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1357,6 +1393,7 @@ async function checkInviteToken() {
       // Established provider: they already have a password — just take them to login
       $('loginCard').classList.remove('hidden')
       $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
       $('loginEmail').value = data.email || ''
       showToast('Welcome back, ' + data.name.split(' ')[0] + '! Please sign in.', 'info', 5000)
     } else {
@@ -1401,6 +1438,7 @@ function applySession(token, user) {
     // Show view picker card (still within loginScreen)
     $('loginCard').classList.add('hidden')
     $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
     $('viewPickerCard').classList.remove('hidden')
     $('landingPage').classList.add('hidden')
     $('loginPanel').classList.remove('hidden')
@@ -1438,7 +1476,61 @@ function vpGo(view) {
 function showLoginCard() {
   $('viewPickerCard').classList.add('hidden')
   $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
   $('loginCard').classList.remove('hidden')
+}
+
+function showForgotCard() {
+  $('loginCard').classList.add('hidden')
+  $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
+  $('forgotCard').classList.remove('hidden')
+  $('forgotEmail').value = $('loginEmail').value || ''  // pre-fill from login field
+  $('forgotError').classList.add('hidden')
+  $('forgotSuccess').classList.add('hidden')
+  $('forgotEmail').focus()
+}
+
+async function doForgotPassword() {
+  const email  = ($('forgotEmail').value || '').trim()
+  const errEl  = $('forgotError')
+  const okEl   = $('forgotSuccess')
+  const btn    = $('forgotBtn')
+  const btnTxt = $('forgotBtnText')
+  const spin   = $('forgotBtnSpin')
+
+  errEl.classList.add('hidden')
+  okEl.classList.add('hidden')
+
+  if (!email) {
+    errEl.textContent = 'Please enter your email address.'
+    errEl.classList.remove('hidden')
+    return
+  }
+
+  btn.disabled = true
+  btnTxt.textContent = 'Sending…'
+  spin.classList.remove('hidden')
+
+  try {
+    await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    })
+    // Always show success — never reveal whether the email exists
+    okEl.textContent = '✅ If that email is registered, a reset link has been sent. Check your inbox.'
+    okEl.classList.remove('hidden')
+    btnTxt.textContent = 'Sent!'
+    btn.disabled = true  // prevent double-send
+    spin.classList.add('hidden')
+  } catch(e) {
+    errEl.textContent = 'Something went wrong. Please try again.'
+    errEl.classList.remove('hidden')
+    btn.disabled = false
+    btnTxt.textContent = 'Send Reset Link'
+    spin.classList.add('hidden')
+  }
 }
 
 // Show the login panel from the landing page
@@ -1479,6 +1571,7 @@ function showLoginForm() {
   $('loginPanel').classList.remove('hidden')
   $('loginCard').classList.remove('hidden')
   $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
   $('viewPickerCard').classList.add('hidden')
   $('loginEmail').focus()
   history.pushState({}, '', '/login')
@@ -1806,6 +1899,7 @@ function showViewPicker() {
   hideApp()
   $('loginCard').classList.add('hidden')
   $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
   $('viewPickerCard').classList.remove('hidden')
   $('loginScreen').classList.remove('hidden')
   // Always show loginPanel (dark bg), not landing page
@@ -1829,6 +1923,7 @@ function logout() {
   $('loginPanel').classList.add('hidden')
   $('loginCard').classList.remove('hidden')
   $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
   $('viewPickerCard').classList.add('hidden')
   $('loginEmail').value = ''
   $('loginPassword').value = ''
@@ -1865,6 +1960,7 @@ async function tryRestoreSession() {
         // First login — show the view picker
         $('loginCard').classList.add('hidden')
         $('setupCard').classList.add('hidden')
+  $('forgotCard').classList.add('hidden')
         $('viewPickerCard').classList.remove('hidden')
         $('landingPage').classList.add('hidden')
         $('loginPanel').classList.remove('hidden')
