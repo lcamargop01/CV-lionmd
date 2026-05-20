@@ -1149,8 +1149,11 @@
 <!-- Mobile sidebar overlay -->
 <div id="mobileOverlay" onclick="closeMobileSidebar()"></div>
 
-<!-- App Layout -->
-<div id="app" class="flex hidden">
+<!-- App Layout: position:fixed inset:0 when visible so it's a true full-screen
+     frame. Body stays free to scroll the landing page beneath it.
+     JS toggles the 'app-visible' class to show/hide (avoids Tailwind hidden
+     overriding the inline display:flex). -->
+<div id="app" style="display:none;position:fixed;inset:0;flex-direction:row;overflow:hidden;z-index:10;">
 
   <!-- Sidebar: on desktop it's a normal flex item (relative); on mobile CSS overrides to fixed -->
   <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col left-0 top-0 w-[260px] flex-shrink-0 relative">
@@ -1408,17 +1411,17 @@ function applySession(token, user) {
     if (wl) wl.textContent = 'Welcome back, ' + user.name.split(' ')[0] + '!'
   } else if (user.role === 'provider') {
     $('loginScreen').classList.add('hidden')
-    $('app').classList.remove('hidden')
+    $('app').style.display='flex'
     if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
     renderProviderPortal()
   } else if (user.role === 'candidate') {
     $('loginScreen').classList.add('hidden')
-    $('app').classList.remove('hidden')
+    $('app').style.display='flex'
     if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
     renderCandidatePortal()
   } else {
     $('loginScreen').classList.add('hidden')
-    $('app').classList.remove('hidden')
+    $('app').style.display='flex'
     if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
     loadInitialData()
   }
@@ -1428,7 +1431,7 @@ function applySession(token, user) {
 function vpGo(view) {
   $('loginScreen').classList.add('hidden')
   $('viewPickerCard').classList.add('hidden')
-  $('app').classList.remove('hidden')
+  $('app').style.display='flex'
   if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
   state.adminView = view
   localStorage.setItem('lmd_admin_view', view)  // persist across refreshes
@@ -1807,7 +1810,7 @@ function applyRoleUI(role, name) {
 function showViewPicker() {
   const wl = $('vpWelcome')
   if (wl && state.user) wl.textContent = 'Hi ' + state.user.name.split(' ')[0] + '! Where would you like to go?'
-  $('app').classList.add('hidden')
+  $('app').style.display='none'
   $('loginCard').classList.add('hidden')
   $('setupCard').classList.add('hidden')
   $('viewPickerCard').classList.remove('hidden')
@@ -1828,7 +1831,7 @@ function logout() {
   $('sidebar').classList.remove('sidebar-open')
   $('mobileOverlay').classList.remove('active')
   // Return to landing page, not directly to login card
-  $('app').classList.add('hidden')
+  $('app').style.display='none'
   $('loginScreen').classList.remove('hidden')
   $('landingPage').classList.remove('hidden')
   $('loginPanel').classList.add('hidden')
@@ -1864,7 +1867,7 @@ async function tryRestoreSession() {
         applyRoleUI(me.role, me.name)
         buildNav()
         $('loginScreen').classList.add('hidden')
-        $('app').classList.remove('hidden')
+        $('app').style.display='flex'
         if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
         loadInitialData()
       } else {
@@ -1879,17 +1882,17 @@ async function tryRestoreSession() {
       }
     } else if (me.role === 'provider') {
       $('loginScreen').classList.add('hidden')
-      $('app').classList.remove('hidden')
+      $('app').style.display='flex'
       if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
       renderProviderPortal()
     } else if (me.role === 'candidate') {
       $('loginScreen').classList.add('hidden')
-      $('app').classList.remove('hidden')
+      $('app').style.display='flex'
       if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
       renderCandidatePortal()
     } else {
       $('loginScreen').classList.add('hidden')
-      $('app').classList.remove('hidden')
+      $('app').style.display='flex'
       if (window.innerWidth < 768) $('sidebar').style.transform = 'translateX(-100%)'
       loadInitialData()
     }
