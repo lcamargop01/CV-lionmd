@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lion MD Portal — Feature Overview</title>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold:    #C9A84C;
+    --gold2:   #f0c040;
+    --navy:    #0d0d1e;
+    --navy2:   #1a1a2e;
+    --navy3:   #16213e;
+    --teal:    #0ea5e9;
+    --green:   #10b981;
+    --purple:  #8b5cf6;
+    --rose:    #f43f5e;
+    --amber:   #f59e0b;
+    --slide-w: 1000px;
+    --slide-h: 600px;
+  }
+
+  html, body {
+    background: #0a0a14;
+    height: 100%;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+    color: #fff;
+  }
+
+  /* ── DECK SHELL ─────────────────────────────── */
+  #deck {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* ── SLIDE VIEWPORT ─────────────────────────── */
+  #viewport {
+    position: relative;
+    width: var(--slide-w);
+    height: var(--slide-h);
+    overflow: hidden;
+    border-radius: 18px;
+    box-shadow: 0 40px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  /* ── SLIDES ─────────────────────────────────── */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    transform: translateX(60px);
+    background: var(--navy2);
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+  .slide.exit-left {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  /* ── CONTROLS ───────────────────────────────── */
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-top: 20px;
+  }
+
+  .ctrl-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 50%;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    font-size: 15px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .ctrl-btn:hover { background: rgba(201,168,76,0.18); border-color: var(--gold); }
+  .ctrl-btn:disabled { opacity: 0.25; cursor: default; }
+
+  #dots {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: background 0.25s, transform 0.25s;
+  }
+  .dot.active {
+    background: var(--gold);
+    transform: scale(1.4);
+  }
+
+  #slide-counter {
+    color: rgba(255,255,255,0.35);
+    font-size: 13px;
+    width: 60px;
+    text-align: center;
+  }
+
+  /* keyboard hint */
+  #kbd-hint {
+    position: fixed;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── SHARED LAYOUT HELPERS ──────────────────── */
+  .slide-inner {
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* gold top bar accent */
+  .top-bar {
+    height: 4px;
+    background: linear-gradient(90deg, var(--gold), var(--gold2), var(--gold));
+    flex-shrink: 0;
+  }
+
+  .slide-header {
+    padding: 28px 40px 0;
+    flex-shrink: 0;
+  }
+  .slide-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .slide-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.2;
+  }
+  .slide-subtitle {
+    font-size: 14px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 4px;
+  }
+  .divider {
+    height: 1px;
+    background: rgba(255,255,255,0.07);
+    margin: 18px 40px 0;
+  }
+  .slide-body {
+    padding: 22px 40px 28px;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── CARD GRID ──────────────────────────────── */
+  .card-grid {
+    display: grid;
+    gap: 14px;
+  }
+  .card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .card-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+  .feat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    gap: 13px;
+    align-items: flex-start;
+    transition: border-color 0.2s;
+  }
+  .feat-card:hover { border-color: rgba(201,168,76,0.3); }
+
+  .feat-icon {
+    width: 36px; height: 36px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .feat-card h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 3px;
+  }
+  .feat-card p {
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.5;
+  }
+
+  /* ── STAT ROW ───────────────────────────────── */
+  .stat-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-box {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    text-align: center;
+  }
+  .stat-box .num {
+    font-size: 30px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--gold), var(--gold2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .stat-box .lbl {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    margin-top: 2px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* ── ROLE COLUMNS ───────────────────────────── */
+  .role-cols {
+    display: flex;
+    gap: 14px;
+    height: 100%;
+  }
+  .role-col {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 18px 16px;
+  }
+  .role-col-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .role-badge {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .role-col-head h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .role-col-head span {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.4);
+    display: block;
+    margin-top: 1px;
+  }
+  .role-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 9px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.4;
+  }
+  .role-item i {
+    margin-top: 2px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  /* ── FLOW DIAGRAM ───────────────────────────── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    justify-content: center;
+    margin: 10px 0;
+  }
+  .flow-step {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    min-width: 100px;
+  }
+  .flow-step i { font-size: 16px; margin-bottom: 4px; display: block; }
+  .flow-step span { font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 600; }
+  .flow-arrow {
+    color: rgba(255,255,255,0.2);
+    font-size: 16px;
+    padding: 0 6px;
+    flex-shrink: 0;
+  }
+
+  /* ── COVER SLIDE ────────────────────────────── */
+  #slide-cover {
+    background: var(--navy);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+  .cover-logo {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .cover-title {
+    font-size: 46px;
+    font-weight: 900;
+    line-height: 1.1;
+    text-align: center;
+    max-width: 700px;
+  }
+  .cover-title span {
+    background: linear-gradient(135deg, var(--gold), var(--gold2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .cover-sub {
+    margin-top: 14px;
+    font-size: 16px;
+    color: rgba(255,255,255,0.4);
+    text-align: center;
+  }
+  .cover-pills {
+    display: flex;
+    gap: 10px;
+    margin-top: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .cover-pill {
+    background: rgba(201,168,76,0.12);
+    border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold2);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 5px 14px;
+    border-radius: 100px;
+  }
+  .cover-bg {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(14,165,233,0.05) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .cover-grid-lines {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+  }
+
+  /* ── TAG CHIP ───────────────────────────────── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .chip-gold  { background: rgba(201,168,76,0.15);  color: var(--gold2);  border: 1px solid rgba(201,168,76,0.3); }
+  .chip-blue  { background: rgba(14,165,233,0.15);  color: #38bdf8;       border: 1px solid rgba(14,165,233,0.3); }
+  .chip-green { background: rgba(16,185,129,0.15);  color: #34d399;       border: 1px solid rgba(16,185,129,0.3); }
+  .chip-purple{ background: rgba(139,92,246,0.15);  color: #a78bfa;       border: 1px solid rgba(139,92,246,0.3); }
+  .chip-rose  { background: rgba(244,63,94,0.15);   color: #fb7185;       border: 1px solid rgba(244,63,94,0.3); }
+
+  /* ── HIGHLIGHT BOX ──────────────────────────── */
+  .hl-box {
+    border-left: 3px solid var(--gold);
+    background: rgba(201,168,76,0.07);
+    border-radius: 0 10px 10px 0;
+    padding: 12px 16px;
+    margin-top: 14px;
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.6;
+  }
+
+  /* ── TWO-COL LAYOUT ─────────────────────────── */
+  .two-col {
+    display: flex;
+    gap: 24px;
+    height: 100%;
+  }
+  .two-col-left  { flex: 1; }
+  .two-col-right { flex: 1; }
+
+  /* ── ICON BG COLORS ─────────────────────────── */
+  .bg-gold    { background: rgba(201,168,76,0.18); color: var(--gold2); }
+  .bg-blue    { background: rgba(14,165,233,0.18); color: #38bdf8; }
+  .bg-green   { background: rgba(16,185,129,0.18); color: #34d399; }
+  .bg-purple  { background: rgba(139,92,246,0.18); color: #a78bfa; }
+  .bg-rose    { background: rgba(244,63,94,0.18);  color: #fb7185; }
+  .bg-amber   { background: rgba(245,158,11,0.18); color: #fbbf24; }
+  .bg-teal    { background: rgba(20,184,166,0.18); color: #2dd4bf; }
+  .bg-indigo  { background: rgba(99,102,241,0.18); color: #818cf8; }
+
+  /* ── PROGRESS TRACK ─────────────────────────── */
+  #progress-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    transition: width 0.4s ease;
+    z-index: 10;
+  }
+
+  /* ── SLIDE NUMBER BADGE ─────────────────────── */
+  .slide-num-badge {
+    position: absolute;
+    top: 16px; right: 20px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── RESPONSIVE SCALE ───────────────────────── */
+  #scaler {
+    transform-origin: center center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="deck">
+  <div id="scaler">
+    <div id="viewport">
+      <div id="progress-bar"></div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 1 — COVER                           -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide active" id="slide-cover">
+        <div class="cover-grid-lines"></div>
+        <div class="cover-bg"></div>
+        <div class="cover-logo"><i class="fas fa-paw mr-2"></i>Lion MD Portal</div>
+        <h1 class="cover-title">Your Practice,<br><span>Fully Automated</span></h1>
+        <p class="cover-sub">A complete platform for payroll, onboarding, and provider management</p>
+        <div class="cover-pills">
+          <span class="cover-pill"><i class="fas fa-bolt mr-1"></i>Payroll Automation</span>
+          <span class="cover-pill"><i class="fas fa-user-plus mr-1"></i>Provider Onboarding</span>
+          <span class="cover-pill"><i class="fas fa-shield-alt mr-1"></i>Role-Based Access</span>
+          <span class="cover-pill"><i class="fas fa-mobile-alt mr-1"></i>Mobile Ready</span>
+          <span class="cover-pill"><i class="fas fa-globe mr-1"></i>Cloud Hosted</span>
+        </div>
+        <div class="slide-num-badge">01 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 2 — WHAT IS IT                      -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Overview</div>
+            <div class="slide-title">One portal. Five user roles.</div>
+            <div class="slide-subtitle">Every stakeholder gets their own tailored experience.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body" style="padding-top:18px;">
+            <div class="role-cols">
+
+              <div class="role-col">
+                <div class="role-col-head">
+                  <div class="role-badge bg-gold"><i class="fas fa-crown"></i></div>
+                  <div>
+                    <h3>Admin / Owner</h3>
+                    <span>Full access to everything</span>
+                  </div>
+                </div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Payroll & billing reports</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Contractor management</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Hiring pipeline</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Client payments tracking</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Rate configuration</div>
+              </div>
+
+              <div class="role-col">
+                <div class="role-col-head">
+                  <div class="role-badge bg-blue"><i class="fas fa-eye"></i></div>
+                  <div>
+                    <h3>CareValidate</h3>
+                    <span>Billing team view</span>
+                  </div>
+                </div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#38bdf8"></i>Summary dashboard</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#38bdf8"></i>Detailed consult records</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#38bdf8"></i>Read-only access</div>
+              </div>
+
+              <div class="role-col">
+                <div class="role-col-head">
+                  <div class="role-badge bg-green"><i class="fas fa-user-check"></i></div>
+                  <div>
+                    <h3>Provider</h3>
+                    <span>Contracted clinicians</span>
+                  </div>
+                </div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#34d399"></i>Personal payroll history</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#34d399"></i>Edit their own profile</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#34d399"></i>State license records</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#34d399"></i>CV & documents</div>
+              </div>
+
+              <div class="role-col">
+                <div class="role-col-head">
+                  <div class="role-badge bg-purple"><i class="fas fa-clipboard-list"></i></div>
+                  <div>
+                    <h3>Candidate</h3>
+                    <span>Applicants being hired</span>
+                  </div>
+                </div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#a78bfa"></i>Track application status</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#a78bfa"></i>Upload documents</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#a78bfa"></i>Receive offer letters</div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">02 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 3 — PAYROLL DASHBOARD               -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Module 1 — Payroll & Admin</div>
+            <div class="slide-title">Dashboard & Period Overview</div>
+            <div class="slide-subtitle">See the whole pay period at a glance before diving into details.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body">
+            <div class="stat-row">
+              <div class="stat-box">
+                <div class="num">200k+</div>
+                <div class="lbl">Consults Tracked</div>
+              </div>
+              <div class="stat-box">
+                <div class="num">38</div>
+                <div class="lbl">Active Contractors</div>
+              </div>
+              <div class="stat-box">
+                <div class="num">Auto</div>
+                <div class="lbl">Fee Calculation</div>
+              </div>
+              <div class="stat-box">
+                <div class="num">Excel</div>
+                <div class="lbl">1-Click Export</div>
+              </div>
+            </div>
+            <div class="card-grid cols-2">
+              <div class="feat-card">
+                <div class="feat-icon bg-gold"><i class="fas fa-chart-pie"></i></div>
+                <div>
+                  <h4>Period Summary Cards</h4>
+                  <p>Total cases, CareValidate fees, contractor fees, and margin — all in one view for each pay period.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-blue"><i class="fas fa-upload"></i></div>
+                <div>
+                  <h4>CSV Upload</h4>
+                  <p>Drop a raw CareValidate export. Fees calculate instantly. Chunked upload handles large files (200k+ rows).</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-green"><i class="fas fa-table"></i></div>
+                <div>
+                  <h4>Consult Records Table</h4>
+                  <p>Filter, sort, and search every consult. Paginated display. Edit or remove individual records inline.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-rose"><i class="fas fa-file-excel"></i></div>
+                <div>
+                  <h4>Full Excel Export</h4>
+                  <p>Downloads all records to a formatted .xlsx file — even 200,000+ rows — via automatic paginated chunking.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">03 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 4 — CONTRACTOR PAYROLL              -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Module 1 — Payroll & Admin</div>
+            <div class="slide-title">Contractor Payroll & Pay Stubs</div>
+            <div class="slide-subtitle">Individual breakdowns for every contractor in every pay period.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body">
+            <div class="two-col">
+              <div class="two-col-left">
+                <div class="card-grid cols-1" style="gap:12px;">
+                  <div class="feat-card">
+                    <div class="feat-icon bg-gold"><i class="fas fa-money-bill-wave"></i></div>
+                    <div>
+                      <h4>Per-Contractor Pay Stubs</h4>
+                      <p>Every contractor gets a detailed breakdown: each consult, visit type, fee earned, and period total. Printable to PDF.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-blue"><i class="fas fa-file-export"></i></div>
+                    <div>
+                      <h4>Gusto Export</h4>
+                      <p>One-click download of a ready-to-import CSV for Gusto payroll. No manual data entry.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-purple"><i class="fas fa-percentage"></i></div>
+                    <div>
+                      <h4>Commission Tracking</h4>
+                      <p>Owner-type contractors earn revenue-share commissions. Automatically calculated and separated from standard contractor pay.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="two-col-right">
+                <div class="card-grid cols-1" style="gap:12px;">
+                  <div class="feat-card">
+                    <div class="feat-icon bg-green"><i class="fas fa-sliders-h"></i></div>
+                    <div>
+                      <h4>Configurable Rates</h4>
+                      <p>Set per-visit-type rates (Async, Sync Phone, Sync Video, In-Person, No-Show) and override per contractor type.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-amber"><i class="fas fa-calculator"></i></div>
+                    <div>
+                      <h4>Recalculate on Demand</h4>
+                      <p>Changed a rate or matched a doctor to a contractor? Hit Recalculate to instantly update all fees for that period.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-teal"><i class="fas fa-calendar-check"></i></div>
+                    <div>
+                      <h4>Period Settings</h4>
+                      <p>Mark denied-paid cases per period. Controls how CareValidate fee totals are reported.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">04 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 5 — CONTRACTORS                     -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Module 1 — Payroll & Admin</div>
+            <div class="slide-title">Contractor Management</div>
+            <div class="slide-subtitle">Full roster control — from adding to merging to archiving.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body">
+            <div class="card-grid cols-3" style="margin-bottom:14px;">
+              <div class="feat-card">
+                <div class="feat-icon bg-gold"><i class="fas fa-user-md"></i></div>
+                <div>
+                  <h4>Add &amp; Edit Contractors</h4>
+                  <p>Name, company, EIN/SSN, Gusto type, role group (NP, MD, Contractor), email, photo, bio.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-blue"><i class="fas fa-code-branch"></i></div>
+                <div>
+                  <h4>Merge Duplicates</h4>
+                  <p>Two records for the same person? Merge them — all consults re-point and fees recalculate automatically.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-green"><i class="fas fa-toggle-on"></i></div>
+                <div>
+                  <h4>Activate / Deactivate</h4>
+                  <p>Archive inactive contractors without deleting their history. Reactivate any time.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-purple"><i class="fas fa-search"></i></div>
+                <div>
+                  <h4>Doctor Matching</h4>
+                  <p>Unmatched doctor names in a CSV? Match them to contractors via AI-assisted fuzzy name matching.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-rose"><i class="fas fa-history"></i></div>
+                <div>
+                  <h4>Consult History</h4>
+                  <p>Drill into any contractor's full consult history across all periods with a single click.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-teal"><i class="fas fa-id-card"></i></div>
+                <div>
+                  <h4>License &amp; Profile Cards</h4>
+                  <p>Admin can view state licenses, CV, and full profile details for any contractor from one panel.</p>
+                </div>
+              </div>
+            </div>
+            <div class="hl-box"><i class="fas fa-lightbulb mr-2" style="color:var(--gold)"></i>
+              Contractors are automatically sorted into groups (Physicians, NPs, Contractors) on all exports and payroll views.
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">05 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 6 — ONBOARDING                      -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Module 2 — Onboarding</div>
+            <div class="slide-title">Hiring Pipeline & Candidate Tracker</div>
+            <div class="slide-subtitle">Move applicants from first contact to signed contractor — without leaving the portal.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body">
+            <div class="flow" style="margin-bottom:16px;">
+              <div class="flow-step"><i class="fas fa-inbox" style="color:#a78bfa"></i><span>Applied</span></div>
+              <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+              <div class="flow-step"><i class="fas fa-search" style="color:#38bdf8"></i><span>Reviewing</span></div>
+              <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+              <div class="flow-step"><i class="fas fa-phone" style="color:#fbbf24"></i><span>Interview</span></div>
+              <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+              <div class="flow-step"><i class="fas fa-file-signature" style="color:#34d399"></i><span>Offer Sent</span></div>
+              <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+              <div class="flow-step"><i class="fas fa-check-double" style="color:#C9A84C"></i><span>Hired</span></div>
+            </div>
+            <div class="card-grid cols-3">
+              <div class="feat-card">
+                <div class="feat-icon bg-purple"><i class="fas fa-kanban"></i></div>
+                <div>
+                  <h4>Kanban Board</h4>
+                  <p>Drag-and-drop pipeline view. Move candidates between stages with one click or by updating their status.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-blue"><i class="fas fa-robot"></i></div>
+                <div>
+                  <h4>AI Resume Analysis</h4>
+                  <p>Upload a CV and get an AI-generated summary of qualifications, specialties, and license states instantly.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-green"><i class="fas fa-calendar-alt"></i></div>
+                <div>
+                  <h4>Meeting Scheduler</h4>
+                  <p>Log interviews, set admin availability slots, and view all upcoming meetings in a calendar view.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-gold"><i class="fas fa-file-alt"></i></div>
+                <div>
+                  <h4>Document Templates</h4>
+                  <p>Create offer letters and contract templates with merge fields. Fill them for any candidate in one click.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-rose"><i class="fas fa-envelope"></i></div>
+                <div>
+                  <h4>Email Invites</h4>
+                  <p>Send candidates a portal invitation link via email. They can log in to track their status and upload docs.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-teal"><i class="fas fa-exchange-alt"></i></div>
+                <div>
+                  <h4>Convert to Contractor</h4>
+                  <p>When hired, convert the candidate record directly into a contractor record — no re-entry of data.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">06 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 7 — PROVIDER PORTAL                 -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Module 3 — Provider Portal</div>
+            <div class="slide-title">Self-Service Portal for Clinicians</div>
+            <div class="slide-subtitle">Providers log in to see their own data — no emailing pay stubs or chasing paperwork.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body">
+            <div class="two-col">
+              <div class="two-col-left">
+                <div class="card-grid cols-1" style="gap:12px;">
+                  <div class="feat-card">
+                    <div class="feat-icon bg-green"><i class="fas fa-user-circle"></i></div>
+                    <div>
+                      <h4>My Profile</h4>
+                      <p>Providers update their own phone, address, bio, NPI, specialty, and licensed states — changes reflect in admin immediately.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-gold"><i class="fas fa-money-bill-wave"></i></div>
+                    <div>
+                      <h4>My Payroll</h4>
+                      <p>Full history of pay periods, earnings per period, and drill-down to individual consults. Printable pay stubs.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-blue"><i class="fas fa-file-medical"></i></div>
+                    <div>
+                      <h4>My Consults</h4>
+                      <p>View all consults attributed to them — filterable by period, visit type, or flagged status.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="two-col-right">
+                <div class="card-grid cols-1" style="gap:12px;">
+                  <div class="feat-card">
+                    <div class="feat-icon bg-purple"><i class="fas fa-map-marker-alt"></i></div>
+                    <div>
+                      <h4>State Licenses</h4>
+                      <p>Log all active licenses with state, license number, and expiry date. Admin can see them too for credentialing checks.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-teal"><i class="fas fa-file-upload"></i></div>
+                    <div>
+                      <h4>Documents &amp; CV</h4>
+                      <p>Upload and replace their CV at any time. Admins can access current version without asking.</p>
+                    </div>
+                  </div>
+                  <div class="feat-card">
+                    <div class="feat-icon bg-rose"><i class="fas fa-camera"></i></div>
+                    <div>
+                      <h4>Profile Photo</h4>
+                      <p>Upload a profile photo — stored and displayed on their contractor card in the admin view.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">07 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 8 — CLIENT PAYMENTS                 -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Module 4 — Client Payments</div>
+            <div class="slide-title">Track What You Get Paid</div>
+            <div class="slide-subtitle">Know exactly how much each client owes you — and whether they've paid.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body" style="padding-top:24px;">
+            <div class="card-grid cols-2" style="margin-bottom:18px;">
+              <div class="feat-card">
+                <div class="feat-icon bg-gold"><i class="fas fa-building"></i></div>
+                <div>
+                  <h4>Client Roster</h4>
+                  <p>Maintain a list of client organizations with contact details. Add, edit, or remove clients any time.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-green"><i class="fas fa-file-invoice-dollar"></i></div>
+                <div>
+                  <h4>Payment Entries per Period</h4>
+                  <p>Log the amount received from each client per billing period, along with status (Paid / Pending / Overdue) and notes.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-blue"><i class="fas fa-chart-bar"></i></div>
+                <div>
+                  <h4>Revenue Summary</h4>
+                  <p>Dashboard cards show total received, total pending, and per-client breakdowns across all periods at a glance.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-rose"><i class="fas fa-exclamation-triangle"></i></div>
+                <div>
+                  <h4>Outstanding Balances</h4>
+                  <p>See at a glance which clients have unpaid entries so nothing falls through the cracks.</p>
+                </div>
+              </div>
+            </div>
+            <div class="hl-box">
+              <i class="fas fa-sync-alt mr-2" style="color:var(--gold)"></i>
+              Client payment data is separate from contractor payroll — giving owners a clear picture of both sides of the books.
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">08 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 9 — USER MANAGEMENT + SECURITY      -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Module 5 — Access Control</div>
+            <div class="slide-title">User Management &amp; Security</div>
+            <div class="slide-subtitle">Control who can see what — down to the individual user.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body">
+            <div class="card-grid cols-3" style="margin-bottom:14px;">
+              <div class="feat-card">
+                <div class="feat-icon bg-gold"><i class="fas fa-users-cog"></i></div>
+                <div>
+                  <h4>Invite-Only Access</h4>
+                  <p>No self-registration. Admins create accounts and send a secure one-time invite link. Nobody gets in uninvited.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-blue"><i class="fas fa-key"></i></div>
+                <div>
+                  <h4>Forgot Password Flow</h4>
+                  <p>Providers can request a password reset by email. Reset link re-uses the secure invite flow — no new attack surface.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-purple"><i class="fas fa-lock"></i></div>
+                <div>
+                  <h4>Role-Based Access</h4>
+                  <p>Admin, CareValidate, Onboarding, Provider, and Candidate roles each see only what they need.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-green"><i class="fas fa-user-slash"></i></div>
+                <div>
+                  <h4>Deactivate Users</h4>
+                  <p>Remove access instantly without deleting the user record. Re-enable if needed.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-rose"><i class="fas fa-sync"></i></div>
+                <div>
+                  <h4>Reset Invite Links</h4>
+                  <p>Regenerate a fresh invite link for any user — invalidates the old one immediately for security.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-teal"><i class="fas fa-link"></i></div>
+                <div>
+                  <h4>Link Contractors to Users</h4>
+                  <p>Connect a portal user account to their contractor record so payroll data automatically appears in their provider view.</p>
+                </div>
+              </div>
+            </div>
+            <div class="hl-box">
+              <i class="fas fa-shield-alt mr-2" style="color:var(--gold)"></i>
+              All passwords are hashed with PBKDF2-SHA256 (100,000 rounds). Tokens use HMAC-SHA256. No passwords are stored in plain text.
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">09 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 10 — MOBILE + UX                    -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide">
+        <div class="slide-inner">
+          <div class="top-bar"></div>
+          <div class="slide-header">
+            <div class="slide-eyebrow">Platform & Experience</div>
+            <div class="slide-title">Built for the Real World</div>
+            <div class="slide-subtitle">Works on every device, every browser — including iOS Safari and Android Chrome.</div>
+          </div>
+          <div class="divider"></div>
+          <div class="slide-body">
+            <div class="card-grid cols-2" style="margin-bottom:14px;">
+              <div class="feat-card">
+                <div class="feat-icon bg-blue"><i class="fas fa-mobile-alt"></i></div>
+                <div>
+                  <h4>Fully Mobile Responsive</h4>
+                  <p>Slide-out sidebar on mobile. Navigation, buttons, and tables adapt to phone screen sizes. Fixed iOS Safari scroll quirks.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-gold"><i class="fas fa-globe"></i></div>
+                <div>
+                  <h4>Cloud Hosted on Cloudflare</h4>
+                  <p>Runs on Cloudflare Pages — globally distributed, 99.9%+ uptime, no server to maintain. Always fast.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-green"><i class="fas fa-envelope-open-text"></i></div>
+                <div>
+                  <h4>Email via Resend</h4>
+                  <p>Invite emails and password-reset emails are sent via Resend with branded HTML templates. Professional and reliable.</p>
+                </div>
+              </div>
+              <div class="feat-card">
+                <div class="feat-icon bg-purple"><i class="fas fa-database"></i></div>
+                <div>
+                  <h4>Cloudflare D1 Database</h4>
+                  <p>Globally replicated SQLite — data is always available, automatically backed up, and scales with the practice.</p>
+                </div>
+              </div>
+            </div>
+            <div class="card-grid cols-3">
+              <div class="feat-card" style="padding:12px 14px;">
+                <div class="feat-icon bg-teal" style="width:28px;height:28px;font-size:12px;border-radius:7px;"><i class="fas fa-bell"></i></div>
+                <div><h4 style="font-size:12px;">Toast Notifications</h4><p>Real-time success/error feedback on every action.</p></div>
+              </div>
+              <div class="feat-card" style="padding:12px 14px;">
+                <div class="feat-icon bg-rose" style="width:28px;height:28px;font-size:12px;border-radius:7px;"><i class="fas fa-spinner"></i></div>
+                <div><h4 style="font-size:12px;">Loading States</h4><p>Buttons disable and show spinners during all async operations.</p></div>
+              </div>
+              <div class="feat-card" style="padding:12px 14px;">
+                <div class="feat-icon bg-amber" style="width:28px;height:28px;font-size:12px;border-radius:7px;"><i class="fas fa-memory"></i></div>
+                <div><h4 style="font-size:12px;">Session Persistence</h4><p>Stay logged in across refreshes. Returns to last page automatically.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-num-badge">10 / 11</div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- SLIDE 11 — CLOSING                        -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="slide" id="slide-close">
+        <div class="cover-grid-lines"></div>
+        <div class="cover-bg"></div>
+        <div class="slide-inner" style="align-items:center;justify-content:center;gap:0;">
+          <div class="slide-eyebrow" style="text-align:center;font-size:11px;margin-bottom:12px;">Everything in one place</div>
+          <h2 style="font-size:36px;font-weight:900;text-align:center;line-height:1.2;max-width:640px;">
+            The complete back-office for<br>
+            <span style="background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+              Lion MD
+            </span>
+          </h2>
+          <p style="color:rgba(255,255,255,0.4);font-size:14px;text-align:center;margin-top:12px;max-width:500px;">
+            Payroll automation · Contractor management · Provider self-service<br>
+            Onboarding pipeline · Client billing · Secure role-based access
+          </p>
+
+          <div style="display:flex;gap:12px;margin-top:32px;flex-wrap:wrap;justify-content:center;">
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 22px;text-align:center;min-width:110px;">
+              <div style="font-size:22px;font-weight:800;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">5</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">User Roles</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 22px;text-align:center;min-width:110px;">
+              <div style="font-size:22px;font-weight:800;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">80+</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">API Endpoints</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 22px;text-align:center;min-width:110px;">
+              <div style="font-size:22px;font-weight:800;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">200k+</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Records Handled</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 22px;text-align:center;min-width:110px;">
+              <div style="font-size:22px;font-weight:800;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">99.9%</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Uptime (CF Pages)</div>
+            </div>
+          </div>
+
+          <div style="margin-top:30px;display:flex;align-items:center;gap:10px;">
+            <div style="height:1px;width:60px;background:rgba(255,255,255,0.1);"></div>
+            <span style="color:rgba(255,255,255,0.25);font-size:12px;">lionmd-payroll.pages.dev</span>
+            <div style="height:1px;width:60px;background:rgba(255,255,255,0.1);"></div>
+          </div>
+        </div>
+        <div class="slide-num-badge">11 / 11</div>
+      </div>
+
+    </div><!-- /viewport -->
+
+    <!-- Controls -->
+    <div id="controls">
+      <button class="ctrl-btn" id="btnPrev" onclick="prevSlide()" title="Previous (←)">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <div id="dots"></div>
+      <button class="ctrl-btn" id="btnNext" onclick="nextSlide()" title="Next (→)">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+      <span id="slide-counter">1 / 11</span>
+    </div>
+
+  </div><!-- /scaler -->
+</div><!-- /deck -->
+
+<div id="kbd-hint">← → arrow keys to navigate &nbsp;·&nbsp; Space to advance</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'))
+  const total  = slides.length
+  let current  = 0
+  let animating = false
+
+  /* ── Build dot nav ─────────────────────────── */
+  const dotsEl = document.getElementById('dots')
+  slides.forEach((_, i) => {
+    const d = document.createElement('div')
+    d.className = 'dot' + (i === 0 ? ' active' : '')
+    d.onclick = () => goTo(i)
+    dotsEl.appendChild(d)
+  })
+
+  function updateUI() {
+    const dots    = dotsEl.querySelectorAll('.dot')
+    const counter = document.getElementById('slide-counter')
+    const prev    = document.getElementById('btnPrev')
+    const next    = document.getElementById('btnNext')
+    const bar     = document.getElementById('progress-bar')
+
+    dots.forEach((d, i) => d.classList.toggle('active', i === current))
+    counter.textContent = `${current + 1} / ${total}`
+    prev.disabled  = current === 0
+    next.disabled  = current === total - 1
+    bar.style.width = `${((current + 1) / total) * 100}%`
+  }
+
+  function goTo(idx) {
+    if (animating || idx === current || idx < 0 || idx >= total) return
+    animating = true
+
+    const prev  = slides[current]
+    const next  = slides[idx]
+    const dir   = idx > current ? 1 : -1
+
+    // Exit current
+    prev.classList.remove('active')
+    prev.classList.add(dir > 0 ? 'exit-left' : '')
+    if (dir < 0) {
+      // going back — slide in from left
+      next.style.transform = 'translateX(-60px)'
+      next.style.opacity   = '0'
+    } else {
+      next.style.transform = 'translateX(60px)'
+      next.style.opacity   = '0'
+    }
+    next.style.pointerEvents = 'none'
+
+    // Force reflow
+    next.offsetHeight
+
+    // Animate in
+    next.style.transition = 'opacity 0.4s ease, transform 0.4s ease'
+    next.style.transform  = 'translateX(0)'
+    next.style.opacity    = '1'
+
+    setTimeout(() => {
+      prev.classList.remove('exit-left')
+      prev.style.transform  = ''
+      prev.style.opacity    = ''
+      prev.style.transition = ''
+      next.style.transition = ''
+      next.style.transform  = ''
+      next.style.opacity    = ''
+      next.style.pointerEvents = ''
+      next.classList.add('active')
+      current = idx
+      updateUI()
+      animating = false
+    }, 420)
+  }
+
+  function nextSlide() { goTo(current + 1) }
+  function prevSlide() { goTo(current - 1) }
+
+  /* ── Keyboard ──────────────────────────────── */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide() }
+    if (e.key === 'ArrowLeft')                   { e.preventDefault(); prevSlide() }
+  })
+
+  /* ── Swipe support ─────────────────────────── */
+  let touchX = null
+  document.getElementById('viewport').addEventListener('touchstart', e => {
+    touchX = e.touches[0].clientX
+  }, { passive: true })
+  document.getElementById('viewport').addEventListener('touchend', e => {
+    if (touchX === null) return
+    const dx = e.changedTouches[0].clientX - touchX
+    if (Math.abs(dx) > 40) dx < 0 ? nextSlide() : prevSlide()
+    touchX = null
+  }, { passive: true })
+
+  /* ── Responsive scale ──────────────────────── */
+  function scaleSlides() {
+    const W = window.innerWidth
+    const H = window.innerHeight
+    const slideW = 1000
+    const slideH = 600
+    const controlH = 80  // approx height of controls + gap
+    const maxW = W  * 0.94
+    const maxH = (H - controlH) * 0.96
+    const scaleX = maxW  / slideW
+    const scaleY = maxH  / slideH
+    const s = Math.min(scaleX, scaleY, 1.2)  // cap at 1.2x
+    document.getElementById('scaler').style.transform = `scale(${s})`
+    document.getElementById('scaler').style.transformOrigin = 'center top'
+    // Adjust outer deck height so controls don't overflow
+    document.getElementById('deck').style.paddingTop =
+      Math.max(0, (H - slideH * s - controlH * s) / 2) + 'px'
+  }
+  window.addEventListener('resize', scaleSlides)
+  scaleSlides()
+
+  updateUI()
+</script>
+</body>
+</html>
