@@ -75,6 +75,10 @@
     opacity: 0;
     transform: translateX(-60px);
   }
+  .slide.exit-right {
+    opacity: 0;
+    transform: translateX(60px);
+  }
 
   /* ── CONTROLS ───────────────────────────────── */
   #controls {
@@ -1238,15 +1242,10 @@
 
     // Exit current
     prev.classList.remove('active')
-    prev.classList.add(dir > 0 ? 'exit-left' : '')
-    if (dir < 0) {
-      // going back — slide in from left
-      next.style.transform = 'translateX(-60px)'
-      next.style.opacity   = '0'
-    } else {
-      next.style.transform = 'translateX(60px)'
-      next.style.opacity   = '0'
-    }
+    prev.classList.add(dir > 0 ? 'exit-left' : 'exit-right')
+    // Incoming slide starts off-screen on the opposite side
+    next.style.transform = dir > 0 ? 'translateX(60px)' : 'translateX(-60px)'
+    next.style.opacity   = '0'
     next.style.pointerEvents = 'none'
 
     // Force reflow
@@ -1258,7 +1257,7 @@
     next.style.opacity    = '1'
 
     setTimeout(() => {
-      prev.classList.remove('exit-left')
+      prev.classList.remove('exit-left', 'exit-right')
       prev.style.transform  = ''
       prev.style.opacity    = ''
       prev.style.transition = ''
