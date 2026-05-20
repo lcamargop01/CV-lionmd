@@ -296,16 +296,24 @@
       #sidebar {
         position: fixed !important;
         top: 0; left: 0;
-        height: 100vh !important;
+        height: 100vh !important;       /* fallback for older browsers */
+        height: 100dvh !important;      /* dynamic viewport — fixes iOS Safari chrome clip */
         width: 260px !important;
         transform: translateX(-100%);
         z-index: 9000 !important;
         box-shadow: none;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;    /* let inner sections scroll, not the sidebar itself */
       }
       #sidebar.sidebar-open {
         transform: translateX(0) !important;
         box-shadow: 4px 0 32px rgba(0,0,0,0.45) !important;
       }
+      /* Nav scrolls if there are many items; footer is always visible */
+      #sidebar nav { overflow-y: auto !important; flex: 1 1 0% !important; min-height: 0 !important; }
+      /* Footer section: never shrink, never overflow */
+      #sidebar > div:last-child { flex-shrink: 0 !important; overflow: visible !important; }
     }
     /* Overlay */
     #mobileOverlay {
@@ -1144,7 +1152,7 @@
 <div id="app" class="flex hidden">
 
   <!-- Sidebar: on desktop it's a normal flex item (relative); on mobile CSS overrides to fixed -->
-  <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col left-0 top-0 h-screen w-[260px] flex-shrink-0 relative">
+  <div id="sidebar" class="sidebar bg-[#1a1a2e] flex flex-col left-0 top-0 h-screen w-[260px] flex-shrink-0 relative" style="height:100vh;height:100dvh;">
     <div class="p-4 border-b border-white/10 flex items-center gap-3">
       <div class="w-10 h-10 rounded-xl flex-shrink-0 overflow-hidden" style="background: linear-gradient(135deg, #1a1a2e, #C9A84C);">
         <img src="/static/lion-logo.png" alt="Lion MD" class="w-full h-full object-cover"/>
@@ -1159,11 +1167,11 @@
       </button>
     </div>
 
-    <nav class="flex-1 p-3 space-y-1 overflow-y-auto" id="sidebarNav">
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto min-h-0" id="sidebarNav">
       <!-- Nav items injected by JS based on role -->
     </nav>
 
-    <div class="p-3 border-t border-white/10 space-y-1">
+    <div class="p-3 border-t border-white/10 space-y-1 flex-shrink-0">
       <!-- Logged-in user info -->
       <div class="flex items-center gap-2 px-3 py-2 mb-1">
         <div class="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white" style="background:var(--lion-gold);">
