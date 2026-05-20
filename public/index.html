@@ -846,7 +846,7 @@
 <!-- ══════════════════════════════════════════════════════════
      PROVIDER APPLICATION SCREEN  (shown when Apply is clicked)
 ══════════════════════════════════════════════════════════ -->
-<div id="applyScreen" class="hidden fixed inset-0 z-50 overflow-y-auto" style="background:#f6f7fb;">
+<div id="applyScreen" class="hidden z-50" style="background:#f6f7fb;min-height:100vh;min-height:100dvh;">
 
 <style>
   /* ── Apply screen styles ── */
@@ -1492,6 +1492,7 @@ function showLoginForm() {
 function showLandingPage() {
   $('loginPanel').classList.add('hidden')
   $('landingPage').classList.remove('hidden')
+  document.body.style.overflow = ''
   history.pushState({}, '', '/')
 }
 
@@ -1509,7 +1510,8 @@ let applyState = {
 function showApplyForm() {
   // Reset state
   applyState = { currentStep: 1, photoB64:'', photoMime:'', photoName:'', cvB64:'', cvMime:'', cvName:'', cvSize:0, selectedStates: new Set() }
-  // Hide login screen, show apply screen
+  // Release any scroll lock, hide login screen, show apply screen
+  document.body.style.overflow = ''
   $('loginScreen').classList.add('hidden')
   $('applyScreen').classList.remove('hidden')
   history.pushState({}, '', '/apply')
@@ -1538,6 +1540,8 @@ function showApplyForm() {
 function hideApplyForm() {
   $('applyScreen').classList.add('hidden')
   $('loginScreen').classList.remove('hidden')
+  document.body.style.overflow = ''
+  window.scrollTo(0, 0)
   history.pushState({}, '', '/')
 }
 
@@ -11968,6 +11972,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       $('loginPanel').classList.add('hidden')
       $('loginScreen').classList.remove('hidden')
       $('landingPage').classList.remove('hidden')
+      document.body.style.overflow = ''
     }
     // In-app popstate: browser back/forward handled naturally by navigate()
   })
