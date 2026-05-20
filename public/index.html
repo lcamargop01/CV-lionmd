@@ -1338,7 +1338,7 @@ async function doLogin() {
   }
 }
 
-// Called when visiting /invite?token=xxx
+// Called when visiting /?token=xxx
 async function checkInviteToken() {
   const params = new URLSearchParams(window.location.search)
   const token = params.get('token')
@@ -1349,11 +1349,23 @@ async function checkInviteToken() {
       if (!r.ok) throw new Error(d.error || 'Invalid invite')
       return d
     })
-    $('loginCard').classList.add('hidden')
-    $('setupCard').classList.remove('hidden')
-    $('setupWelcomeMsg').textContent = 'Welcome, ' + data.name + '! Create a password to access the portal.'
-    $('setupCard').dataset.token = token
     window.history.replaceState({}, '', window.location.pathname)
+    $('landingPage').classList.add('hidden')
+    $('loginPanel').classList.remove('hidden')
+
+    if (!data.must_set_password) {
+      // Established provider: they already have a password — just take them to login
+      $('loginCard').classList.remove('hidden')
+      $('setupCard').classList.add('hidden')
+      $('loginEmail').value = data.email || ''
+      showToast('Welcome back, ' + data.name.split(' ')[0] + '! Please sign in.', 'info', 5000)
+    } else {
+      // First-time user: show password setup
+      $('loginCard').classList.add('hidden')
+      $('setupCard').classList.remove('hidden')
+      $('setupWelcomeMsg').textContent = 'Welcome, ' + data.name + '! Create a password to access the portal.'
+      $('setupCard').dataset.token = token
+    }
     return true
   } catch(e) { return false }
 }

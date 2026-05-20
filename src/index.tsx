@@ -2691,15 +2691,17 @@ app.post('/api/auth/change-password', requireAuth, async (c) => {
 })
 
 // ── GET /api/auth/invite/:token ──────────────────────────────────
-// Lets front-end look up who the invite belongs to before showing setup form
+// Lets front-end look up who the invite belongs to before showing setup form.
+// Returns must_set_password so the frontend can redirect to login instead of
+// setup when an established provider clicks a newly-generated invite link.
 app.get('/api/auth/invite/:token', async (c) => {
   await ensureAuthSchema(c.env.DB)
   const token = c.req.param('token')
   const user = await c.env.DB.prepare(
-    'SELECT id, name, email, role FROM portal_users WHERE invite_token=? AND is_active=1'
+    'SELECT id, name, email, role, must_set_password FROM portal_users WHERE invite_token=? AND is_active=1'
   ).bind(token).first() as any
   if (!user) return c.json({ error: 'Invalid or expired invite link' }, 404)
-  return c.json({ id: user.id, name: user.name, email: user.email, role: user.role })
+  return c.json({ id: user.id, name: user.name, email: user.email, role: user.role, must_set_password: user.must_set_password })
 })
 
 // ── GET /api/admin/users ─────────────────────────────────────────
