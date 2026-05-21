@@ -247,6 +247,19 @@
   .kc-name { font-size: 12px; font-weight: 700; color: #111827; margin-bottom: 4px; }
   .kc-sub  { font-size: 10px; color: #9ca3af; }
 
+  /* apply form */
+  .apply-step { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .apply-step-num { width: 28px; height: 28px; border-radius: 50%; background: #e5e7eb; color: #9ca3af; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .apply-step.active .apply-step-num { background: #1e2d4a; color: #C9A84C; }
+  .apply-step.done .apply-step-num { background: #10b981; color: #fff; }
+  .apply-step-label { font-size: 10px; font-weight: 600; color: #9ca3af; white-space: nowrap; }
+  .apply-step.active .apply-step-label { color: #1e2d4a; }
+  .apply-step.done .apply-step-label { color: #10b981; }
+  .apply-step-line { flex: 1; height: 2px; background: #e5e7eb; margin: 0 6px; margin-bottom: 14px; transition: background 0.2s; }
+  .apply-step-line.active { background: #C9A84C; }
+  .apply-input { border: 1.5px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #111827; background: #fff; outline: none; box-sizing: border-box; }
+  .apply-input:focus { border-color: #C9A84C; }
+
   /* modal */
   #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 900; align-items: center; justify-content: center; }
   #modal-overlay.open { display: flex; }
@@ -698,6 +711,180 @@
       </div>
 
       <!-- ════════════════════════════════════════════ -->
+      <!-- SCREEN: NEW PROVIDER APPLICATION            -->
+      <!-- ════════════════════════════════════════════ -->
+      <div class="screen" id="screen-apply">
+        <div style="max-width:680px;margin:0 auto;">
+          <!-- Progress steps -->
+          <div style="display:flex;align-items:center;gap:0;margin-bottom:28px;">
+            <div class="apply-step active" id="astep-1">
+              <div class="apply-step-num">1</div>
+              <div class="apply-step-label">Personal Info</div>
+            </div>
+            <div class="apply-step-line active"></div>
+            <div class="apply-step" id="astep-2">
+              <div class="apply-step-num">2</div>
+              <div class="apply-step-label">Credentials</div>
+            </div>
+            <div class="apply-step-line"></div>
+            <div class="apply-step" id="astep-3">
+              <div class="apply-step-num">3</div>
+              <div class="apply-step-label">Availability</div>
+            </div>
+            <div class="apply-step-line"></div>
+            <div class="apply-step" id="astep-4">
+              <div class="apply-step-num">4</div>
+              <div class="apply-step-label">Submit</div>
+            </div>
+          </div>
+
+          <!-- Step 1: Personal Info -->
+          <div id="apply-panel-1" class="card" style="padding:28px;">
+            <div style="font-size:15px;font-weight:800;color:#111827;margin-bottom:4px;">Personal Information</div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:22px;">Tell us about yourself so we can get started.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">First Name</label>
+                <input class="apply-input" type="text" value="Jordan" style="width:100%;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Last Name</label>
+                <input class="apply-input" type="text" value="Rivera" style="width:100%;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Email Address</label>
+                <input class="apply-input" type="email" value="j.rivera@email.com" style="width:100%;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Phone Number</label>
+                <input class="apply-input" type="tel" value="(813) 555-0192" style="width:100%;">
+              </div>
+              <div style="grid-column:1/-1;">
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Current City &amp; State</label>
+                <input class="apply-input" type="text" value="Tampa, FL" style="width:100%;">
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+              <button class="btn btn-gold" onclick="applyNext(2)">Next — Credentials <i class="fas fa-arrow-right"></i></button>
+            </div>
+          </div>
+
+          <!-- Step 2: Credentials (hidden initially) -->
+          <div id="apply-panel-2" class="card" style="padding:28px;display:none;">
+            <div style="font-size:15px;font-weight:800;color:#111827;margin-bottom:4px;">Professional Credentials</div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:22px;">Your license and specialty details.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Provider Type</label>
+                <select class="apply-input" style="width:100%;">
+                  <option selected>Nurse Practitioner (NP)</option>
+                  <option>ARNP</option>
+                  <option>Physician Assistant (PA)</option>
+                  <option>MD / DO</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">NPI Number</label>
+                <input class="apply-input" type="text" value="1234567890" style="width:100%;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Primary Specialty</label>
+                <select class="apply-input" style="width:100%;">
+                  <option selected>Family Medicine / Weight Management</option>
+                  <option>Internal Medicine</option>
+                  <option>Psychiatry</option>
+                  <option>Urgent Care</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Years of Experience</label>
+                <select class="apply-input" style="width:100%;">
+                  <option>1–2 years</option>
+                  <option selected>3–5 years</option>
+                  <option>6–10 years</option>
+                  <option>10+ years</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1;">
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">States Licensed To Practice</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+                  <span style="background:#1e2d4a;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">FL</span>
+                  <span style="background:#1e2d4a;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">TX</span>
+                  <span style="background:#e5e7eb;color:#374151;font-size:11px;padding:3px 10px;border-radius:20px;cursor:pointer;">+ Add State</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:8px;">
+              <button class="btn btn-outline" onclick="applyNext(1)"><i class="fas fa-arrow-left"></i> Back</button>
+              <button class="btn btn-gold" onclick="applyNext(3)">Next — Availability <i class="fas fa-arrow-right"></i></button>
+            </div>
+          </div>
+
+          <!-- Step 3: Availability (hidden initially) -->
+          <div id="apply-panel-3" class="card" style="padding:28px;display:none;">
+            <div style="font-size:15px;font-weight:800;color:#111827;margin-bottom:4px;">Availability &amp; Work Preferences</div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:22px;">Let us know how you'd like to work with Lion MD.</div>
+            <div style="display:grid;gap:14px;margin-bottom:14px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:8px;">Preferred Visit Types</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" checked> Async</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" checked> Sync Video</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"> Sync Phone</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"> In-Person</label>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Expected Weekly Hours</label>
+                <select class="apply-input" style="width:100%;">
+                  <option>1–10 hours (part-time)</option>
+                  <option selected>10–20 hours</option>
+                  <option>20–40 hours</option>
+                  <option>40+ hours (full-time)</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Business Entity (optional)</label>
+                <input class="apply-input" type="text" placeholder="Your LLC or PLLC name, if applicable" style="width:100%;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">How did you hear about Lion MD?</label>
+                <select class="apply-input" style="width:100%;">
+                  <option selected>Referral from another provider</option>
+                  <option>LinkedIn</option>
+                  <option>Job board</option>
+                  <option>Other</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:8px;">
+              <button class="btn btn-outline" onclick="applyNext(2)"><i class="fas fa-arrow-left"></i> Back</button>
+              <button class="btn btn-gold" onclick="applyNext(4)">Review &amp; Submit <i class="fas fa-arrow-right"></i></button>
+            </div>
+          </div>
+
+          <!-- Step 4: Submit / Confirmation (hidden initially) -->
+          <div id="apply-panel-4" class="card" style="padding:28px;display:none;text-align:center;">
+            <div style="width:56px;height:56px;background:rgba(16,185,129,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              <i class="fas fa-check-circle" style="color:#10b981;font-size:26px;"></i>
+            </div>
+            <div style="font-size:18px;font-weight:800;color:#111827;margin-bottom:8px;">Application Submitted!</div>
+            <div style="font-size:13px;color:#6b7280;max-width:380px;margin:0 auto 24px;">Thanks, Jordan. The Lion MD onboarding team will review your application and reach out within 2 business days.</div>
+            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:18px;text-align:left;margin-bottom:20px;">
+              <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:10px;">WHAT HAPPENS NEXT</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#374151;"><div style="width:22px;height:22px;background:#1e2d4a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#C9A84C;font-size:10px;font-weight:700;flex-shrink:0;">1</div>Onboarding team reviews your credentials</div>
+                <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#374151;"><div style="width:22px;height:22px;background:#1e2d4a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#C9A84C;font-size:10px;font-weight:700;flex-shrink:0;">2</div>You'll be contacted to schedule an interview</div>
+                <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#374151;"><div style="width:22px;height:22px;background:#1e2d4a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#C9A84C;font-size:10px;font-weight:700;flex-shrink:0;">3</div>Once approved, you receive a portal invite email</div>
+                <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#374151;"><div style="width:22px;height:22px;background:#1e2d4a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#C9A84C;font-size:10px;font-weight:700;flex-shrink:0;">4</div>You set your password and access your portal</div>
+              </div>
+            </div>
+            <button class="btn btn-outline" onclick="applyReset()"><i class="fas fa-redo"></i> Start Over (Demo)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════════ -->
       <!-- SCREEN: CLIENT PAYMENTS                     -->
       <!-- ════════════════════════════════════════════ -->
       <div class="screen" id="screen-payments">
@@ -1122,7 +1309,8 @@ function initUsersTable() {
 const screenTitles = {
   dashboard:'Dashboard', payroll:'Contractor Payroll', consults:'Consult Records',
   contractors:'Contractors', onboarding:'Onboarding', payments:'Client Payments',
-  rates:'Payment Rates', users:'User Management', provider:'Provider Portal'
+  rates:'Payment Rates', users:'User Management', provider:'Provider Portal',
+  apply:'New Provider Application'
 };
 
 function showScreen(name) {
@@ -1151,12 +1339,45 @@ function showScreen(name) {
 }
 
 function homeAction(action) {
+  if (action === 'apply') { showScreen('apply'); return; }
   const msgs = {
     login:   'Provider login page would open — enter your email & password to access your portal.',
-    apply:   'New Provider Application form would open — submit qualifications and licensing info.',
-    contact: 'Contact form / email to info@lion.md would open.'
+    contact: 'Contact form / email to contact@lion.md would open.'
   };
   showToast(msgs[action] || 'Action: ' + action);
+}
+
+function applyNext(step) {
+  // Hide all panels
+  [1,2,3,4].forEach(i => {
+    document.getElementById('apply-panel-'+i).style.display = 'none';
+    const el = document.getElementById('astep-'+i);
+    if (el) { el.classList.remove('active','done'); }
+  });
+  // Mark done steps
+  for (let i = 1; i < step; i++) {
+    const el = document.getElementById('astep-'+i);
+    if (el) { el.classList.add('done'); el.querySelector('.apply-step-num').innerHTML = '<i class="fas fa-check" style="font-size:10px;"></i>'; }
+  }
+  // Mark active step
+  const active = document.getElementById('astep-'+step);
+  if (active) active.classList.add('active');
+  // Update connector lines
+  document.querySelectorAll('.apply-step-line').forEach((ln, idx) => {
+    ln.classList.toggle('active', idx < step - 1);
+  });
+  // Show panel
+  document.getElementById('apply-panel-'+step).style.display = '';
+}
+
+function applyReset() {
+  // Reset step nums back to numbers
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('astep-'+i);
+    if (el) { el.classList.remove('active','done'); el.querySelector('.apply-step-num').textContent = i; }
+  });
+  document.querySelectorAll('.apply-step-line').forEach(ln => ln.classList.remove('active'));
+  applyNext(1);
 }
 
 function showProvTab(tab) {
