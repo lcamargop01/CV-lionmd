@@ -921,108 +921,164 @@
   let animating = false
 
   /* ── TOUR DATA ──────────────────────────────────────────────
-     One entry per demo slide (0-based slide index).
-     Non-demo slides have no entry — card stays hidden.        */
-  const tourData = {
-    // Slide 3 — Home Page
-    2: {
-      icon: 'fa-home',
-      label: 'Public Landing',
-      title: 'The Public Home Page',
-      body: 'This is what any visitor sees at lion.md before logging in. Providers click "Provider Login" to access their portal; new candidates click "New Provider Application" to start the hiring process.',
-      color: 'rgba(14,165,233,0.12)', iconColor: '#38bdf8',
-    },
-    // Slide 5 — Dashboard
-    4: {
-      icon: 'fa-chart-pie',
-      label: 'Admin View',
-      title: 'Live Dashboard',
-      body: 'Five KPI cards update automatically from uploaded payroll files: total approved cases, what CareValidate owes, what goes to contractors, Chris\'s management fee, and your net margin — all calculated instantly.',
+     One entry for EVERY slide (0-based index, 0–16).
+     The card shows on all 17 slides — demo slides get an
+     interactive explanation; structural slides get context.    */
+  const tourData = [
+    // 0 — Cover
+    {
+      icon: 'fa-rocket',
+      label: 'Welcome',
+      title: 'Lion MD Portal',
+      body: 'A complete platform for contractor payroll, provider self-service, and hiring management — built for Lion MD. Use the arrows (or this card) to walk through each feature.',
       color: 'rgba(201,168,76,0.12)', iconColor: '#C9A84C',
+      isDemo: false,
     },
-    // Slide 6 — Payroll
-    5: {
+    // 1 — Five Roles overview
+    {
+      icon: 'fa-users',
+      label: 'Overview',
+      title: 'Five Role-Based Views',
+      body: 'Every user logs in to their own scoped experience — Admins see everything, CareValidate reviewers see billing only, the Onboarding team sees the hiring pipeline, Providers see their own data, and Candidates track their application.',
+      color: 'rgba(201,168,76,0.12)', iconColor: '#C9A84C',
+      isDemo: false,
+    },
+    // 2 — Home Page (live demo)
+    {
+      icon: 'fa-home',
+      label: 'lion.md — Public Landing Page',
+      title: 'What Visitors See First',
+      body: 'This is the real lion.md home page. Providers click "Provider Login" to reach their portal. New contractors click "New Provider Application" to start the hiring process. Everything is invite-only — no public sign-up.',
+      color: 'rgba(14,165,233,0.12)', iconColor: '#38bdf8',
+      isDemo: true,
+    },
+    // 3 — Section divider: Admin
+    {
+      icon: 'fa-crown',
+      label: 'Coming Up',
+      title: 'The Admin Control Center',
+      body: 'The next section walks through everything an Admin or Owner can do — dashboard analytics, contractor payroll, consult records, onboarding pipeline, client payments, and user management.',
+      color: 'rgba(201,168,76,0.12)', iconColor: '#C9A84C',
+      isDemo: false,
+    },
+    // 4 — Dashboard (live demo)
+    {
+      icon: 'fa-chart-pie',
+      label: 'Admin View — Dashboard',
+      title: 'Live Financial Dashboard',
+      body: 'Five KPI cards auto-calculate from uploaded payroll files: total approved cases, what CareValidate owes, what goes to contractors, the management fee, and net margin. The period selector (top right) switches between uploaded billing periods.',
+      color: 'rgba(201,168,76,0.12)', iconColor: '#C9A84C',
+      isDemo: true,
+    },
+    // 5 — Payroll (live demo)
+    {
       icon: 'fa-money-bill-wave',
-      label: 'Admin View',
-      title: 'Contractor Payroll',
-      body: 'Each contractor gets a payout card showing their case count and total. Click any card to open a detailed paystub. The "Export to Gusto CSV" button sends the whole period to Gusto in one click.',
+      label: 'Admin View — Contractor Payroll',
+      title: 'Automated Contractor Payroll',
+      body: 'Chris Garcia\'s management fee is calculated automatically at 25% of net margin. Every contractor gets a payout card — click it to open a detailed paystub. "Export to Gusto CSV" sends the full period to payroll in one click.',
       color: 'rgba(16,185,129,0.12)', iconColor: '#10b981',
+      isDemo: true,
     },
-    // Slide 7 — Consults
-    6: {
+    // 6 — Consults (live demo)
+    {
       icon: 'fa-file-medical',
-      label: 'Admin / CareValidate View',
-      title: '187,000+ Consult Records',
-      body: 'Every consult from every uploaded file is fully searchable here. Filter by doctor, visit type, or organization. Export any filtered subset to XLSX — or the full dataset in one click.',
+      label: 'Admin / CareValidate View — Consult Records',
+      title: '187,000+ Searchable Consult Records',
+      body: 'Every consult from every uploaded file lives here — fully searchable by doctor, visit type, organization, or patient. Filter to any subset and export to XLSX, or pull the entire dataset with one click.',
       color: 'rgba(59,130,246,0.12)', iconColor: '#3b82f6',
+      isDemo: true,
     },
-    // Slide 8 — Contractors
-    7: {
+    // 7 — Contractors (live demo)
+    {
       icon: 'fa-user-md',
-      label: 'Admin View',
+      label: 'Admin View — Contractors',
       title: 'Contractor Directory',
-      body: '28 active NPs, ARNPs, and PAs — each with their company name, masked EIN/SSN, specialty group, and status. Click Profile to see a contractor\'s full payroll history, consult breakdown, and licenses.',
+      body: '28 active NPs, ARNPs, and PAs — each listed with their company name, masked EIN/SSN, specialty group, and status. Click "Profile" on any row to open that contractor\'s full payroll history, consult records, and licenses.',
       color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+      isDemo: true,
     },
-    // Slide 9 — Onboarding
-    8: {
+    // 8 — Onboarding (live demo)
+    {
       icon: 'fa-user-plus',
-      label: 'Admin / Onboarding View',
-      title: 'Hiring Pipeline',
-      body: 'New provider candidates move through a Kanban board — New → Contacted → Interview → Offer → Hired. The Onboarding team manages this pipeline without seeing any payroll or financial data.',
+      label: 'Admin / Onboarding View — Hiring Pipeline',
+      title: 'Kanban Onboarding Board',
+      body: 'New provider candidates move through stages: New → Contacted → Interview → Offer Sent → Hired. The Onboarding team manages this entirely without ever seeing payroll or financial data.',
       color: 'rgba(245,158,11,0.12)', iconColor: '#f59e0b',
+      isDemo: true,
     },
-    // Slide 10 — Payments
-    9: {
+    // 9 — Client Payments (live demo)
+    {
       icon: 'fa-credit-card',
-      label: 'Admin View',
-      title: 'Client Payments',
-      body: 'Track revenue from all 54 client organizations. See which invoices are paid, pending, or past due. The May 2026 period shows $3.4M in tracked revenue across all clients.',
+      label: 'Admin View — Client Payments',
+      title: 'Client Payment Tracker',
+      body: 'Track incoming revenue from all 54 client organizations. Each client shows their payment status — Paid, Pending, or Past Due — with the invoice amount and date. May 2026 shows $3.4M in total tracked revenue.',
       color: 'rgba(244,63,94,0.12)', iconColor: '#fb7185',
+      isDemo: true,
     },
-    // Slide 11 — Users
-    10: {
+    // 10 — User Management (live demo)
+    {
       icon: 'fa-users-cog',
-      label: 'Admin View',
-      title: 'User Management',
-      body: 'Create users and assign one of 5 roles: Admin, CareValidate, Onboarding, Provider, or Candidate. Each role sees only their section of the portal. New users receive an invite email automatically.',
+      label: 'Admin View — User Management',
+      title: 'Role-Based User Access',
+      body: 'Admins create users and assign one of 5 roles. Each role gates access to exactly the right section — nothing more. New users are sent an invite email automatically; they set their own password on first login.',
       color: 'rgba(16,185,129,0.12)', iconColor: '#10b981',
+      isDemo: true,
     },
-    // Slide 14 — Provider Profile
-    13: {
+    // 11 — Email slide
+    {
+      icon: 'fa-envelope',
+      label: 'Automated Email',
+      title: 'Invite Email — Sent by the System',
+      body: 'When an Admin adds a new user, this invite email goes out automatically via Resend. The link contains a signed token (72-hour TTL). The provider clicks it, sets their password, and lands directly in their own portal.',
+      color: 'rgba(14,165,233,0.12)', iconColor: '#38bdf8',
+      isDemo: false,
+    },
+    // 12 — Section divider: Provider
+    {
+      icon: 'fa-user-md',
+      label: 'Coming Up',
+      title: 'The Provider\'s Private Portal',
+      body: 'Providers log in and see only their own data — profile, payroll history, consult records, state licenses, and CV uploads. No access to other providers\' information or any admin features.',
+      color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+      isDemo: false,
+    },
+    // 13 — Provider Profile (live demo)
+    {
       icon: 'fa-id-card',
-      label: 'Provider View',
-      title: 'Provider Profile',
-      body: 'When Sarah Williams logs in, she sees only her own data. Her profile shows contact info, NPI number, specialty, and the states she\'s licensed in — all editable by the provider directly.',
+      label: 'Provider View — My Profile',
+      title: 'Provider Profile Page',
+      body: 'Sarah Williams sees only her own data. She can update her contact info, NPI number, specialty, and the states she\'s licensed to practice in. The tabs across the top give her access to payroll, consults, licenses, and CV upload.',
       color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+      isDemo: true,
     },
-    // Slide 15 — Provider Payroll
-    14: {
+    // 14 — Provider Payroll (live demo)
+    {
       icon: 'fa-dollar-sign',
-      label: 'Provider View',
-      title: 'Provider Payroll History',
-      body: 'Providers see their lifetime earnings, total case count, and a full period-by-period pay history. Each period has a Paystub button to download or share their payment statement.',
+      label: 'Provider View — My Payroll',
+      title: 'Provider Pay History',
+      body: 'Lifetime earnings, total case count, and a period-by-period pay history — all scoped to this provider only. Each row has a "Paystub" button that opens a printable payment statement for that period.',
       color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+      isDemo: true,
     },
-    // Slide 16 — Provider Licenses
-    15: {
+    // 15 — Provider Licenses (live demo)
+    {
       icon: 'fa-map-marked-alt',
-      label: 'Provider View',
+      label: 'Provider View — State Licenses',
       title: 'State License Manager',
-      body: 'Providers manage their own state licenses — adding new states, editing license numbers, and tracking expiry dates. Admins can see all licenses across all providers at a glance.',
+      body: 'Providers add and manage their own state licenses — license number, state, and expiry date per entry. Admins can view all licenses across all providers. Expiring licenses are flagged automatically.',
       color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+      isDemo: true,
     },
-  }
-
-  // Demo slide indices (those with tour data)
-  const demoSlideIndices = Object.keys(tourData).map(Number)
-  // Total tour steps = total number of demo slides
-  const tourTotal = demoSlideIndices.length
-
-  // Which tour step (0-based among demo slides only) corresponds to a given slide index
-  function tourStepForSlide(slideIdx) {
-    return demoSlideIndices.indexOf(slideIdx)
-  }
+    // 16 — Closing
+    {
+      icon: 'fa-check-circle',
+      label: 'Summary',
+      title: 'That\'s the Full Platform',
+      body: 'Lion MD Portal replaces manual spreadsheets with a fully automated, role-gated system — payroll, billing, onboarding, and provider self-service in one place. Click "Open Interactive Demo" to explore freely.',
+      color: 'rgba(16,185,129,0.12)', iconColor: '#10b981',
+      isDemo: false,
+    },
+  ]
 
   let cardDismissed = false  // user dismissed this slide's card
   let cardTimer = null
@@ -1031,33 +1087,31 @@
     const data = tourData[slideIdx]
     if (!data) { hideTourCard(); return }
 
-    // Populate
+    // Populate icon
     const icon = document.getElementById('tc-icon')
     icon.innerHTML = `<i class="fas ${data.icon}"></i>`
     icon.style.background = data.color
     icon.style.color = data.iconColor
+
     document.getElementById('tc-label').textContent = data.label
     document.getElementById('tc-title').textContent = data.title
     document.getElementById('tc-body').textContent  = data.body
 
-    // Dots — one per demo slide
-    const step = tourStepForSlide(slideIdx)
+    // Dots — one per slide (all 17)
     const dotsEl = document.getElementById('tc-dots')
-    dotsEl.innerHTML = demoSlideIndices.map((_, i) =>
-      `<div class="tc-dot${i === step ? ' active' : ''}"></div>`
+    dotsEl.innerHTML = tourData.map((_, i) =>
+      `<div class="tc-dot${i === slideIdx ? ' active' : ''}"></div>`
     ).join('')
 
-    // Next button label
+    // Next / Finish button
     const nextBtn = document.getElementById('tc-next')
-    const isLast  = step === tourTotal - 1
+    const isLast  = slideIdx === total - 1
     nextBtn.innerHTML = isLast
-      ? 'Got it <i class="fas fa-check"></i>'
-      : 'Next slide <i class="fas fa-arrow-right"></i>'
+      ? 'Finish <i class="fas fa-check"></i>'
+      : 'Next <i class="fas fa-arrow-right"></i>'
 
-    // Position the card
     positionTourCard()
 
-    // Show
     const card = document.getElementById('tour-card')
     card.classList.remove('hidden')
     document.getElementById('tour-reopen').style.display = 'none'
@@ -1071,11 +1125,9 @@
   function dismissTourCard() {
     cardDismissed = true
     document.getElementById('tour-card').classList.add('hidden')
-    // Show re-open button if this is a demo slide
-    if (tourData[current]) {
-      positionReopenBtn()
-      document.getElementById('tour-reopen').style.display = 'flex'
-    }
+    // Always show the re-open button when card is dismissed
+    positionReopenBtn()
+    document.getElementById('tour-reopen').style.display = 'flex'
   }
 
   function reopenTourCard() {
@@ -1085,16 +1137,14 @@
   }
 
   function tourCardNext() {
-    const step    = tourStepForSlide(current)
-    const isLast  = step === tourTotal - 1
-    if (isLast) {
+    if (current === total - 1) {
+      // Last slide — just dismiss
       dismissTourCard()
-    } else {
-      // Advance to the next demo slide
-      const nextSlideIdx = demoSlideIndices[step + 1]
-      hideTourCard()
-      goTo(nextSlideIdx)
+      return
     }
+    // Always advance exactly one slide — seamless, no jumping
+    hideTourCard()
+    goTo(current + 1)
   }
 
   function positionTourCard() {
