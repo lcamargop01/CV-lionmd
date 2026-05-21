@@ -42,36 +42,46 @@
     overflow: hidden;
   }
 
-  /* ── SLIDE VIEWPORT ─────────────────────────── */
-  #viewport {
+  /* ── SCALER — gets the responsive CSS transform ── */
+  /* iframes live inside #viewport which is a child of #scaler.
+     Because #viewport itself has NO transform, Chromium does NOT
+     create a GPU compositing black-screen layer for its iframes. */
+  #scaler {
     position: relative;
-    width: var(--slide-w);
-    height: var(--slide-h);
+    flex-shrink: 0;
+    /* width/height set by JS to scaledW × scaledH */
+    transform-origin: top left;
+  }
+
+  /* ── VIEWPORT — always natural 1000×600, no transform ── */
+  #viewport {
+    width: 1000px;
+    height: 600px;
+    position: absolute;
+    top: 0; left: 0;
     overflow: hidden;
     border-radius: 18px;
     box-shadow: 0 40px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06);
-    flex-shrink: 0;
+    /* CRITICAL: no transform here — iframes inside a transformed parent = black screen */
+    transform: none !important;
   }
 
   /* ── SLIDES ─────────────────────────────────── */
+  /* fade-only — translateX on a slide that contains iframes = black screen in Chrome */
   .slide {
     position: absolute;
     inset: 0;
     display: flex;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.45s ease, transform 0.45s ease;
-    transform: translateX(60px);
+    transition: opacity 0.4s ease;
     background: var(--navy2);
     overflow: hidden;
   }
   .slide.active {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(0);
   }
-  .slide.exit-left  { opacity: 0; transform: translateX(-60px); }
-  .slide.exit-right { opacity: 0; transform: translateX(60px); }
 
   /* ── CONTROLS ───────────────────────────────── */
   #controls {
@@ -197,8 +207,6 @@
   #progress-bar { position: absolute; bottom: 0; left: 0; height: 2px; background: linear-gradient(90deg, var(--gold), var(--gold2)); transition: width 0.4s ease; z-index: 10; }
   .slide-num-badge { position: absolute; top: 16px; right: 20px; font-size: 10px; color: rgba(255,255,255,0.2); font-weight: 600; letter-spacing: 0.5px; }
 
-  #scaler { position: relative; flex-shrink: 0; overflow: visible; }
-
   /* ── SECTION DIVIDER SLIDE ──────────────────── */
   .section-div-slide {
     background: var(--navy); align-items: center; justify-content: center; flex-direction: column;
@@ -269,7 +277,6 @@
   .email-annot-box li::before { content: '→'; position: absolute; left: 0; color: var(--gold); }
 
   /* ── DEMO EMBED SLIDES ──────────────────────── */
-  /* Inline demo screen inside a presentation slide */
   .demo-slide {
     position: relative; width: 100%; height: 100%;
     display: flex; flex-direction: column;
@@ -286,199 +293,43 @@
   .demo-topbar-sub   { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 0.3px; }
   .demo-topbar-badge { margin-left: auto; background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.3); color: var(--gold); font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; }
 
-  /* The inner content area (564px tall = 600 - 36px topbar) */
-  .demo-body {
-    flex: 1; overflow: hidden;
-    /* Scale 1280-wide demo content to 1000px wide */
+  /* ── IFRAME CONTAINER ───────────────────────── */
+  /* fills the area below the 36px topbar: 600 - 36 = 564px */
+  .demo-frame-wrap {
+    flex: 1;
     position: relative;
+    overflow: hidden;
+    background: #f0f2f5;
   }
-  /* The scaler wrapper — 1280px logical width scaled to 1000px */
-  .demo-body-scaler {
-    width: 1280px;
-    height: 720px;
-    transform: scale(0.78125);
-    transform-origin: top left;
+  /* iframe is 1280px wide (demo native width), scaled to fit 1000px container.
+     scale = 1000/1280 = 0.78125
+     height needed to fill 564px visible area: 564/0.78125 = 722px */
+  .demo-frame-wrap iframe {
     position: absolute;
     top: 0; left: 0;
-    overflow: hidden;
-  }
-
-  /* ── DEMO APP RESET (scoped) ────────────────── */
-  /* All demo styles are prefixed .ds- to avoid conflicts */
-  .ds-root {
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    width: 1280px;
+    height: 722px;
+    border: none;
+    transform-origin: top left;
+    transform: scale(0.78125);
     background: #f0f2f5;
-    width: 1280px; height: 720px;
-    display: flex; overflow: hidden;
-    font-size: 14px; color: #374151;
+    display: block;
   }
-
-  /* ── DS: SIDEBAR ──────────────────────────── */
-  .ds-sidebar {
-    width: 240px; flex-shrink: 0;
-    background: #1a1a2e;
-    display: flex; flex-direction: column;
-    border-right: 1px solid rgba(255,255,255,0.04);
-    overflow-y: auto;
-  }
-  .ds-sidebar-logo {
-    padding: 18px 16px 14px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    display: flex; align-items: center; gap: 10px;
-  }
-  .ds-sidebar-logo img { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid #C9A84C; }
-  .ds-logo-name { color: #fff; font-size: 13px; font-weight: 700; line-height: 1.2; }
-  .ds-logo-sub  { color: rgba(255,255,255,0.35); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
-  .ds-sidebar-section { padding: 10px 10px 4px; color: rgba(255,255,255,0.25); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; }
-  .ds-nav-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 9px 14px; margin: 1px 6px;
-    border-radius: 8px; cursor: pointer;
-    color: rgba(255,255,255,0.5);
-    font-size: 13px; font-weight: 500;
-    border-left: 3px solid transparent;
-  }
-  .ds-nav-item.active { background: rgba(201,168,76,0.12); border-left-color: #C9A84C; color: #C9A84C; }
-  .ds-nav-item i { width: 16px; text-align: center; font-size: 13px; }
-  .ds-sidebar-footer { margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06); padding: 12px 10px; }
-  .ds-user-row { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 8px; }
-  .ds-avatar { width: 32px; height: 32px; border-radius: 50%; background: #C9A84C; color: #0d0d1e; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
-  .ds-user-name { color: #fff; font-size: 12px; font-weight: 600; }
-  .ds-user-role { color: rgba(255,255,255,0.35); font-size: 10px; }
-
-  /* ── DS: MAIN AREA ─────────────────────────── */
-  .ds-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  .ds-topbar {
-    background: #fff;
-    border-bottom: 1px solid #e5e7eb;
-    padding: 0 28px;
-    height: 56px;
-    display: flex; align-items: center; justify-content: space-between;
-    flex-shrink: 0;
-  }
-  .ds-page-title { font-size: 18px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 10px; }
-  .ds-period-pill { background: linear-gradient(135deg, #C9A84C, #f0c040); color: #0d0d1e; font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.5px; }
-  .ds-role-badge { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.3); color: #C9A84C; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; }
-  .ds-content { flex: 1; overflow-y: auto; padding: 24px 28px; }
-  .ds-content::-webkit-scrollbar { width: 4px; }
-  .ds-content::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
-
-  /* ── DS: CARDS ─────────────────────────────── */
-  .ds-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
-  .ds-kpi-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 22px; }
-  .ds-kpi { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); border-left: 3px solid transparent; }
-  .ds-kpi.gold   { border-left-color: #C9A84C; }
-  .ds-kpi.blue   { border-left-color: #3b82f6; }
-  .ds-kpi.green  { border-left-color: #10b981; }
-  .ds-kpi.purple { border-left-color: #8b5cf6; }
-  .ds-kpi.rose   { border-left-color: #f43f5e; }
-  .ds-kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; margin-bottom: 6px; }
-  .ds-kpi-value { font-size: 20px; font-weight: 800; color: #111827; }
-  .ds-kpi-sub   { font-size: 10px; color: #9ca3af; margin-top: 3px; }
-
-  /* ── DS: TABLE ──────────────────────────────── */
-  .ds-table { width: 100%; border-collapse: collapse; }
-  .ds-table th { background: #f9fafb; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-  .ds-table td { padding: 11px 14px; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6; }
-  .ds-table tr:last-child td { border-bottom: none; }
-
-  /* ── DS: BADGES ─────────────────────────────── */
-  .ds-pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-  .ds-pill-green  { background: #d1fae5; color: #065f46; }
-  .ds-pill-blue   { background: #dbeafe; color: #1e40af; }
-  .ds-pill-gold   { background: rgba(201,168,76,0.15); color: #92400e; }
-  .ds-pill-gray   { background: #f3f4f6; color: #6b7280; }
-  .ds-pill-purple { background: #ede9fe; color: #5b21b6; }
-  .ds-pill-red    { background: #fee2e2; color: #991b1b; }
-
-  /* ── DS: BTN ────────────────────────────────── */
-  .ds-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 8px; cursor: pointer; border: none; }
-  .ds-btn-gold { background: #C9A84C; color: #fff; }
-  .ds-btn-outline { background: transparent; border: 1.5px solid #d1d5db; color: #374151; }
-  .ds-btn-outline-gold { background: transparent; border: 1.5px solid #C9A84C; color: #C9A84C; }
-
-  /* ── DS: CHARTS ─────────────────────────────── */
-  .ds-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .ds-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
-  .ds-bar-label { width: 130px; font-size: 11px; color: #374151; text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ds-bar-track { flex: 1; height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
-  .ds-bar-fill { height: 100%; border-radius: 4px; }
-  .ds-bar-val { width: 80px; font-size: 11px; color: #6b7280; flex-shrink: 0; }
-  .ds-donut-wrap { position: relative; width: 130px; height: 130px; flex-shrink: 0; }
-  .ds-donut-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-  .ds-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-
-  /* ── DS: KANBAN ──────────────────────────────── */
-  .ds-kanban { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
-  .ds-kanban::-webkit-scrollbar { height: 3px; }
-  .ds-kanban::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
-  .ds-kanban-col { flex-shrink: 0; width: 200px; }
-  .ds-kanban-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .ds-kanban-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; }
-  .ds-kanban-count { background: #f3f4f6; color: #6b7280; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; }
-  .ds-kanban-card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); margin-bottom: 8px; border-left: 3px solid #e5e7eb; }
-  .ds-kc-name { font-size: 12px; font-weight: 700; color: #111827; margin-bottom: 4px; }
-  .ds-kc-sub  { font-size: 10px; color: #9ca3af; }
-
-  /* ── DS: MISC ───────────────────────────────── */
-  .ds-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .ds-section-title { font-size: 15px; font-weight: 700; color: #111827; }
-  .ds-avatar-cell { display: flex; align-items: center; gap: 9px; }
-  .ds-tbl-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; color: #fff; flex-shrink: 0; }
-
-  /* ── DS: PROV TABS ──────────────────────────── */
-  .ds-tabs { display: flex; gap: 0; border-bottom: 2px solid #e5e7eb; margin-bottom: 20px; }
-  .ds-tab { padding: 8px 18px; font-size: 13px; color: #6b7280; cursor: pointer; }
-  .ds-tab.active { color: #C9A84C; font-weight: 700; border-bottom: 2px solid #C9A84C; margin-bottom: -2px; }
-
-  /* ── DS: HOME PAGE ──────────────────────────── */
-  .ds-home {
-    width: 1280px; height: 720px;
-    background: linear-gradient(160deg,#0d0d1e 0%,#16213e 60%,#0f3460 100%);
-    display: flex; align-items: center; justify-content: center;
-    flex-direction: column;
-    position: relative; overflow: hidden;
-  }
-  .ds-home-grid {
+  /* Click-to-interact overlay — tap it once to enable keyboard/pointer pass-through */
+  .demo-frame-wrap .iframe-overlay {
     position: absolute; inset: 0;
-    background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg,rgba(255,255,255,0.025) 1px, transparent 1px);
-    background-size: 60px 60px;
-    pointer-events: none;
+    z-index: 10; cursor: pointer;
+    background: transparent;
   }
-  .ds-home-glow {
-    position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 30% 40%, rgba(201,168,76,0.08) 0%, transparent 55%),
-                radial-gradient(ellipse at 75% 70%, rgba(14,165,233,0.06) 0%, transparent 45%);
-    pointer-events: none;
+  .demo-frame-wrap .iframe-overlay::after {
+    content: '\1F5B1\FE0F\00A0 Click to interact';
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(13,13,30,0.82); color: rgba(255,255,255,0.7);
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 5px 14px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.12);
+    white-space: nowrap; pointer-events: none;
   }
-  .ds-home-inner {
-    position: relative; z-index: 2;
-    display: flex; flex-direction: column; align-items: center;
-    max-width: 900px; width: 100%; padding: 40px 32px;
-  }
-  .ds-home-logo { display: flex; flex-direction: column; align-items: center; margin-bottom: 32px; }
-  .ds-home-logo img { width: 76px; height: 76px; border-radius: 50%; border: 2px solid #C9A84C; box-shadow: 0 0 28px rgba(201,168,76,0.3); margin-bottom: 10px; }
-  .ds-home-brand { font-size: 26px; font-weight: 900; color: #fff; }
-  .ds-home-tagline { font-size: 11px; font-weight: 700; letter-spacing: 3px; color: rgba(255,255,255,0.35); text-transform: uppercase; margin-top: 2px; }
-  .ds-home-headline { font-size: 42px; font-weight: 900; color: #fff; text-align: center; line-height: 1.1; margin-bottom: 14px; }
-  .ds-home-headline em { font-style: normal; background: linear-gradient(135deg,#C9A84C,#f0c040); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-  .ds-home-sub { font-size: 15px; color: rgba(255,255,255,0.45); text-align: center; max-width: 520px; line-height: 1.65; margin-bottom: 40px; }
-  .ds-home-btns { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
-  .ds-home-btn {
-    display: flex; align-items: center; gap: 14px;
-    background: rgba(255,255,255,0.05); border: 1.5px solid rgba(255,255,255,0.12);
-    border-radius: 16px; padding: 18px 24px; min-width: 220px;
-  }
-  .ds-home-btn.primary { background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.5); }
-  .ds-home-btn-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
-  .ds-home-btn-title { font-size: 14px; font-weight: 800; color: #fff; margin-bottom: 3px; }
-  .ds-home-btn-sub { font-size: 10px; color: rgba(255,255,255,0.4); line-height: 1.4; }
-  .ds-home-pills { display: flex; gap: 10px; margin-top: 40px; flex-wrap: wrap; justify-content: center; }
-  .ds-home-pill { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4); font-size: 11px; font-weight: 600; padding: 5px 14px; border-radius: 100px; }
-
-  /* ── DS: PROVIDER PROFILE LAYOUT ───────────── */
-  .ds-prov-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); padding: 20px; }
-  .ds-section-divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
 
 </style>
 </head>
@@ -530,7 +381,7 @@
                   <div class="role-badge bg-gold"><i class="fas fa-crown"></i></div>
                   <div><h3>Admin / Owner</h3><span>Full access</span></div>
                 </div>
-                <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Payroll & billing reports</div>
+                <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Payroll &amp; billing reports</div>
                 <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Contractor management</div>
                 <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Hiring pipeline</div>
                 <div class="role-item"><i class="fas fa-check-circle" style="color:#C9A84C"></i>Client payment tracking</div>
@@ -580,7 +431,7 @@
       </div>
 
       <!-- ══════════════════════════════════════════ -->
-      <!-- SLIDE 3 — HOME PAGE (inline demo)         -->
+      <!-- SLIDE 3 — DEMO: HOME PAGE                 -->
       <!-- ══════════════════════════════════════════ -->
       <div class="slide" id="slide-home">
         <div class="demo-slide">
@@ -590,54 +441,9 @@
             <span class="demo-topbar-sub">lion.md — what visitors and providers see before logging in</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Live Demo</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-home">
-                <div class="ds-home-grid"></div>
-                <div class="ds-home-glow"></div>
-                <div class="ds-home-inner">
-                  <div class="ds-home-logo">
-                    <img src="/static/lion-logo.png" alt="Lion MD">
-                    <div class="ds-home-brand">Lion MD Portal</div>
-                    <div class="ds-home-tagline">Payroll &amp; Provider Management</div>
-                  </div>
-                  <div class="ds-home-headline">Your Practice,<br><em>Fully Automated</em></div>
-                  <div class="ds-home-sub">A secure portal for contractor payroll, provider self-service, and hiring management — built for Lion MD.</div>
-                  <div class="ds-home-btns">
-                    <div class="ds-home-btn primary">
-                      <div class="ds-home-btn-icon" style="background:rgba(201,168,76,0.2);color:#C9A84C;"><i class="fas fa-user-circle"></i></div>
-                      <div>
-                        <div class="ds-home-btn-title">Provider Login</div>
-                        <div class="ds-home-btn-sub">Contractors: access your portal,<br>pay stubs &amp; licenses</div>
-                      </div>
-                      <i class="fas fa-arrow-right" style="color:rgba(201,168,76,0.6);font-size:14px;margin-left:auto;"></i>
-                    </div>
-                    <div class="ds-home-btn">
-                      <div class="ds-home-btn-icon" style="background:rgba(139,92,246,0.2);color:#a78bfa;"><i class="fas fa-clipboard-list"></i></div>
-                      <div>
-                        <div class="ds-home-btn-title">New Provider Application</div>
-                        <div class="ds-home-btn-sub">Interested in joining? Submit<br>your application here</div>
-                      </div>
-                      <i class="fas fa-arrow-right" style="color:rgba(255,255,255,0.2);font-size:14px;margin-left:auto;"></i>
-                    </div>
-                    <div class="ds-home-btn">
-                      <div class="ds-home-btn-icon" style="background:rgba(14,165,233,0.2);color:#38bdf8;"><i class="fas fa-envelope"></i></div>
-                      <div>
-                        <div class="ds-home-btn-title">Contact Us</div>
-                        <div class="ds-home-btn-sub">Questions or support?<br>Reach the Lion MD team</div>
-                      </div>
-                      <i class="fas fa-arrow-right" style="color:rgba(255,255,255,0.2);font-size:14px;margin-left:auto;"></i>
-                    </div>
-                  </div>
-                  <div class="ds-home-pills">
-                    <span class="ds-home-pill"><i class="fas fa-lock" style="margin-right:5px;"></i>Invite-Only Access</span>
-                    <span class="ds-home-pill"><i class="fas fa-globe" style="margin-right:5px;"></i>Hosted on Cloudflare</span>
-                    <span class="ds-home-pill"><i class="fas fa-shield-alt" style="margin-right:5px;"></i>PBKDF2 Password Hashing</span>
-                    <span class="ds-home-pill"><i class="fas fa-envelope" style="margin-right:5px;"></i>Email via Resend</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-home-wrap">
+            <iframe id="frame-home" data-src="/demo?screen=home&iframe=1" title="Home Page Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-home" onclick="unlockFrame('home')"></div>
           </div>
         </div>
         <div class="slide-num-badge">3 / 17</div>
@@ -682,98 +488,9 @@
             <span class="demo-topbar-sub">Live KPI cards, visit-type donut, contractor earnings chart</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <!-- sidebar -->
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo">
-                    <img src="/static/lion-logo.png" alt="">
-                    <div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Payroll</div></div>
-                  </div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">Main</div>
-                    <div class="ds-nav-item active"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-money-bill-wave"></i><span>Contractor Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>Consult Records</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-md"></i><span>Contractors</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-plus"></i><span>Onboarding</span></div>
-                    <div class="ds-sidebar-section" style="margin-top:8px;">Finance</div>
-                    <div class="ds-nav-item"><i class="fas fa-credit-card"></i><span>Client Payments</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-sliders-h"></i><span>Payment Rates</span></div>
-                    <div class="ds-sidebar-section" style="margin-top:8px;">Admin</div>
-                    <div class="ds-nav-item"><i class="fas fa-users-cog"></i><span>User Management</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer">
-                    <div class="ds-user-row">
-                      <div class="ds-avatar">A</div>
-                      <div><div class="ds-user-name">Admin User</div><div class="ds-user-role">Administrator</div></div>
-                    </div>
-                  </div>
-                </div>
-                <!-- main -->
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Dashboard <span class="ds-period-pill">May 2026</span></div>
-                    <div style="display:flex;align-items:center;gap:12px;">
-                      <select style="border:1.5px solid #e5e7eb;border-radius:8px;padding:5px 10px;font-size:12px;color:#374151;outline:none;"><option>May 2026 (2 files)</option><option>April 2026</option></select>
-                      <div class="ds-role-badge"><i class="fas fa-crown" style="font-size:9px;"></i> Admin</div>
-                    </div>
-                  </div>
-                  <div class="ds-content">
-                    <!-- KPI row -->
-                    <div class="ds-kpi-grid">
-                      <div class="ds-kpi gold"><div class="ds-kpi-label">Total Approved Cases</div><div class="ds-kpi-value">187,432</div><div class="ds-kpi-sub">↑ 4.2% vs last month</div></div>
-                      <div class="ds-kpi blue"><div class="ds-kpi-label">CV Owes Us</div><div class="ds-kpi-value">$3,421,800</div><div class="ds-kpi-sub">Total billed this period</div></div>
-                      <div class="ds-kpi green"><div class="ds-kpi-label">We Owe Contractors</div><div class="ds-kpi-value">$1,744,200</div><div class="ds-kpi-sub">28 active contractors</div></div>
-                      <div class="ds-kpi purple"><div class="ds-kpi-label">Chris Mgmt Fee</div><div class="ds-kpi-value">$419,400</div><div class="ds-kpi-sub">25% of net margin</div></div>
-                      <div class="ds-kpi rose"><div class="ds-kpi-label">Net Margin (37.4%)</div><div class="ds-kpi-value">$1,258,200</div><div class="ds-kpi-sub">After all payouts</div></div>
-                    </div>
-                    <div class="ds-two-col">
-                      <!-- Donut -->
-                      <div class="ds-card" style="padding:20px;">
-                        <div class="ds-section-title" style="margin-bottom:16px;">Visit Type Breakdown</div>
-                        <div style="display:flex;align-items:center;gap:24px;">
-                          <div class="ds-donut-wrap">
-                            <svg class="ds-donut-svg" viewBox="0 0 42 42">
-                              <circle cx="21" cy="21" r="15.915" fill="none" stroke="#f3f4f6" stroke-width="5"/>
-                              <circle cx="21" cy="21" r="15.915" fill="none" stroke="#C9A84C" stroke-width="5" stroke-dasharray="73 27" stroke-dashoffset="0"/>
-                              <circle cx="21" cy="21" r="15.915" fill="none" stroke="#3b82f6" stroke-width="5" stroke-dasharray="14 86" stroke-dashoffset="-73"/>
-                              <circle cx="21" cy="21" r="15.915" fill="none" stroke="#8b5cf6" stroke-width="5" stroke-dasharray="8 92" stroke-dashoffset="-87"/>
-                              <circle cx="21" cy="21" r="15.915" fill="none" stroke="#10b981" stroke-width="5" stroke-dasharray="5 95" stroke-dashoffset="-95"/>
-                            </svg>
-                            <div class="ds-donut-center"><div style="font-size:17px;font-weight:800;color:#111827;">187K</div><div style="font-size:9px;color:#9ca3af;">cases</div></div>
-                          </div>
-                          <div style="flex:1;">
-                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;"><div style="width:10px;height:10px;border-radius:2px;background:#C9A84C;flex-shrink:0;"></div><span style="color:#374151;flex:1;">Async (Text/Email)</span><strong>73%</strong></div>
-                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;"><div style="width:10px;height:10px;border-radius:2px;background:#3b82f6;flex-shrink:0;"></div><span style="color:#374151;flex:1;">Sync Video</span><strong>14%</strong></div>
-                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;"><div style="width:10px;height:10px;border-radius:2px;background:#8b5cf6;flex-shrink:0;"></div><span style="color:#374151;flex:1;">Sync Phone</span><strong>8%</strong></div>
-                            <div style="display:flex;align-items:center;gap:8px;font-size:12px;"><div style="width:10px;height:10px;border-radius:2px;background:#10b981;flex-shrink:0;"></div><span style="color:#374151;flex:1;">In-Person</span><strong>5%</strong></div>
-                          </div>
-                        </div>
-                      </div>
-                      <!-- Bar chart -->
-                      <div class="ds-card" style="padding:20px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-                          <div class="ds-section-title">Contractor Earnings</div>
-                          <div style="display:flex;gap:10px;font-size:10px;">
-                            <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:2px;background:#3b82f6;display:inline-block;"></span>CV Pays Us</span>
-                            <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:2px;background:#8b5cf6;display:inline-block;"></span>We Pay</span>
-                          </div>
-                        </div>
-                        <div class="ds-bar-row"><div class="ds-bar-label">S. Williams</div><div class="ds-bar-track"><div class="ds-bar-fill" style="width:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div><div class="ds-bar-val">$184K</div></div>
-                        <div class="ds-bar-row"><div class="ds-bar-label">J. Martinez</div><div class="ds-bar-track"><div class="ds-bar-fill" style="width:85%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div><div class="ds-bar-val">$156K</div></div>
-                        <div class="ds-bar-row"><div class="ds-bar-label">A. Johnson</div><div class="ds-bar-track"><div class="ds-bar-fill" style="width:70%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div><div class="ds-bar-val">$128K</div></div>
-                        <div class="ds-bar-row"><div class="ds-bar-label">M. Davis</div><div class="ds-bar-track"><div class="ds-bar-fill" style="width:61%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div><div class="ds-bar-val">$112K</div></div>
-                        <div class="ds-bar-row"><div class="ds-bar-label">L. Nguyen</div><div class="ds-bar-track"><div class="ds-bar-fill" style="width:54%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div><div class="ds-bar-val">$98K</div></div>
-                        <div class="ds-bar-row"><div class="ds-bar-label">R. Chen</div><div class="ds-bar-track"><div class="ds-bar-fill" style="width:45%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div><div class="ds-bar-val">$83K</div></div>
-                        <div class="ds-bar-row"><div class="ds-bar-label">P. Patel</div><div class="ds-bar-track"><div class="ds-bar-fill" style="width:41%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div><div class="ds-bar-val">$76K</div></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-dashboard-wrap">
+            <iframe id="frame-dashboard" data-src="/demo?screen=dashboard&iframe=1" title="Dashboard Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-dashboard" onclick="unlockFrame('dashboard')"></div>
           </div>
         </div>
         <div class="slide-num-badge">5 / 17</div>
@@ -790,62 +507,9 @@
             <span class="demo-topbar-sub">Mgmt fee card, per-contractor payout cards, paystub viewer, Gusto export</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Payroll</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">Main</div>
-                    <div class="ds-nav-item"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
-                    <div class="ds-nav-item active"><i class="fas fa-money-bill-wave"></i><span>Contractor Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>Consult Records</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-md"></i><span>Contractors</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-plus"></i><span>Onboarding</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar">A</div><div><div class="ds-user-name">Admin User</div><div class="ds-user-role">Administrator</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Contractor Payroll <span class="ds-period-pill">May 2026</span></div>
-                    <div style="display:flex;gap:10px;">
-                      <button class="ds-btn ds-btn-outline"><i class="fas fa-sync-alt"></i> Recalculate</button>
-                      <button class="ds-btn ds-btn-gold"><i class="fas fa-file-export"></i> Export to Gusto CSV</button>
-                    </div>
-                  </div>
-                  <div class="ds-content">
-                    <!-- Chris mgmt card -->
-                    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:14px;padding:18px 22px;margin-bottom:18px;border:1px solid rgba(201,168,76,0.25);">
-                      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                        <div>
-                          <span style="background:rgba(201,168,76,0.2);color:#C9A84C;font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;letter-spacing:1px;">MGMT FEE EARNER</span>
-                          <div style="color:#fff;font-size:17px;font-weight:800;margin-top:6px;">Chris Garcia</div>
-                          <div style="color:rgba(255,255,255,0.4);font-size:11px;">25% of (CV Pays Us – We Pay Contractors)</div>
-                        </div>
-                        <button class="ds-btn ds-btn-outline-gold"><i class="fas fa-file-invoice-dollar"></i> Payment Statement</button>
-                      </div>
-                      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-                        <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:11px;"><div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Mgmt Fee</div><div style="color:#C9A84C;font-size:17px;font-weight:800;">$419,400</div></div>
-                        <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:11px;"><div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total CV</div><div style="color:#fff;font-size:17px;font-weight:800;">$3,421,800</div></div>
-                        <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:11px;"><div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">We Pay Out</div><div style="color:#fff;font-size:17px;font-weight:800;">$1,744,200</div></div>
-                        <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:11px;"><div style="font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Net Margin</div><div style="color:#10b981;font-size:17px;font-weight:800;">37.4%</div></div>
-                      </div>
-                    </div>
-                    <!-- Contractor cards -->
-                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#6366f1;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">S</div><div><div style="font-size:12px;font-weight:700;color:#111827;">S. Williams</div><span class="ds-pill ds-pill-blue" style="font-size:9px;">Regular</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">18,420 cases</div><div style="font-size:15px;font-weight:800;color:#10b981;">$184,200</div></div>
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">J</div><div><div style="font-size:12px;font-weight:700;color:#111827;">J. Martinez</div><span class="ds-pill ds-pill-blue" style="font-size:9px;">Regular</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">15,630 cases</div><div style="font-size:15px;font-weight:800;color:#10b981;">$156,300</div></div>
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#10b981;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">A</div><div><div style="font-size:12px;font-weight:700;color:#111827;">A. Johnson</div><span class="ds-pill ds-pill-blue" style="font-size:9px;">Regular</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">12,840 cases</div><div style="font-size:15px;font-weight:800;color:#10b981;">$128,400</div></div>
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">M</div><div><div style="font-size:12px;font-weight:700;color:#111827;">M. Davis</div><span class="ds-pill ds-pill-blue" style="font-size:9px;">Regular</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">11,250 cases</div><div style="font-size:15px;font-weight:800;color:#10b981;">$112,500</div></div>
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#8b5cf6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">L</div><div><div style="font-size:12px;font-weight:700;color:#111827;">L. Nguyen</div><span class="ds-pill ds-pill-blue" style="font-size:9px;">Regular</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">9,870 cases</div><div style="font-size:15px;font-weight:800;color:#10b981;">$98,700</div></div>
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#ec4899;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">R</div><div><div style="font-size:12px;font-weight:700;color:#111827;">R. Chen</div><span class="ds-pill ds-pill-blue" style="font-size:9px;">Regular</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">8,340 cases</div><div style="font-size:15px;font-weight:800;color:#10b981;">$83,400</div></div>
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#14b8a6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">P</div><div><div style="font-size:12px;font-weight:700;color:#111827;">P. Patel</div><span class="ds-pill ds-pill-blue" style="font-size:9px;">Regular</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">7,620 cases</div><div style="font-size:15px;font-weight:800;color:#10b981;">$76,200</div></div>
-                      <div class="ds-card" style="padding:14px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:32px;height:32px;border-radius:8px;background:#f97316;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;">A</div><div><div style="font-size:12px;font-weight:700;color:#111827;">A.L. Carr</div><span class="ds-pill ds-pill-gold" style="font-size:9px;">Owner</span></div></div><div style="font-size:10px;color:#6b7280;margin-bottom:5px;">11,286 cases</div><div style="font-size:15px;font-weight:800;color:#9ca3af;">Owner — Not Paid</div></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-payroll-wrap">
+            <iframe id="frame-payroll" data-src="/demo?screen=payroll&iframe=1" title="Payroll Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-payroll" onclick="unlockFrame('payroll')"></div>
           </div>
         </div>
         <div class="slide-num-badge">6 / 17</div>
@@ -862,54 +526,9 @@
             <span class="demo-topbar-sub">187,000+ searchable consult records with filter, export, and doctor breakdown</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Payroll</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">Main</div>
-                    <div class="ds-nav-item"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-money-bill-wave"></i><span>Contractor Payroll</span></div>
-                    <div class="ds-nav-item active"><i class="fas fa-file-medical"></i><span>Consult Records</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-md"></i><span>Contractors</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-plus"></i><span>Onboarding</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar">A</div><div><div class="ds-user-name">Admin User</div><div class="ds-user-role">Administrator</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Consult Records <span class="ds-period-pill">May 2026</span></div>
-                    <div class="ds-role-badge"><i class="fas fa-crown" style="font-size:9px;"></i> Admin</div>
-                  </div>
-                  <div class="ds-content">
-                    <div class="ds-card" style="padding:18px;">
-                      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-                        <input type="text" placeholder="🔍  Search patient, case ID, org..." style="flex:1;min-width:200px;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;color:#111827;outline:none;">
-                        <select style="width:140px;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:12px;color:#374151;outline:none;"><option>All Doctors</option><option>J. Martinez, NP</option><option>S. Williams, NP</option></select>
-                        <select style="width:120px;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:12px;color:#374151;outline:none;"><option>All Types</option><option>Async</option><option>Sync Video</option></select>
-                        <button class="ds-btn ds-btn-outline"><i class="fas fa-download"></i> Export</button>
-                        <button class="ds-btn ds-btn-gold"><i class="fas fa-database"></i> Full Export</button>
-                      </div>
-                      <div style="font-size:12px;color:#6b7280;margin-bottom:10px;"><strong style="color:#111827;">187,432</strong> records</div>
-                      <div style="overflow-x:auto;">
-                        <table class="ds-table">
-                          <thead><tr><th>Case ID</th><th>Date</th><th>Patient</th><th>Organization</th><th>Doctor</th><th>Type</th><th>CV Fee</th><th>Contractor Fee</th><th>Status</th></tr></thead>
-                          <tbody>
-                            <tr><td style="font-family:monospace;font-size:11px;color:#6b7280;">TRM-A0042</td><td style="font-size:12px;">5/20/2026</td><td style="font-weight:600;">Marcus Thompson</td><td><span class="ds-pill ds-pill-gray">TrimRx</span></td><td style="font-size:12px;">S. Williams, NP</td><td><span class="ds-pill ds-pill-gold">Async</span></td><td style="color:#10b981;font-weight:700;">$18.00</td><td style="color:#3b82f6;font-weight:700;">$10.00</td><td><span class="ds-pill ds-pill-green">Approved</span></td></tr>
-                            <tr><td style="font-family:monospace;font-size:11px;color:#6b7280;">ALT-B1193</td><td style="font-size:12px;">5/20/2026</td><td style="font-weight:600;">Keisha Johnson</td><td><span class="ds-pill ds-pill-gray">Alt Rx</span></td><td style="font-size:12px;">J. Martinez, NP</td><td><span class="ds-pill ds-pill-gold">Async</span></td><td style="color:#10b981;font-weight:700;">$18.00</td><td style="color:#3b82f6;font-weight:700;">$10.00</td><td><span class="ds-pill ds-pill-green">Approved</span></td></tr>
-                            <tr><td style="font-family:monospace;font-size:11px;color:#6b7280;">TRM-C2284</td><td style="font-size:12px;">5/19/2026</td><td style="font-weight:600;">Raj Patel</td><td><span class="ds-pill ds-pill-gray">TrimRx</span></td><td style="font-size:12px;">A. Johnson, NP</td><td><span class="ds-pill ds-pill-blue">Sync Video</span></td><td style="color:#10b981;font-weight:700;">$55.00</td><td style="color:#3b82f6;font-weight:700;">$30.00</td><td><span class="ds-pill ds-pill-green">Approved</span></td></tr>
-                            <tr><td style="font-family:monospace;font-size:11px;color:#6b7280;">ALT-D3375</td><td style="font-size:12px;">5/19/2026</td><td style="font-weight:600;">Linda Garcia</td><td><span class="ds-pill ds-pill-gray">Good Health</span></td><td style="font-size:12px;">S. Williams, NP</td><td><span class="ds-pill ds-pill-gold">Async</span></td><td style="color:#10b981;font-weight:700;">$18.00</td><td style="color:#3b82f6;font-weight:700;">$10.00</td><td><span class="ds-pill ds-pill-green">Approved</span></td></tr>
-                            <tr><td style="font-family:monospace;font-size:11px;color:#6b7280;">TRM-E4466</td><td style="font-size:12px;">5/18/2026</td><td style="font-weight:600;">Derek Wilson</td><td><span class="ds-pill ds-pill-gray">Alt Rx</span></td><td style="font-size:12px;">M. Davis, NP</td><td><span class="ds-pill ds-pill-purple">Sync Phone</span></td><td style="color:#10b981;font-weight:700;">$50.00</td><td style="color:#3b82f6;font-weight:700;">$27.00</td><td><span class="ds-pill ds-pill-red">Denied</span></td></tr>
-                            <tr><td style="font-family:monospace;font-size:11px;color:#6b7280;">GH-F5557</td><td style="font-size:12px;">5/18/2026</td><td style="font-weight:600;">Amara Osei</td><td><span class="ds-pill ds-pill-gray">Good Health</span></td><td style="font-size:12px;">L. Nguyen, ARNP</td><td><span class="ds-pill ds-pill-gold">Async</span></td><td style="color:#10b981;font-weight:700;">$18.00</td><td style="color:#3b82f6;font-weight:700;">$10.00</td><td><span class="ds-pill ds-pill-green">Approved</span></td></tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-consults-wrap">
+            <iframe id="frame-consults" data-src="/demo?screen=consults&iframe=1" title="Consults Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-consults" onclick="unlockFrame('consults')"></div>
           </div>
         </div>
         <div class="slide-num-badge">7 / 17</div>
@@ -926,48 +545,9 @@
             <span class="demo-topbar-sub">28 active NPs/ARNPs/PAs — EIN, group, email, status, actions</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Payroll</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">Main</div>
-                    <div class="ds-nav-item"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-money-bill-wave"></i><span>Contractor Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>Consult Records</span></div>
-                    <div class="ds-nav-item active"><i class="fas fa-user-md"></i><span>Contractors</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-plus"></i><span>Onboarding</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar">A</div><div><div class="ds-user-name">Admin User</div><div class="ds-user-role">Administrator</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Contractors <span class="ds-period-pill">May 2026</span></div>
-                    <div style="display:flex;gap:10px;">
-                      <button class="ds-btn ds-btn-outline"><i class="fas fa-file-excel"></i> Export XLSX</button>
-                      <button class="ds-btn ds-btn-gold"><i class="fas fa-plus"></i> Add Contractor</button>
-                    </div>
-                  </div>
-                  <div class="ds-content">
-                    <div style="font-size:13px;color:#6b7280;margin-bottom:12px;"><strong style="color:#111827;">28 active</strong> · 6 inactive</div>
-                    <div class="ds-card" style="overflow:hidden;">
-                      <div style="padding:12px 18px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">NPs / ARNPs / PAs — 28</div>
-                      <table class="ds-table">
-                        <thead><tr><th>Name</th><th>Company</th><th>EIN / SSN</th><th>Group</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
-                        <tbody>
-                          <tr><td><div class="ds-avatar-cell"><div class="ds-tbl-avatar" style="background:#6366f1;">S</div><span style="font-weight:600;">Sarah Williams</span></div></td><td style="font-size:12px;">Williams Clinical LLC</td><td style="font-family:monospace;font-size:11px;color:#6b7280;">**5823</td><td><span class="ds-pill ds-pill-purple">NP</span></td><td style="font-size:12px;color:#6b7280;">s.williams@example.com</td><td><span class="ds-pill ds-pill-green">Active</span></td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-user"></i> Profile</button><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-pencil-alt"></i> Edit</button></div></td></tr>
-                          <tr><td><div class="ds-avatar-cell"><div class="ds-tbl-avatar" style="background:#3b82f6;">J</div><span style="font-weight:600;">James Martinez</span></div></td><td style="font-size:12px;">Martinez NP Services</td><td style="font-family:monospace;font-size:11px;color:#6b7280;">**7741</td><td><span class="ds-pill ds-pill-purple">NP</span></td><td style="font-size:12px;color:#6b7280;">j.martinez@example.com</td><td><span class="ds-pill ds-pill-green">Active</span></td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-user"></i> Profile</button><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-pencil-alt"></i> Edit</button></div></td></tr>
-                          <tr><td><div class="ds-avatar-cell"><div class="ds-tbl-avatar" style="background:#10b981;">A</div><span style="font-weight:600;">Anna Johnson</span></div></td><td style="font-size:12px;">Johnson Health PLLC</td><td style="font-family:monospace;font-size:11px;color:#6b7280;">**3392</td><td><span class="ds-pill ds-pill-purple">NP</span></td><td style="font-size:12px;color:#6b7280;">a.johnson@example.com</td><td><span class="ds-pill ds-pill-green">Active</span></td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-user"></i> Profile</button><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-pencil-alt"></i> Edit</button></div></td></tr>
-                          <tr><td><div class="ds-avatar-cell"><div class="ds-tbl-avatar" style="background:#f59e0b;">M</div><span style="font-weight:600;">Marcus Davis</span></div></td><td style="font-size:12px;">Davis Care Group LLC</td><td style="font-family:monospace;font-size:11px;color:#6b7280;">**8814</td><td><span class="ds-pill ds-pill-purple">NP</span></td><td style="font-size:12px;color:#6b7280;">m.davis@example.com</td><td><span class="ds-pill ds-pill-green">Active</span></td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-user"></i> Profile</button><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-pencil-alt"></i> Edit</button></div></td></tr>
-                          <tr><td><div class="ds-avatar-cell"><div class="ds-tbl-avatar" style="background:#8b5cf6;">L</div><span style="font-weight:600;">Lisa Nguyen</span></div></td><td style="font-size:12px;">Nguyen Clinical PLLC</td><td style="font-family:monospace;font-size:11px;color:#6b7280;">**2267</td><td><span class="ds-pill ds-pill-purple">ARNP</span></td><td style="font-size:12px;color:#6b7280;">l.nguyen@example.com</td><td><span class="ds-pill ds-pill-green">Active</span></td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-user"></i> Profile</button><button class="ds-btn ds-btn-outline" style="padding:3px 9px;font-size:11px;"><i class="fas fa-pencil-alt"></i> Edit</button></div></td></tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-contractors-wrap">
+            <iframe id="frame-contractors" data-src="/demo?screen=contractors&iframe=1" title="Contractors Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-contractors" onclick="unlockFrame('contractors')"></div>
           </div>
         </div>
         <div class="slide-num-badge">8 / 17</div>
@@ -984,68 +564,9 @@
             <span class="demo-topbar-sub">Kanban board: New → Contacted → Interview → Offer → Hired</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Payroll</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">Main</div>
-                    <div class="ds-nav-item"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-money-bill-wave"></i><span>Contractor Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>Consult Records</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-user-md"></i><span>Contractors</span></div>
-                    <div class="ds-nav-item active"><i class="fas fa-user-plus"></i><span>Onboarding</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar">A</div><div><div class="ds-user-name">Admin User</div><div class="ds-user-role">Administrator</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Onboarding <span class="ds-period-pill">May 2026</span></div>
-                    <button class="ds-btn ds-btn-gold"><i class="fas fa-plus"></i> Add Candidate</button>
-                  </div>
-                  <div class="ds-content">
-                    <div style="display:flex;gap:8px;margin-bottom:14px;">
-                      <span class="ds-pill ds-pill-gray">12 total</span>
-                      <span class="ds-pill ds-pill-blue">5 active</span>
-                      <span class="ds-pill ds-pill-green">6 hired</span>
-                      <span class="ds-pill ds-pill-red">1 rejected</span>
-                    </div>
-                    <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:18px;">
-                      <div style="padding:8px 18px;font-size:13px;font-weight:700;color:#C9A84C;border-bottom:2px solid #C9A84C;margin-bottom:-2px;cursor:pointer;">Pipeline</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;">Contractors</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;cursor:pointer;">Calendar &amp; Deadlines</div>
-                    </div>
-                    <div class="ds-kanban">
-                      <div class="ds-kanban-col">
-                        <div class="ds-kanban-header"><span class="ds-kanban-title" style="color:#6366f1;">New</span><span class="ds-kanban-count">2</span></div>
-                        <div class="ds-kanban-card" style="border-left-color:#6366f1;"><div class="ds-kc-name">Jordan Hayes — TrimRx</div><div class="ds-kc-sub">New · NP</div></div>
-                        <div class="ds-kanban-card" style="border-left-color:#6366f1;"><div class="ds-kc-name">Alex Rivera — Alt Rx</div><div class="ds-kc-sub">New · NP</div></div>
-                      </div>
-                      <div class="ds-kanban-col">
-                        <div class="ds-kanban-header"><span class="ds-kanban-title" style="color:#3b82f6;">Contacted</span><span class="ds-kanban-count">1</span></div>
-                        <div class="ds-kanban-card" style="border-left-color:#3b82f6;"><div class="ds-kc-name">Casey Morgan — Good Health</div><div class="ds-kc-sub">Contacted · NP</div></div>
-                      </div>
-                      <div class="ds-kanban-col">
-                        <div class="ds-kanban-header"><span class="ds-kanban-title" style="color:#f59e0b;">Interview</span><span class="ds-kanban-count">2</span></div>
-                        <div class="ds-kanban-card" style="border-left-color:#f59e0b;"><div class="ds-kc-name">Taylor Brooks — TrimRx</div><div class="ds-kc-sub">Interview Scheduled · NP</div></div>
-                        <div class="ds-kanban-card" style="border-left-color:#f59e0b;"><div class="ds-kc-name">Quinn Walker — Alt Rx</div><div class="ds-kc-sub">Interview Scheduled · NP</div></div>
-                      </div>
-                      <div class="ds-kanban-col">
-                        <div class="ds-kanban-header"><span class="ds-kanban-title" style="color:#8b5cf6;">Offer Sent</span><span class="ds-kanban-count">0</span></div>
-                        <div style="border:2px dashed #e5e7eb;border-radius:10px;padding:16px;text-align:center;font-size:11px;color:#d1d5db;">Drop here</div>
-                      </div>
-                      <div class="ds-kanban-col">
-                        <div class="ds-kanban-header"><span class="ds-kanban-title" style="color:#10b981;">Hired</span><span class="ds-kanban-count">6</span></div>
-                        <div class="ds-kanban-card" style="border-left-color:#10b981;"><div class="ds-kc-name">Sam Patterson</div><div class="ds-kc-sub">Hired · NP</div></div>
-                        <div class="ds-kanban-card" style="border-left-color:#10b981;"><div class="ds-kc-name">Dana Flores</div><div class="ds-kc-sub">Hired · NP</div></div>
-                        <div class="ds-kanban-card" style="border-left-color:#10b981;"><div class="ds-kc-name">Chris Kim</div><div class="ds-kc-sub">Hired · NP</div></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-onboarding-wrap">
+            <iframe id="frame-onboarding" data-src="/demo?screen=onboarding&iframe=1" title="Onboarding Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-onboarding" onclick="unlockFrame('onboarding')"></div>
           </div>
         </div>
         <div class="slide-num-badge">9 / 17</div>
@@ -1062,55 +583,9 @@
             <span class="demo-topbar-sub">54 clients, $3.4M May revenue — paid/pending/past-due tracking</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Payroll</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">Main</div>
-                    <div class="ds-nav-item"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-money-bill-wave"></i><span>Contractor Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>Consult Records</span></div>
-                    <div class="ds-sidebar-section" style="margin-top:8px;">Finance</div>
-                    <div class="ds-nav-item active"><i class="fas fa-credit-card"></i><span>Client Payments</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar">A</div><div><div class="ds-user-name">Admin User</div><div class="ds-user-role">Administrator</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Client Payments <span class="ds-period-pill">May 2026</span></div>
-                    <div class="ds-role-badge"><i class="fas fa-crown" style="font-size:9px;"></i> Admin</div>
-                  </div>
-                  <div class="ds-content">
-                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px;">
-                      <div class="ds-kpi gold"><div class="ds-kpi-label">Total Clients</div><div class="ds-kpi-value">54</div></div>
-                      <div class="ds-kpi green"><div class="ds-kpi-label">May Revenue</div><div class="ds-kpi-value" style="font-size:16px;">$3,421,800</div></div>
-                      <div class="ds-kpi blue"><div class="ds-kpi-label">Paid This Month</div><div class="ds-kpi-value">22</div></div>
-                      <div class="ds-kpi rose"><div class="ds-kpi-label">Past Due</div><div class="ds-kpi-value">2</div></div>
-                      <div class="ds-kpi purple"><div class="ds-kpi-label">All-Time Revenue</div><div class="ds-kpi-value" style="font-size:14px;">$13.9M</div></div>
-                    </div>
-                    <div class="ds-card" style="overflow:hidden;">
-                      <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e7eb;">
-                        <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle" style="color:#10b981;"></i><span style="font-size:13px;font-weight:700;color:#111827;">Paid</span><span class="ds-pill ds-pill-green">22</span></div>
-                        <button class="ds-btn ds-btn-outline"><i class="fas fa-file-excel"></i> Export XLSX</button>
-                      </div>
-                      <table class="ds-table">
-                        <thead><tr><th>Client</th><th>Status</th><th>Amount</th><th>Date</th><th>Notes</th></tr></thead>
-                        <tbody>
-                          <tr><td style="font-weight:600;">CareValidate</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td style="font-weight:700;color:#10b981;">$3,421,800.00</td><td style="font-size:12px;color:#6b7280;">5/4/2026</td><td style="font-size:12px;color:#9ca3af;">—</td></tr>
-                          <tr><td style="font-weight:600;">TrimRx</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td style="font-weight:700;color:#10b981;">$12,400.00</td><td style="font-size:12px;color:#6b7280;">5/6/2026</td><td style="font-size:12px;color:#9ca3af;">—</td></tr>
-                          <tr><td style="font-weight:600;">Alt Rx</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td style="font-weight:700;color:#10b981;">$9,800.00</td><td style="font-size:12px;color:#6b7280;">5/5/2026</td><td style="font-size:12px;color:#9ca3af;">—</td></tr>
-                          <tr><td style="font-weight:600;">Good Health Network</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td style="font-weight:700;color:#10b981;">$7,200.00</td><td style="font-size:12px;color:#6b7280;">5/5/2026</td><td style="font-size:12px;color:#9ca3af;">—</td></tr>
-                          <tr><td style="font-weight:600;">Sunrise Medical</td><td><span class="ds-pill ds-pill-gold">Pending</span></td><td style="font-weight:700;">$1,800.00</td><td style="font-size:12px;color:#6b7280;">—</td><td style="font-size:12px;color:#9ca3af;">—</td></tr>
-                          <tr><td style="font-weight:600;">BlueSky Health</td><td><span class="ds-pill ds-pill-red">Past Due</span></td><td style="font-weight:700;">$950.00</td><td style="font-size:12px;color:#6b7280;">—</td><td style="font-size:12px;color:#9ca3af;">⚠️ Invoice sent 5/1</td></tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-payments-wrap">
+            <iframe id="frame-payments" data-src="/demo?screen=payments&iframe=1" title="Payments Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-payments" onclick="unlockFrame('payments')"></div>
           </div>
         </div>
         <div class="slide-num-badge">10 / 17</div>
@@ -1127,46 +602,9 @@
             <span class="demo-topbar-sub">Create users, assign roles — Admin/CareValidate/Onboarding/Provider/Candidate</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Payroll</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">Main</div>
-                    <div class="ds-nav-item"><i class="fas fa-chart-pie"></i><span>Dashboard</span></div>
-                    <div class="ds-sidebar-section" style="margin-top:8px;">Admin</div>
-                    <div class="ds-nav-item active"><i class="fas fa-users-cog"></i><span>User Management</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar">A</div><div><div class="ds-user-name">Admin User</div><div class="ds-user-role">Administrator</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">User Management</div>
-                    <div style="display:flex;gap:10px;">
-                      <button class="ds-btn ds-btn-outline"><i class="fas fa-users"></i> Bulk Setup</button>
-                      <button class="ds-btn ds-btn-gold"><i class="fas fa-user-plus"></i> Add User</button>
-                    </div>
-                  </div>
-                  <div class="ds-content">
-                    <div style="font-size:13px;color:#6b7280;margin-bottom:14px;">Create users and assign portal access roles</div>
-                    <div class="ds-card" style="overflow:hidden;">
-                      <table class="ds-table">
-                        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
-                        <tbody>
-                          <tr><td style="font-weight:600;">Laura Camargo</td><td style="font-size:12px;color:#6b7280;">admin@lionmd.com</td><td><span class="ds-pill ds-pill-gold">Admin</span></td><td><span class="ds-pill ds-pill-green">Active</span></td><td style="font-size:12px;color:#6b7280;">5/20/2026</td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-paper-plane"></i></button></div></td></tr>
-                          <tr><td style="font-weight:600;">Paula Reyes</td><td style="font-size:12px;color:#6b7280;">paula@lionmd.com</td><td><span class="ds-pill ds-pill-gold">Admin</span></td><td><span class="ds-pill ds-pill-green">Active</span></td><td style="font-size:12px;color:#6b7280;">5/20/2026</td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-paper-plane"></i></button></div></td></tr>
-                          <tr><td style="font-weight:600;">Sarah Williams</td><td style="font-size:12px;color:#6b7280;">s.williams@example.com</td><td><span class="ds-pill ds-pill-purple">Provider</span></td><td><span class="ds-pill ds-pill-green">Active</span></td><td style="font-size:12px;color:#6b7280;">5/19/2026</td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-paper-plane"></i></button></div></td></tr>
-                          <tr><td style="font-weight:600;">James Martinez</td><td style="font-size:12px;color:#6b7280;">j.martinez@example.com</td><td><span class="ds-pill ds-pill-purple">Provider</span></td><td><span class="ds-pill ds-pill-green">Active</span></td><td style="font-size:12px;color:#6b7280;">5/18/2026</td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-paper-plane"></i></button></div></td></tr>
-                          <tr><td style="font-weight:600;">CV Reviewer</td><td style="font-size:12px;color:#6b7280;">cv@carevalidate.com</td><td><span class="ds-pill ds-pill-blue">CareValidate</span></td><td><span class="ds-pill ds-pill-green">Active</span></td><td style="font-size:12px;color:#6b7280;">5/17/2026</td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-paper-plane"></i></button></div></td></tr>
-                          <tr><td style="font-weight:600;">Onboard Mgr</td><td style="font-size:12px;color:#6b7280;">ob@lionmd.com</td><td><span class="ds-pill ds-pill-green">Onboarding</span></td><td><span class="ds-pill ds-pill-green">Active</span></td><td style="font-size:12px;color:#6b7280;">5/15/2026</td><td><div style="display:flex;gap:5px;"><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button><button class="ds-btn ds-btn-outline" style="padding:3px 8px;font-size:11px;"><i class="fas fa-paper-plane"></i></button></div></td></tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-users-wrap">
+            <iframe id="frame-users" data-src="/demo?screen=users&iframe=1" title="Users Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-users" onclick="unlockFrame('users')"></div>
           </div>
         </div>
         <div class="slide-num-badge">11 / 17</div>
@@ -1262,59 +700,9 @@
             <span class="demo-topbar-sub">Contact info, specialty, states licensed — editable by the provider</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Provider</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">My Portal</div>
-                    <div class="ds-nav-item active"><i class="fas fa-user-circle"></i><span>My Profile</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-dollar-sign"></i><span>My Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>My Consults</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-map-marked-alt"></i><span>State Licenses</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-pdf"></i><span>Documents &amp; CV</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar" style="background:#8b5cf6;">S</div><div><div class="ds-user-name">Sarah Williams</div><div class="ds-user-role">Provider / NP</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Provider Portal</div>
-                    <div class="ds-role-badge" style="background:rgba(139,92,246,0.12);border-color:rgba(139,92,246,0.3);color:#8b5cf6;"><i class="fas fa-user-md" style="font-size:9px;"></i> Provider</div>
-                  </div>
-                  <div class="ds-content">
-                    <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px;">
-                      <div style="padding:8px 18px;font-size:13px;font-weight:700;color:#C9A84C;border-bottom:2px solid #C9A84C;margin-bottom:-2px;">My Profile</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">My Payroll</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">My Consults</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">State Licenses</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">Documents &amp; CV</div>
-                    </div>
-                    <div class="ds-prov-card" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;">
-                      <div style="width:52px;height:52px;border-radius:12px;background:#C9A84C;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#0d0d1e;flex-shrink:0;">S</div>
-                      <div style="flex:1;"><div style="font-size:17px;font-weight:800;color:#111827;">Sarah Williams, NP</div><div style="display:flex;gap:8px;margin-top:5px;"><span class="ds-pill ds-pill-purple">NP</span><span class="ds-pill ds-pill-blue">3 States Licensed</span></div></div>
-                      <button class="ds-btn ds-btn-outline-gold"><i class="fas fa-pencil-alt"></i> Edit Profile</button>
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-                      <div class="ds-prov-card">
-                        <div class="ds-section-title" style="margin-bottom:12px;">Contact Information</div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
-                          <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Email</div><div>s.williams@example.com</div></div>
-                          <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Phone</div><div>(555) 234-5678</div></div>
-                          <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Address</div><div>Tampa, FL 33602</div></div>
-                          <div><div style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">NPI Number</div><div>1234567890</div></div>
-                        </div>
-                      </div>
-                      <div class="ds-prov-card">
-                        <div class="ds-section-title" style="margin-bottom:12px;">Professional Details</div>
-                        <div style="font-size:13px;margin-bottom:10px;"><span style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">Specialty</span>Family Medicine / Weight Management</div>
-                        <div style="font-size:13px;"><span style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">States Licensed</span><div style="display:flex;gap:6px;flex-wrap:wrap;"><span class="ds-pill ds-pill-blue">FL</span><span class="ds-pill ds-pill-blue">TX</span><span class="ds-pill ds-pill-blue">GA</span></div></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-pprofile-wrap">
+            <iframe id="frame-pprofile" data-src="/demo?screen=provider&iframe=1&tab=profile" title="Provider Profile Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-pprofile" onclick="unlockFrame('pprofile')"></div>
           </div>
         </div>
         <div class="slide-num-badge">14 / 17</div>
@@ -1331,57 +719,9 @@
             <span class="demo-topbar-sub">Lifetime earnings, period history, per-period paystub download</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Provider</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">My Portal</div>
-                    <div class="ds-nav-item"><i class="fas fa-user-circle"></i><span>My Profile</span></div>
-                    <div class="ds-nav-item active"><i class="fas fa-dollar-sign"></i><span>My Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>My Consults</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-map-marked-alt"></i><span>State Licenses</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-pdf"></i><span>Documents &amp; CV</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar" style="background:#8b5cf6;">S</div><div><div class="ds-user-name">Sarah Williams</div><div class="ds-user-role">Provider / NP</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Provider Portal</div>
-                    <div class="ds-role-badge" style="background:rgba(139,92,246,0.12);border-color:rgba(139,92,246,0.3);color:#8b5cf6;"><i class="fas fa-user-md" style="font-size:9px;"></i> Provider</div>
-                  </div>
-                  <div class="ds-content">
-                    <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px;">
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">My Profile</div>
-                      <div style="padding:8px 18px;font-size:13px;font-weight:700;color:#C9A84C;border-bottom:2px solid #C9A84C;margin-bottom:-2px;">My Payroll</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">My Consults</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">State Licenses</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">Documents &amp; CV</div>
-                    </div>
-                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
-                      <div class="ds-kpi gold"><div class="ds-kpi-label">Lifetime Earnings</div><div class="ds-kpi-value">$184,200</div></div>
-                      <div class="ds-kpi blue"><div class="ds-kpi-label">Total Cases</div><div class="ds-kpi-value">18,420</div></div>
-                      <div class="ds-kpi green"><div class="ds-kpi-label">Approved</div><div class="ds-kpi-value">18,204</div></div>
-                      <div class="ds-kpi rose"><div class="ds-kpi-label">Denied</div><div class="ds-kpi-value">216</div></div>
-                    </div>
-                    <div class="ds-card" style="overflow:hidden;">
-                      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;"><span class="ds-section-title">Pay Period History</span></div>
-                      <table class="ds-table">
-                        <thead><tr><th>Period</th><th>Cases</th><th>Earnings</th><th>Status</th><th></th></tr></thead>
-                        <tbody>
-                          <tr><td style="font-weight:600;">May 2026</td><td>1,842</td><td style="color:#10b981;font-weight:700;">$18,420</td><td><span class="ds-pill ds-pill-gold">Processing</span></td><td><button class="ds-btn ds-btn-outline" style="padding:3px 10px;font-size:11px;">Paystub</button></td></tr>
-                          <tr><td style="font-weight:600;">April 2026</td><td>2,103</td><td style="color:#10b981;font-weight:700;">$21,030</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td><button class="ds-btn ds-btn-outline" style="padding:3px 10px;font-size:11px;">Paystub</button></td></tr>
-                          <tr><td style="font-weight:600;">March 2026</td><td>1,956</td><td style="color:#10b981;font-weight:700;">$19,560</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td><button class="ds-btn ds-btn-outline" style="padding:3px 10px;font-size:11px;">Paystub</button></td></tr>
-                          <tr><td style="font-weight:600;">February 2026</td><td>1,788</td><td style="color:#10b981;font-weight:700;">$17,880</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td><button class="ds-btn ds-btn-outline" style="padding:3px 10px;font-size:11px;">Paystub</button></td></tr>
-                          <tr><td style="font-weight:600;">January 2026</td><td>1,620</td><td style="color:#10b981;font-weight:700;">$16,200</td><td><span class="ds-pill ds-pill-green">Paid</span></td><td><button class="ds-btn ds-btn-outline" style="padding:3px 10px;font-size:11px;">Paystub</button></td></tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-ppayroll-wrap">
+            <iframe id="frame-ppayroll" data-src="/demo?screen=provider&iframe=1&tab=payroll" title="Provider Payroll Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-ppayroll" onclick="unlockFrame('ppayroll')"></div>
           </div>
         </div>
         <div class="slide-num-badge">15 / 17</div>
@@ -1398,62 +738,9 @@
             <span class="demo-topbar-sub">Manage state licensing — add, edit, expiry tracking per state</span>
             <span class="demo-topbar-badge"><i class="fas fa-circle" style="color:#10b981;font-size:7px;margin-right:4px;"></i>Interactive</span>
           </div>
-          <div class="demo-body">
-            <div class="demo-body-scaler">
-              <div class="ds-root">
-                <div class="ds-sidebar">
-                  <div class="ds-sidebar-logo"><img src="/static/lion-logo.png" alt=""><div><div class="ds-logo-name">Lion MD Portal</div><div class="ds-logo-sub">Provider</div></div></div>
-                  <div style="flex:1;padding:8px 0;">
-                    <div class="ds-sidebar-section">My Portal</div>
-                    <div class="ds-nav-item"><i class="fas fa-user-circle"></i><span>My Profile</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-dollar-sign"></i><span>My Payroll</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-medical"></i><span>My Consults</span></div>
-                    <div class="ds-nav-item active"><i class="fas fa-map-marked-alt"></i><span>State Licenses</span></div>
-                    <div class="ds-nav-item"><i class="fas fa-file-pdf"></i><span>Documents &amp; CV</span></div>
-                  </div>
-                  <div class="ds-sidebar-footer"><div class="ds-user-row"><div class="ds-avatar" style="background:#8b5cf6;">S</div><div><div class="ds-user-name">Sarah Williams</div><div class="ds-user-role">Provider / NP</div></div></div></div>
-                </div>
-                <div class="ds-main">
-                  <div class="ds-topbar">
-                    <div class="ds-page-title">Provider Portal</div>
-                    <div class="ds-role-badge" style="background:rgba(139,92,246,0.12);border-color:rgba(139,92,246,0.3);color:#8b5cf6;"><i class="fas fa-user-md" style="font-size:9px;"></i> Provider</div>
-                  </div>
-                  <div class="ds-content">
-                    <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px;">
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">My Profile</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">My Payroll</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">My Consults</div>
-                      <div style="padding:8px 18px;font-size:13px;font-weight:700;color:#C9A84C;border-bottom:2px solid #C9A84C;margin-bottom:-2px;">State Licenses</div>
-                      <div style="padding:8px 18px;font-size:13px;color:#6b7280;">Documents &amp; CV</div>
-                    </div>
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                      <div style="font-size:13px;color:#6b7280;">3 licenses on file</div>
-                      <button class="ds-btn ds-btn-gold"><i class="fas fa-plus"></i> Add License</button>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:10px;">
-                      <div class="ds-card" style="padding:16px;display:flex;align-items:center;gap:14px;">
-                        <div style="width:44px;height:44px;border-radius:8px;background:#d1fae5;display:flex;align-items:center;justify-content:center;font-weight:800;color:#065f46;font-size:14px;">FL</div>
-                        <div style="flex:1;"><div style="font-weight:700;color:#111827;">Florida</div><div style="font-size:12px;color:#6b7280;">Lic #NP-2341095 · Expires 12/31/2026</div></div>
-                        <span class="ds-pill ds-pill-green">Active</span>
-                        <button class="ds-btn ds-btn-outline" style="padding:4px 10px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button>
-                      </div>
-                      <div class="ds-card" style="padding:16px;display:flex;align-items:center;gap:14px;">
-                        <div style="width:44px;height:44px;border-radius:8px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-weight:800;color:#1e40af;font-size:14px;">TX</div>
-                        <div style="flex:1;"><div style="font-weight:700;color:#111827;">Texas</div><div style="font-size:12px;color:#6b7280;">Lic #NP-TX-88821 · Expires 06/30/2027</div></div>
-                        <span class="ds-pill ds-pill-green">Active</span>
-                        <button class="ds-btn ds-btn-outline" style="padding:4px 10px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button>
-                      </div>
-                      <div class="ds-card" style="padding:16px;display:flex;align-items:center;gap:14px;">
-                        <div style="width:44px;height:44px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-weight:800;color:#92400e;font-size:14px;">GA</div>
-                        <div style="flex:1;"><div style="font-weight:700;color:#111827;">Georgia</div><div style="font-size:12px;color:#6b7280;">Lic #GA-NP-45521 · Expires 03/31/2027</div></div>
-                        <span class="ds-pill ds-pill-green">Active</span>
-                        <button class="ds-btn ds-btn-outline" style="padding:4px 10px;font-size:11px;"><i class="fas fa-pencil-alt"></i></button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="demo-frame-wrap" id="frame-plicenses-wrap">
+            <iframe id="frame-plicenses" data-src="/demo?screen=provider&iframe=1&tab=licenses" title="Provider Licenses Demo" scrolling="no"></iframe>
+            <div class="iframe-overlay" id="overlay-plicenses" onclick="unlockFrame('plicenses')"></div>
           </div>
         </div>
         <div class="slide-num-badge">16 / 17</div>
@@ -1507,7 +794,7 @@
   </div><!-- /scaler -->
 </div><!-- /deck -->
 
-<!-- Controls — outside deck/scaler -->
+<!-- Controls — outside deck/scaler, unaffected by scale transform -->
 <div id="controls">
   <button class="ctrl-btn" id="btnPrev" onclick="prevSlide()" title="Previous (←)">
     <i class="fas fa-chevron-left"></i>
@@ -1526,6 +813,46 @@
   const total   = slides.length
   let current   = 0
   let animating = false
+
+  /* ── Slide → frame ID map ───────────────────────
+     Key = 0-based slide index, value = array of frame IDs to lazy-load */
+  const slideFrameMap = {
+    2:  ['frame-home'],
+    4:  ['frame-dashboard'],
+    5:  ['frame-payroll'],
+    6:  ['frame-consults'],
+    7:  ['frame-contractors'],
+    8:  ['frame-onboarding'],
+    9:  ['frame-payments'],
+    10: ['frame-users'],
+    13: ['frame-pprofile'],
+    14: ['frame-ppayroll'],
+    15: ['frame-plicenses'],
+  }
+
+  /* ── Lazy-load: set iframe src on first visit ── */
+  function lazyLoadFrame(idx) {
+    const ids = slideFrameMap[idx]
+    if (!ids) return
+    ids.forEach(id => {
+      const el = document.getElementById(id)
+      if (el && el.dataset.src && !el.getAttribute('src')) {
+        el.src = el.dataset.src
+      }
+    })
+  }
+
+  /* ── Overlay helpers ───────────────────────────── */
+  function lockAllFrames() {
+    document.querySelectorAll('.iframe-overlay').forEach(o => {
+      o.style.display = ''
+    })
+  }
+
+  function unlockFrame(name) {
+    const o = document.getElementById('overlay-' + name)
+    if (o) o.style.display = 'none'
+  }
 
   /* ── Build dot nav ─────────────────────────── */
   const dotsEl = document.getElementById('dots')
@@ -1549,37 +876,46 @@
     bar.style.width = `${((current + 1) / total) * 100}%`
   }
 
+  /* ── Slide transition — fade only, no translateX ──
+     translateX on a slide that wraps an iframe causes Chromium
+     to composite that layer and render it black. */
   function goTo(idx) {
     if (animating || idx === current || idx < 0 || idx >= total) return
     animating = true
 
-    const prev  = slides[current]
-    const next  = slides[idx]
-    const dir   = idx > current ? 1 : -1
+    const prevSlide = slides[current]
+    const nextSlide = slides[idx]
 
-    prev.classList.remove('active')
-    prev.classList.add(dir > 0 ? 'exit-left' : 'exit-right')
-    next.style.transform  = dir > 0 ? 'translateX(60px)' : 'translateX(-60px)'
-    next.style.opacity    = '0'
-    next.style.pointerEvents = 'none'
-    next.offsetHeight // reflow
-    next.style.transition = 'opacity 0.4s ease, transform 0.4s ease'
-    next.style.transform  = 'translateX(0)'
-    next.style.opacity    = '1'
+    // Fade out current
+    prevSlide.classList.remove('active')
+    // Ensure next starts invisible
+    nextSlide.style.opacity = '0'
+    nextSlide.style.pointerEvents = 'none'
+    nextSlide.offsetHeight // reflow
+
+    // Fade in next
+    nextSlide.style.transition = 'opacity 0.4s ease'
+    nextSlide.style.opacity    = '1'
 
     setTimeout(() => {
-      prev.classList.remove('exit-left', 'exit-right')
-      prev.style.transform  = ''
-      prev.style.opacity    = ''
-      prev.style.transition = ''
-      next.style.transition = ''
-      next.style.transform  = ''
-      next.style.opacity    = ''
-      next.style.pointerEvents = ''
-      next.classList.add('active')
+      // Clean up inline styles — CSS class takes over
+      prevSlide.style.opacity    = ''
+      prevSlide.style.transition = ''
+      nextSlide.style.transition = ''
+      nextSlide.style.opacity    = ''
+      nextSlide.style.pointerEvents = ''
+      nextSlide.classList.add('active')
+
       current = idx
       updateUI()
       animating = false
+
+      // Lazy-load current + next slide frames
+      lazyLoadFrame(idx)
+      lazyLoadFrame(idx + 1)
+
+      // Re-lock all overlays so newly navigated frames require a click
+      lockAllFrames()
     }, 420)
   }
 
@@ -1604,39 +940,43 @@
     touchX = null
   }, { passive: true })
 
-  /* ── Responsive scale ──────────────────────── */
+  /* ── Responsive scale ───────────────────────────
+     CRITICAL: scale is applied to #scaler, NOT to #viewport.
+     #viewport always stays at its natural 1000×600 with transform:none.
+     Iframes inside a CSS-transformed parent = GPU compositing black screen in Chrome.
+     By keeping #viewport untransformed, iframes render correctly.
+     #scaler is sized to scaledW×scaledH and transformed so it appears
+     to be the right visual size while #viewport remains 1000×600 inside it. */
   function scaleSlides() {
     const W      = window.innerWidth
     const H      = window.innerHeight
     const slideW = 1000
     const slideH = 600
-    const ctrlH  = 110
+    const ctrlH  = 110   // space reserved for bottom controls
 
-    const availW = W
-    const availH = H - ctrlH
-
-    const s = Math.min((availW * 0.96) / slideW,
-                       (availH * 0.96) / slideH,
-                       1.2)
+    const s = Math.min(
+      (W * 0.96) / slideW,
+      ((H - ctrlH) * 0.96) / slideH,
+      1.2
+    )
 
     const scaledW = slideW * s
     const scaledH = slideH * s
 
     const scaler = document.getElementById('scaler')
-    const vp     = document.getElementById('viewport')
     const deck   = document.getElementById('deck')
 
-    scaler.style.width  = scaledW + 'px'
-    scaler.style.height = scaledH + 'px'
+    // #scaler occupies scaledW×scaledH in layout, then is scaled up/down
+    // so that the 1000×600 #viewport inside appears as scaledW×scaledH on screen.
+    scaler.style.width         = scaledW + 'px'
+    scaler.style.height        = scaledH + 'px'
+    scaler.style.transformOrigin = 'top left'
+    scaler.style.transform     = `scale(${s})`
 
-    vp.style.transformOrigin = 'top left'
-    vp.style.transform       = `scale(${s})`
-    vp.style.position = 'absolute'
-    vp.style.top      = '0'
-    vp.style.left     = '0'
+    // #viewport stays at exactly 1000×600 — set via CSS, no JS override needed.
+    // Just ensure it's absolutely positioned at top:0 left:0 inside #scaler.
 
     deck.style.paddingBottom  = ctrlH + 'px'
-    deck.style.paddingTop     = '0'
     deck.style.justifyContent = 'center'
     deck.style.alignItems     = 'center'
   }
@@ -1644,6 +984,10 @@
   window.addEventListener('resize', scaleSlides)
   scaleSlides()
   updateUI()
+
+  // Pre-load the first slide's frame immediately
+  lazyLoadFrame(0)
+  lazyLoadFrame(1)
 </script>
 </body>
 </html>
