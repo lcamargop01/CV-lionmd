@@ -1097,16 +1097,18 @@
     document.getElementById('tc-title').textContent = data.title
     document.getElementById('tc-body').textContent  = data.body
 
-    // Dots — one per slide (all 17)
+    // Dots — one per demo slide only
+    const demoSlides = tourData.reduce((acc, d, i) => { if (d.isDemo) acc.push(i); return acc }, [])
     const dotsEl = document.getElementById('tc-dots')
-    dotsEl.innerHTML = tourData.map((_, i) =>
+    dotsEl.innerHTML = demoSlides.map(i =>
       `<div class="tc-dot${i === slideIdx ? ' active' : ''}"></div>`
     ).join('')
 
     // Next / Finish button
-    const nextBtn = document.getElementById('tc-next')
-    const isLast  = slideIdx === total - 1
-    nextBtn.innerHTML = isLast
+    const nextBtn   = document.getElementById('tc-next')
+    const lastDemo  = demoSlides[demoSlides.length - 1]
+    const isLastDemo = slideIdx === lastDemo
+    nextBtn.innerHTML = isLastDemo
       ? 'Finish <i class="fas fa-check"></i>'
       : 'Next <i class="fas fa-arrow-right"></i>'
 
@@ -1125,9 +1127,11 @@
   function dismissTourCard() {
     cardDismissed = true
     document.getElementById('tour-card').classList.add('hidden')
-    // Always show the re-open button when card is dismissed
-    positionReopenBtn()
-    document.getElementById('tour-reopen').style.display = 'flex'
+    // Only show reopen on demo slides (non-demo slides never have a card)
+    if (tourData[current]?.isDemo) {
+      positionReopenBtn()
+      document.getElementById('tour-reopen').style.display = 'flex'
+    }
   }
 
   function reopenTourCard() {
@@ -1137,12 +1141,14 @@
   }
 
   function tourCardNext() {
-    if (current === total - 1) {
-      // Last slide — just dismiss
+    // Find the last demo slide
+    const demoSlides = tourData.reduce((acc, d, i) => { if (d.isDemo) acc.push(i); return acc }, [])
+    const lastDemo = demoSlides[demoSlides.length - 1]
+    if (current === lastDemo || current === total - 1) {
       dismissTourCard()
       return
     }
-    // Always advance exactly one slide — seamless, no jumping
+    // Advance exactly one slide — slide transitions handle the rest
     hideTourCard()
     goTo(current + 1)
   }
@@ -1173,14 +1179,15 @@
      Show with a short delay to let the iframe paint first.     */
   function onSlideEntered(idx) {
     clearTimeout(cardTimer)
-    cardDismissed = false
-    document.getElementById('tour-reopen').style.display = 'none'
-    if (tourData[idx]) {
+    if (tourData[idx]?.isDemo) {
+      cardDismissed = false
+      document.getElementById('tour-reopen').style.display = 'none'
       cardTimer = setTimeout(() => {
         if (current === idx) showTourCard(idx)
       }, 350)
     } else {
       hideTourCard()
+      document.getElementById('tour-reopen').style.display = 'none'
     }
   }
 
