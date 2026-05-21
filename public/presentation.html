@@ -293,6 +293,88 @@
   .demo-topbar-sub   { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 0.3px; }
   .demo-topbar-badge { margin-left: auto; background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.3); color: var(--gold); font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; }
 
+  /* ── SLIDE TOUR CARD ──────────────────────────── */
+  /* Positioned fixed so it floats above the scaled viewport,
+     always visible regardless of scale. Anchored bottom-left
+     of the slide area (above the controls bar). */
+  #tour-card {
+    position: fixed;
+    z-index: 2000;
+    /* positioned by JS relative to scaler */
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,0,0,0.06);
+    width: 300px;
+    padding: 18px 20px 16px;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: all;
+  }
+  #tour-card.hidden {
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+  }
+  .tc-header {
+    display: flex; align-items: flex-start; gap: 11px; margin-bottom: 10px;
+  }
+  .tc-icon {
+    width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    background: rgba(201,168,76,0.12); color: #C9A84C;
+  }
+  .tc-slide-label {
+    font-size: 9px; font-weight: 800; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #C9A84C; margin-bottom: 3px;
+  }
+  .tc-title {
+    font-size: 14px; font-weight: 800; color: #111827; line-height: 1.25;
+  }
+  .tc-body {
+    font-size: 12px; color: #6b7280; line-height: 1.65;
+    margin-bottom: 14px;
+  }
+  .tc-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .tc-dots { display: flex; gap: 4px; align-items: center; }
+  .tc-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #e5e7eb; transition: background 0.2s;
+  }
+  .tc-dot.active { background: #C9A84C; width: 14px; border-radius: 3px; }
+  .tc-dismiss {
+    font-size: 11px; color: #9ca3af; background: none; border: none;
+    cursor: pointer; padding: 4px 2px; white-space: nowrap;
+  }
+  .tc-dismiss:hover { color: #6b7280; }
+  .tc-next {
+    background: #C9A84C; color: #fff;
+    font-size: 12px; font-weight: 700;
+    padding: 7px 16px; border-radius: 8px;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .tc-next:hover { background: #b8943a; }
+
+  /* Re-open button — fixed bottom-left corner of the slide */
+  #tour-reopen {
+    position: fixed;
+    z-index: 1999;
+    background: rgba(201,168,76,0.18);
+    border: 1px solid rgba(201,168,76,0.5);
+    color: #C9A84C;
+    font-size: 11px; font-weight: 800;
+    padding: 5px 12px; border-radius: 20px;
+    cursor: pointer; display: none;
+    align-items: center; gap: 6px;
+    transition: background 0.2s;
+    backdrop-filter: blur(8px);
+  }
+  #tour-reopen:hover { background: rgba(201,168,76,0.32); }
+
   /* ── IFRAME CONTAINER ───────────────────────── */
   /* fills the area below the 36px topbar: 600 - 36 = 564px */
   .demo-frame-wrap {
@@ -794,6 +876,30 @@
   </div><!-- /scaler -->
 </div><!-- /deck -->
 
+<!-- ── SLIDE TOUR CARD ──────────────────────────────────────── -->
+<div id="tour-card" class="hidden">
+  <div class="tc-header">
+    <div class="tc-icon" id="tc-icon"><i class="fas fa-chart-pie"></i></div>
+    <div>
+      <div class="tc-slide-label" id="tc-label">Slide</div>
+      <div class="tc-title" id="tc-title">Title</div>
+    </div>
+  </div>
+  <div class="tc-body" id="tc-body">Body</div>
+  <div class="tc-footer">
+    <div class="tc-dots" id="tc-dots"></div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="tc-dismiss" onclick="dismissTourCard()">Dismiss</button>
+      <button class="tc-next" id="tc-next" onclick="tourCardNext()">Next <i class="fas fa-arrow-right"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Re-open button -->
+<div id="tour-reopen" onclick="reopenTourCard()">
+  <i class="fas fa-info-circle"></i> What is this?
+</div>
+
 <!-- Controls — outside deck/scaler, unaffected by scale transform -->
 <div id="controls">
   <button class="ctrl-btn" id="btnPrev" onclick="prevSlide()" title="Previous (←)">
@@ -813,6 +919,220 @@
   const total   = slides.length
   let current   = 0
   let animating = false
+
+  /* ── TOUR DATA ──────────────────────────────────────────────
+     One entry per demo slide (0-based slide index).
+     Non-demo slides have no entry — card stays hidden.        */
+  const tourData = {
+    // Slide 3 — Home Page
+    2: {
+      icon: 'fa-home',
+      label: 'Public Landing',
+      title: 'The Public Home Page',
+      body: 'This is what any visitor sees at lion.md before logging in. Providers click "Provider Login" to access their portal; new candidates click "New Provider Application" to start the hiring process.',
+      color: 'rgba(14,165,233,0.12)', iconColor: '#38bdf8',
+    },
+    // Slide 5 — Dashboard
+    4: {
+      icon: 'fa-chart-pie',
+      label: 'Admin View',
+      title: 'Live Dashboard',
+      body: 'Five KPI cards update automatically from uploaded payroll files: total approved cases, what CareValidate owes, what goes to contractors, Chris\'s management fee, and your net margin — all calculated instantly.',
+      color: 'rgba(201,168,76,0.12)', iconColor: '#C9A84C',
+    },
+    // Slide 6 — Payroll
+    5: {
+      icon: 'fa-money-bill-wave',
+      label: 'Admin View',
+      title: 'Contractor Payroll',
+      body: 'Each contractor gets a payout card showing their case count and total. Click any card to open a detailed paystub. The "Export to Gusto CSV" button sends the whole period to Gusto in one click.',
+      color: 'rgba(16,185,129,0.12)', iconColor: '#10b981',
+    },
+    // Slide 7 — Consults
+    6: {
+      icon: 'fa-file-medical',
+      label: 'Admin / CareValidate View',
+      title: '187,000+ Consult Records',
+      body: 'Every consult from every uploaded file is fully searchable here. Filter by doctor, visit type, or organization. Export any filtered subset to XLSX — or the full dataset in one click.',
+      color: 'rgba(59,130,246,0.12)', iconColor: '#3b82f6',
+    },
+    // Slide 8 — Contractors
+    7: {
+      icon: 'fa-user-md',
+      label: 'Admin View',
+      title: 'Contractor Directory',
+      body: '28 active NPs, ARNPs, and PAs — each with their company name, masked EIN/SSN, specialty group, and status. Click Profile to see a contractor\'s full payroll history, consult breakdown, and licenses.',
+      color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+    },
+    // Slide 9 — Onboarding
+    8: {
+      icon: 'fa-user-plus',
+      label: 'Admin / Onboarding View',
+      title: 'Hiring Pipeline',
+      body: 'New provider candidates move through a Kanban board — New → Contacted → Interview → Offer → Hired. The Onboarding team manages this pipeline without seeing any payroll or financial data.',
+      color: 'rgba(245,158,11,0.12)', iconColor: '#f59e0b',
+    },
+    // Slide 10 — Payments
+    9: {
+      icon: 'fa-credit-card',
+      label: 'Admin View',
+      title: 'Client Payments',
+      body: 'Track revenue from all 54 client organizations. See which invoices are paid, pending, or past due. The May 2026 period shows $3.4M in tracked revenue across all clients.',
+      color: 'rgba(244,63,94,0.12)', iconColor: '#fb7185',
+    },
+    // Slide 11 — Users
+    10: {
+      icon: 'fa-users-cog',
+      label: 'Admin View',
+      title: 'User Management',
+      body: 'Create users and assign one of 5 roles: Admin, CareValidate, Onboarding, Provider, or Candidate. Each role sees only their section of the portal. New users receive an invite email automatically.',
+      color: 'rgba(16,185,129,0.12)', iconColor: '#10b981',
+    },
+    // Slide 14 — Provider Profile
+    13: {
+      icon: 'fa-id-card',
+      label: 'Provider View',
+      title: 'Provider Profile',
+      body: 'When Sarah Williams logs in, she sees only her own data. Her profile shows contact info, NPI number, specialty, and the states she\'s licensed in — all editable by the provider directly.',
+      color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+    },
+    // Slide 15 — Provider Payroll
+    14: {
+      icon: 'fa-dollar-sign',
+      label: 'Provider View',
+      title: 'Provider Payroll History',
+      body: 'Providers see their lifetime earnings, total case count, and a full period-by-period pay history. Each period has a Paystub button to download or share their payment statement.',
+      color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+    },
+    // Slide 16 — Provider Licenses
+    15: {
+      icon: 'fa-map-marked-alt',
+      label: 'Provider View',
+      title: 'State License Manager',
+      body: 'Providers manage their own state licenses — adding new states, editing license numbers, and tracking expiry dates. Admins can see all licenses across all providers at a glance.',
+      color: 'rgba(139,92,246,0.12)', iconColor: '#a78bfa',
+    },
+  }
+
+  // Demo slide indices (those with tour data)
+  const demoSlideIndices = Object.keys(tourData).map(Number)
+  // Total tour steps = total number of demo slides
+  const tourTotal = demoSlideIndices.length
+
+  // Which tour step (0-based among demo slides only) corresponds to a given slide index
+  function tourStepForSlide(slideIdx) {
+    return demoSlideIndices.indexOf(slideIdx)
+  }
+
+  let cardDismissed = false  // user dismissed this slide's card
+  let cardTimer = null
+
+  function showTourCard(slideIdx) {
+    const data = tourData[slideIdx]
+    if (!data) { hideTourCard(); return }
+
+    // Populate
+    const icon = document.getElementById('tc-icon')
+    icon.innerHTML = `<i class="fas ${data.icon}"></i>`
+    icon.style.background = data.color
+    icon.style.color = data.iconColor
+    document.getElementById('tc-label').textContent = data.label
+    document.getElementById('tc-title').textContent = data.title
+    document.getElementById('tc-body').textContent  = data.body
+
+    // Dots — one per demo slide
+    const step = tourStepForSlide(slideIdx)
+    const dotsEl = document.getElementById('tc-dots')
+    dotsEl.innerHTML = demoSlideIndices.map((_, i) =>
+      `<div class="tc-dot${i === step ? ' active' : ''}"></div>`
+    ).join('')
+
+    // Next button label
+    const nextBtn = document.getElementById('tc-next')
+    const isLast  = step === tourTotal - 1
+    nextBtn.innerHTML = isLast
+      ? 'Got it <i class="fas fa-check"></i>'
+      : 'Next slide <i class="fas fa-arrow-right"></i>'
+
+    // Position the card
+    positionTourCard()
+
+    // Show
+    const card = document.getElementById('tour-card')
+    card.classList.remove('hidden')
+    document.getElementById('tour-reopen').style.display = 'none'
+  }
+
+  function hideTourCard() {
+    document.getElementById('tour-card').classList.add('hidden')
+    document.getElementById('tour-reopen').style.display = 'none'
+  }
+
+  function dismissTourCard() {
+    cardDismissed = true
+    document.getElementById('tour-card').classList.add('hidden')
+    // Show re-open button if this is a demo slide
+    if (tourData[current]) {
+      positionReopenBtn()
+      document.getElementById('tour-reopen').style.display = 'flex'
+    }
+  }
+
+  function reopenTourCard() {
+    cardDismissed = false
+    document.getElementById('tour-reopen').style.display = 'none'
+    showTourCard(current)
+  }
+
+  function tourCardNext() {
+    const step    = tourStepForSlide(current)
+    const isLast  = step === tourTotal - 1
+    if (isLast) {
+      dismissTourCard()
+    } else {
+      // Advance to the next demo slide
+      const nextSlideIdx = demoSlideIndices[step + 1]
+      hideTourCard()
+      goTo(nextSlideIdx)
+    }
+  }
+
+  function positionTourCard() {
+    const scaler = document.getElementById('scaler')
+    const card   = document.getElementById('tour-card')
+    if (!scaler) return
+    const sr = scaler.getBoundingClientRect()
+    // Place card bottom-left of the slide, 12px above controls area
+    const cardW = 300
+    const left  = sr.left
+    const top   = sr.bottom - card.offsetHeight - 14
+    card.style.left = Math.max(8, left) + 'px'
+    card.style.top  = Math.max(8, top)  + 'px'
+  }
+
+  function positionReopenBtn() {
+    const scaler = document.getElementById('scaler')
+    const btn    = document.getElementById('tour-reopen')
+    if (!scaler) return
+    const sr = scaler.getBoundingClientRect()
+    btn.style.left   = Math.max(8, sr.left) + 'px'
+    btn.style.top    = (sr.bottom - 38) + 'px'
+  }
+
+  /* ── Tour card auto-show on slide entry ──────────
+     Show with a short delay to let the iframe paint first.     */
+  function onSlideEntered(idx) {
+    clearTimeout(cardTimer)
+    cardDismissed = false
+    document.getElementById('tour-reopen').style.display = 'none'
+    if (tourData[idx]) {
+      cardTimer = setTimeout(() => {
+        if (current === idx) showTourCard(idx)
+      }, 350)
+    } else {
+      hideTourCard()
+    }
+  }
 
   /* ── Slide → frame ID map ───────────────────────
      Key = 0-based slide index, value = array of frame IDs to lazy-load */
@@ -916,6 +1236,9 @@
 
       // Re-lock all overlays so newly navigated frames require a click
       lockAllFrames()
+
+      // Show tour card for this slide
+      onSlideEntered(idx)
     }, 420)
   }
 
@@ -981,13 +1304,21 @@
     deck.style.alignItems     = 'center'
   }
 
-  window.addEventListener('resize', scaleSlides)
+  window.addEventListener('resize', () => {
+    scaleSlides()
+    // Reposition tour card and reopen button on resize
+    if (!document.getElementById('tour-card').classList.contains('hidden')) positionTourCard()
+    if (document.getElementById('tour-reopen').style.display === 'flex') positionReopenBtn()
+  })
   scaleSlides()
   updateUI()
 
   // Pre-load the first slide's frame immediately
   lazyLoadFrame(0)
   lazyLoadFrame(1)
+
+  // Show tour card for the initial slide (if it's a demo slide)
+  onSlideEntered(0)
 </script>
 </body>
 </html>
