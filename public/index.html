@@ -6634,7 +6634,7 @@ function obContractorsSearch(val) {
 }
 
 // ── Contractor Detail Slide-Over Panel ───────────────────────────
-const ctDetailState = { tab: 'payroll', contractorId: null, licenses: [], fullProfile: null }
+const ctDetailState = { tab: 'payroll', contractorId: null, licenses: [], fullProfile: null, docs: [] }
 
 async function obOpenContractorDetail(contractorId) {
   ctDetailState.contractorId = contractorId
@@ -6668,14 +6668,16 @@ async function obOpenContractorDetail(contractorId) {
   $('ctDetailBody').innerHTML = '<div class="flex justify-center py-16"><div class="spinner"></div></div>'
 
   try {
-    const [data, fullProfile] = await Promise.all([
+    const [data, fullProfile, docs] = await Promise.all([
       api(`/api/contractors/${contractorId}/history`),
-      api(`/api/admin/contractors/${contractorId}/full-profile`).catch(() => null)
+      api(`/api/admin/contractors/${contractorId}/full-profile`).catch(() => null),
+      api(`/api/admin/contractors/${contractorId}/documents`).catch(() => [])
     ])
     // full-profile has richer licenses (from provider_licenses) + portal user + ob photo
     const licenses = fullProfile?.licenses || []
     ctDetailState.licenses = licenses
     ctDetailState.fullProfile = fullProfile
+    ctDetailState.docs = docs || []
     obRenderContractorDetail(data)
   } catch(e) {
     $('ctDetailBody').innerHTML = `<p class="text-red-500 text-sm text-center py-10">${e.message}</p>`
@@ -6711,6 +6713,7 @@ function obRenderContractorDetail(data) {
   const cid = ctDetailState.contractorId
   const licenses = ctDetailState.licenses || []
   const fp = ctDetailState.fullProfile  // full profile from /api/admin/contractors/:id/full-profile
+  const ctDocs = ctDetailState.docs || []
 
   // Merge: contractor row fields take priority; fall back to ob_candidate for photo/specialty
   const photoData = ct.photo_data || ob_candidate?.photo_data || ''
@@ -6889,19 +6892,58 @@ function obRenderContractorDetail(data) {
         <!-- CV / Résumé -->
         <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
           <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">CV / Résumé</p>
-          ${ct.cv_filename ? `
-          <div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-green-200">
-            <i class="fas fa-file-alt text-green-500 text-lg flex-shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-gray-800 truncate">${escHtml(ct.cv_filename)}</p>
-              ${ct.cv_updated_at ? `<p class="text-xs text-gray-400">Uploaded ${new Date(ct.cv_updated_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</p>` : ''}
-            </div>
-            ${ct.cv_url ? `<a href="${ct.cv_url}" download="${escHtml(ct.cv_filename)}" class="text-xs px-3 py-1.5 rounded-lg bg-white border border-green-300 text-green-700 hover:bg-green-100 flex-shrink-0 flex items-center gap-1">
-              <i class="fas fa-download"></i> Download
-            </a>` : ''}
-          </div>` : `
-          <p class="text-xs text-gray-400 italic">No CV uploaded yet — provider can upload from their portal.</p>`}
+          ${(() => {
+            // Check new contractor_documents table first (doc_type === 'cv')
+            const cvDocs = ctDocs.filter(d => d.doc_type === 'cv')
+            if (cvDocs.length > 0) {
+              return cvDocs.map(d => `
+              <div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-green-200 mb-2">
+                <i class="fas fa-file-alt text-green-500 text-lg flex-shrink-0"></i>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-gray-800 truncate">${escHtml(d.file_name)}</p>
+                  <p class="text-xs text-gray-400">${d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : ''}</p>
+                </div>
+                <button onclick="ctDownloadContractorDoc(${d.id}, '${escHtml(d.file_name)}')"
+                  class="text-xs px-3 py-1.5 rounded-lg bg-white border border-green-300 text-green-700 hover:bg-green-100 flex-shrink-0 flex items-center gap-1">
+                  <i class="fas fa-download"></i> Download
+                </button>
+              </div>`).join('')
+            }
+            // Fall back to legacy cv_filename/cv_url columns
+            if (ct.cv_filename) {
+              return `
+              <div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-green-200">
+                <i class="fas fa-file-alt text-green-500 text-lg flex-shrink-0"></i>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-gray-800 truncate">${escHtml(ct.cv_filename)}</p>
+                  ${ct.cv_updated_at ? `<p class="text-xs text-gray-400">Uploaded ${new Date(ct.cv_updated_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</p>` : ''}
+                </div>
+                ${ct.cv_url ? `<a href="${ct.cv_url}" download="${escHtml(ct.cv_filename)}" class="text-xs px-3 py-1.5 rounded-lg bg-white border border-green-300 text-green-700 hover:bg-green-100 flex-shrink-0 flex items-center gap-1">
+                  <i class="fas fa-download"></i> Download
+                </a>` : ''}
+              </div>`
+            }
+            return `<p class="text-xs text-gray-400 italic">No CV uploaded yet — provider can upload from their portal, or admin can upload via the Documents tab.</p>`
+          })()}
         </div>
+
+        <!-- Documents summary -->
+        ${ctDocs.length > 0 ? `
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Documents on File</p>
+            <button onclick="ctSwitchTab('documents')" class="text-xs text-blue-500 hover:underline">View all →</button>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${ctDocs.slice(0, 6).map(d => {
+              const typeLabel = CT_DOC_TYPES.find(t => t.key === d.doc_type)?.label || d.doc_type
+              return `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-gray-200 text-xs text-gray-600">
+                <i class="fas fa-file text-gray-300"></i>${escHtml(typeLabel)}
+              </span>`
+            }).join('')}
+            ${ctDocs.length > 6 ? `<span class="inline-flex items-center px-2 py-1 rounded-lg bg-gray-100 text-xs text-gray-400">+${ctDocs.length - 6} more</span>` : ''}
+          </div>
+        </div>` : ''}
 
         <!-- State Licenses summary (from provider_licenses table) -->
         ${licenses.length > 0 ? `
@@ -7179,6 +7221,7 @@ async function ctLoadContractorDocs() {
   if (!listEl) return
   try {
     const docs = await api(`/api/admin/contractors/${cid}/documents`)
+    ctDetailState.docs = docs || []  // keep state in sync for Profile tab summary
     if (!docs || docs.length === 0) {
       listEl.innerHTML = `
         <div class="text-center py-10">
