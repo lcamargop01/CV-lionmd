@@ -4303,6 +4303,84 @@ app.post('/api/client-payments/seed', requireAdmin, async (c) => {
   return c.json({ ok: true, clients: clientNames.length, entries_inserted: inserted, skipped })
 })
 
+// ══════════════════════════════════════════════════════════════════
+// CONTRACTOR DOCUMENTS
+// Table: contractor_documents
+// Admins upload/manage compliance docs for onboarded contractors:
+//   W-9, Malpractice Insurance, NPI Certificate, DEA Registration,
+//   CV/Résumé, Medical License, Offer Letter, etc.
+// File data stored as base64 in D1 (same pattern as onboarding_documents).
+// ══════════════════════════════════════════════════════════════════
+
+async function ensureContractorDocSchema(db: D1Database) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS contractor_documents (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      contractor_id INTEGER NOT NULL,
+      doc_type      TEXT    NOT NULL DEFAULT 'other',
+      file_name     TEXT    NOT NULL,
+      file_data     TEXT    NOT NULL,
+      file_size     INTEGER DEFAULT 0,
+      mime_type     TEXT    DEFAULT 'application/octet-stream',
+      notes         TEXT    DEFAULT '',
+      uploaded_by   TEXT    DEFAULT '',
+      uploaded_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (contractor_id) REFERENCES contractors(id)
+    )
+  `).run().catch(() => {})
+}
+
+// GET /api/admin/contractors/:id/documents — list (metadata only, no file_data)
+app.get('/api/admin/contractors/:id/documents', requireAdmin, async (c) => {
+  await ensureContractorDocSchema(c.env.DB)
+  const id = c.req.param('id')
+  const rows = await c.env.DB.prepare(
+    `SELECT id, contractor_id, doc_type, file_name, file_size, mime_type, notes, uploaded_by, uploaded_at
+     FROM contractor_documents WHERE contractor_id=? ORDER BY uploaded_at DESC`
+  ).bind(id).all()
+  return c.json(rows.results)
+})
+
+// POST /api/admin/contractors/:id/documents — upload (base64 JSON body)
+// Body: { doc_type, file_name, file_data (base64), file_size, mime_type, notes }
+app.post('/api/admin/contractors/:id/documents', requireAdmin, async (c) => {
+  await ensureContractorDocSchema(c.env.DB)
+  const id = c.req.param('id')
+  const uploader = c.get('user')
+  const body = await c.req.json() as any
+  if (!body.file_name || !body.file_data) return c.json({ error: 'file_name and file_data required' }, 400)
+  const r = await c.env.DB.prepare(
+    `INSERT INTO contractor_documents
+       (contractor_id, doc_type, file_name, file_data, file_size, mime_type, notes, uploaded_by)
+     VALUES (?,?,?,?,?,?,?,?)`
+  ).bind(
+    id,
+    body.doc_type || 'other',
+    body.file_name,
+    body.file_data,
+    body.file_size || 0,
+    body.mime_type || 'application/octet-stream',
+    body.notes || '',
+    uploader?.name || uploader?.email || 'admin'
+  ).run()
+  return c.json({ ok: true, id: r.meta.last_row_id })
+})
+
+// GET /api/admin/contractor-documents/:id — download single doc (includes file_data)
+app.get('/api/admin/contractor-documents/:id', requireAdmin, async (c) => {
+  const doc = await c.env.DB.prepare(
+    `SELECT * FROM contractor_documents WHERE id=?`
+  ).bind(c.req.param('id')).first() as any
+  if (!doc) return c.json({ error: 'Not found' }, 404)
+  return c.json(doc)
+})
+
+// DELETE /api/admin/contractor-documents/:id
+app.delete('/api/admin/contractor-documents/:id', requireAdmin, async (c) => {
+  await c.env.DB.prepare(`DELETE FROM contractor_documents WHERE id=?`).bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
 // ── Demo route ──────────────────────────────────────────────────
 // Serve demo.html at /demo
 app.get('/demo', async (c) => {

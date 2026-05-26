@@ -6691,7 +6691,7 @@ function obCloseContractorDetail() {
 
 function ctSwitchTab(tab) {
   ctDetailState.tab = tab
-  const tabs = ['profile','payroll','licenses']
+  const tabs = ['profile','payroll','licenses','documents']
   tabs.forEach(t => {
     const btn = $('ctTab_' + t)
     const pane = $('ctPane_' + t)
@@ -6700,6 +6700,7 @@ function ctSwitchTab(tab) {
       : 'px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-700 border-b-2 border-transparent whitespace-nowrap'
     if (pane) pane.classList.toggle('hidden', t !== tab)
   })
+  if (tab === 'documents') ctLoadContractorDocs()
 }
 
 function obRenderContractorDetail(data) {
@@ -6818,6 +6819,10 @@ function obRenderContractorDetail(data) {
         class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-700 border-b-2 border-transparent whitespace-nowrap">
         <i class="fas fa-map-marker-alt mr-1.5"></i>Licenses
         ${licenses.length > 0 ? `<span class="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">${licenses.length}</span>` : ''}
+      </button>
+      <button id="ctTab_documents" onclick="ctSwitchTab('documents')"
+        class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-700 border-b-2 border-transparent whitespace-nowrap">
+        <i class="fas fa-folder-open mr-1.5"></i>Documents
       </button>
     </div>
 
@@ -7019,6 +7024,19 @@ function obRenderContractorDetail(data) {
         </div>
       `}
     </div>
+
+    <!-- Documents Pane -->
+    <div id="ctPane_documents" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs text-gray-500">Documents on file for this contractor</p>
+        <button onclick="ctUploadContractorDoc()" class="text-xs px-3 py-1.5 rounded-lg btn-primary font-semibold flex items-center gap-1.5">
+          <i class="fas fa-upload"></i> Upload Doc
+        </button>
+      </div>
+      <div id="ctDocList" class="space-y-2">
+        <div class="flex justify-center py-8"><div class="spinner"></div></div>
+      </div>
+    </div>
   `
 }
 
@@ -7138,6 +7156,211 @@ async function ctDeleteLicense(licId, contractorId) {
     obRenderContractorDetail(data)
     ctSwitchTab('licenses')
   } catch(e) { showToast(e.message, 'error') }
+}
+
+// ── Contractor Documents (admin) ──────────────────────────────────
+
+const CT_DOC_TYPES = [
+  { key: 'w9',          label: 'W-9 Form' },
+  { key: 'malpractice', label: 'Malpractice Insurance' },
+  { key: 'npi',         label: 'NPI Certificate' },
+  { key: 'dea',         label: 'DEA Registration' },
+  { key: 'cv',          label: 'CV / Résumé' },
+  { key: 'medical_license', label: 'Medical License' },
+  { key: 'id',          label: 'Government ID' },
+  { key: 'contract',    label: 'Signed Contract' },
+  { key: 'other',       label: 'Other' },
+]
+
+async function ctLoadContractorDocs() {
+  const cid = ctDetailState.contractorId
+  if (!cid) return
+  const listEl = $('ctDocList')
+  if (!listEl) return
+  try {
+    const docs = await api(`/api/admin/contractors/${cid}/documents`)
+    if (!docs || docs.length === 0) {
+      listEl.innerHTML = `
+        <div class="text-center py-10">
+          <i class="fas fa-folder-open text-4xl text-gray-200 mb-3 block"></i>
+          <p class="text-sm text-gray-400">No documents on file</p>
+          <p class="text-xs text-gray-300 mt-1">Click "Upload Doc" to add W-9, licenses, insurance, etc.</p>
+        </div>`
+      return
+    }
+    listEl.innerHTML = docs.map(d => {
+      const typeLabel = CT_DOC_TYPES.find(t => t.key === d.doc_type)?.label || d.doc_type
+      const icon = ctDocIcon(d.mime_type)
+      const sizeFmt = ctFmtSize(d.file_size)
+      const dateFmt = d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : ''
+      return `
+        <div class="flex items-center gap-3 p-3 border border-gray-100 rounded-xl hover:border-blue-200 hover:bg-blue-50/20 transition-colors">
+          <div class="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <i class="fas ${icon} text-blue-500 text-sm"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-sm text-gray-800 truncate">${escHtml(d.file_name)}</div>
+            <div class="text-xs text-gray-400 mt-0.5">
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium mr-1">${escHtml(typeLabel)}</span>
+              ${sizeFmt ? `<span>${sizeFmt}</span>` : ''}
+              ${dateFmt ? `<span class="ml-1">· ${dateFmt}</span>` : ''}
+            </div>
+            ${d.notes ? `<p class="text-xs text-gray-400 mt-0.5 italic">${escHtml(d.notes)}</p>` : ''}
+          </div>
+          <div class="flex gap-1 flex-shrink-0">
+            <button onclick="ctDownloadContractorDoc(${d.id}, '${escHtml(d.file_name)}')"
+              class="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 flex items-center gap-1" title="Download">
+              <i class="fas fa-download"></i><span class="hidden sm:inline">Download</span>
+            </button>
+            <button onclick="ctDeleteContractorDoc(${d.id})"
+              class="text-xs px-2 py-1.5 bg-red-50 text-red-400 rounded-lg hover:bg-red-100" title="Delete">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>`
+    }).join('')
+  } catch(e) {
+    if (listEl) listEl.innerHTML = `<p class="text-sm text-red-500 text-center py-6">Failed to load documents: ${escHtml(e.message)}</p>`
+  }
+}
+
+function ctDocIcon(mimeType) {
+  if (!mimeType) return 'fa-file'
+  if (mimeType.includes('pdf'))  return 'fa-file-pdf'
+  if (mimeType.includes('word') || mimeType.includes('docx')) return 'fa-file-word'
+  if (mimeType.includes('image')) return 'fa-file-image'
+  if (mimeType.includes('text')) return 'fa-file-alt'
+  return 'fa-file'
+}
+
+function ctFmtSize(bytes) {
+  if (!bytes || bytes === 0) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function ctUploadContractorDoc() {
+  const cid = ctDetailState.contractorId
+  if (!cid) return
+
+  // Build modal
+  let modal = $('ctDocUploadModal')
+  if (!modal) {
+    modal = document.createElement('div')
+    modal.id = 'ctDocUploadModal'
+    modal.className = 'fixed inset-0 modal-backdrop z-[60] flex items-center justify-center p-4'
+    document.body.appendChild(modal)
+  }
+  modal.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h3 class="font-bold text-gray-800"><i class="fas fa-upload mr-2 text-blue-500"></i>Upload Document</h3>
+        <button onclick="$('ctDocUploadModal').classList.add('hidden')" class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Document Type *</label>
+          <select id="ctDocType" class="w-full text-sm">
+            ${CT_DOC_TYPES.map(t => `<option value="${t.key}">${t.label}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Notes (optional)</label>
+          <input id="ctDocNotes" type="text" placeholder="e.g. Expires 2026-01-01" class="w-full text-sm"/>
+        </div>
+        <div class="upload-zone p-6 text-center rounded-xl cursor-pointer" id="ctDocDropZone" onclick="$('ctDocFileInput').click()">
+          <i class="fas fa-file-upload text-3xl text-gray-300 mb-2 block"></i>
+          <p class="text-sm text-gray-500 font-medium">Click to select file</p>
+          <p class="text-xs text-gray-400 mt-1">PDF, DOCX, PNG, JPG — max 10MB</p>
+        </div>
+        <input type="file" id="ctDocFileInput" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" class="hidden"
+          onchange="ctHandleDocFileSelected(event, ${cid})">
+        <div id="ctDocError" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+      </div>
+    </div>`
+  modal.classList.remove('hidden')
+}
+
+async function ctHandleDocFileSelected(event, contractorId) {
+  const file = event.target.files[0]
+  if (!file) return
+  if (file.size > 10 * 1024 * 1024) {
+    const errEl = $('ctDocError')
+    if (errEl) { errEl.textContent = 'File too large (max 10MB)'; errEl.classList.remove('hidden') }
+    return
+  }
+
+  const dz = $('ctDocDropZone')
+  const dzOrig = dz ? dz.innerHTML : ''
+  if (dz) dz.innerHTML = '<div class="flex justify-center py-2"><div class="spinner"></div></div>'
+
+  const docType = $('ctDocType')?.value || 'other'
+  const notes   = ($('ctDocNotes')?.value || '').trim()
+
+  try {
+    const b64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        // Strip data URL prefix, send raw base64
+        const result = reader.result
+        resolve(result.replace(/^data:[^;]+;base64,/, ''))
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+    await api(`/api/admin/contractors/${contractorId}/documents`, {
+      method: 'POST',
+      body: JSON.stringify({
+        doc_type:  docType,
+        file_name: file.name,
+        file_data: b64,
+        file_size: file.size,
+        mime_type: file.type || 'application/octet-stream',
+        notes:     notes
+      })
+    })
+
+    $('ctDocUploadModal').classList.add('hidden')
+    showToast('Document uploaded!', 'success')
+    await ctLoadContractorDocs()
+  } catch(e) {
+    if (dz) dz.innerHTML = dzOrig
+    const errEl = $('ctDocError')
+    if (errEl) { errEl.textContent = 'Upload failed: ' + e.message; errEl.classList.remove('hidden') }
+    showToast('Upload failed: ' + e.message, 'error')
+  }
+}
+
+async function ctDownloadContractorDoc(docId, fileName) {
+  try {
+    showLoading('Preparing download…')
+    const doc = await api(`/api/admin/contractor-documents/${docId}`)
+    hideLoading()
+    if (!doc.file_data) { showToast('No file data found', 'error'); return }
+    // file_data is raw base64 (no data: prefix) — convert to blob
+    const binary = atob(doc.file_data)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    const blob = new Blob([bytes], { type: doc.mime_type || 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = fileName
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    showToast('Downloaded!', 'success')
+  } catch(e) { hideLoading(); showToast('Download failed: ' + e.message, 'error') }
+}
+
+async function ctDeleteContractorDoc(docId) {
+  if (!confirm('Delete this document? This cannot be undone.')) return
+  try {
+    await api(`/api/admin/contractor-documents/${docId}`, { method: 'DELETE' })
+    showToast('Document deleted.', 'success')
+    await ctLoadContractorDocs()
+  } catch(e) { showToast('Failed to delete: ' + e.message, 'error') }
 }
 
 // ── Calendar & Deadlines Tab ──────────────────────────────────────
