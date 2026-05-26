@@ -3452,6 +3452,18 @@ app.delete('/api/admin/licenses/:id', requireAdmin, async (c) => {
   return c.json({ ok: true })
 })
 
+// ── Admin: PATCH /api/admin/contractors/:id/phone ────────────────
+app.patch('/api/admin/contractors/:id/phone', requireAdmin, async (c) => {
+  const cid = c.req.param('id')
+  const { phone } = await c.req.json() as any
+  await c.env.DB.prepare(`UPDATE contractors SET phone=? WHERE id=?`).bind((phone || '').trim(), cid).run()
+  // Mirror to portal_users if linked
+  await c.env.DB.prepare(
+    `UPDATE portal_users SET phone=?, updated_at=CURRENT_TIMESTAMP WHERE contractor_id=?`
+  ).bind((phone || '').trim(), cid).run().catch(() => {})
+  return c.json({ ok: true })
+})
+
 // ── Admin: GET /api/admin/contractors/:id/full-profile ───────────
 // Returns complete profile: contractor row + licenses + linked portal user + onboarding record (with photo)
 app.get('/api/admin/contractors/:id/full-profile', requireAdmin, async (c) => {
