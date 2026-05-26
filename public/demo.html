@@ -1165,7 +1165,7 @@ function initContractorsTable() {
       <td style="font-size:12px;color:#6b7280;">${c.email}</td>
       <td><span class="badge-pill ${c.active?'badge-green':'badge-gray'}">${c.active?'Active':'Inactive'}</span></td>
       <td style="display:flex;gap:6px;">
-        <button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="showToast('Opening ${c.name} profile…')"><i class="fas fa-user"></i> Profile</button>
+        <button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="openContractorProfile(${i})"><i class="fas fa-user"></i> Profile</button>
         <button class="btn btn-outline" style="padding:3px 10px;font-size:11px;" onclick="showToast('Edit form for ${c.name}')"><i class="fas fa-pencil-alt"></i> Edit</button>
       </td>
     </tr>`).join('');
@@ -1182,7 +1182,7 @@ function initKanban() {
       ${col.cards.length === 0
         ? `<div style="border:2px dashed #e5e7eb;border-radius:10px;padding:16px;text-align:center;font-size:11px;color:#d1d5db;">Drop here</div>`
         : col.cards.map(name => `
-          <div class="kanban-card stage-${col.id}" onclick="showToast('Opening ${name} candidate file…')">
+          <div class="kanban-card stage-${col.id}" onclick="openCandidateFile('${name}','${col.label}')">
             <div class="kc-name">${name}</div>
             <div class="kc-sub">${col.label} · NP</div>
           </div>`).join('')
@@ -1384,6 +1384,168 @@ function openAddUser() {
     <div style="display:flex;gap:10px;">
       <button class="btn btn-outline" style="flex:1;" onclick="closeModal()">Cancel</button>
       <button class="btn btn-gold" style="flex:1;" onclick="showToast('Invite sent!');closeModal()"><i class="fas fa-paper-plane"></i> Send Invite</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function openContractorProfile(idx) {
+  const c = contractors[idx];
+  const color = ['#6366f1','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316'][idx % 8];
+  const docs = [
+    { icon:'fa-file-contract', label:'W-9 / Tax Form',          file:'W9_' + c.name.split(' ')[1] + '_2026.pdf',   date:'1/10/2026', size:'84 KB',  status:'verified' },
+    { icon:'fa-shield-alt',    label:'Malpractice Insurance',   file:'MalpracticeIns_2026.pdf',                     date:'2/3/2026',  size:'312 KB', status:'verified' },
+    { icon:'fa-id-badge',      label:'NPI Certificate',         file:'NPI_Certificate.pdf',                         date:'3/18/2025', size:'56 KB',  status:'verified' },
+    { icon:'fa-pills',         label:'DEA Registration',        file:'DEA_Registration.pdf',                        date:'',          size:'',       status:'missing'  },
+    { icon:'fa-file-alt',      label:'CV / Résumé',             file:'CV_' + c.name.split(' ')[1] + '_2026.pdf',    date:'4/15/2026', size:'248 KB', status:'uploaded' },
+    { icon:'fa-university',    label:'Medical License (FL)',    file:'FL_License_2026.pdf',                         date:'4/2/2026',  size:'120 KB', status:'verified' },
+  ];
+  document.getElementById('modal-content').innerHTML = `
+    <div style="max-width:580px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800;">${c.name.charAt(0)}</div>
+          <div>
+            <div style="font-size:16px;font-weight:800;color:#111827;">${c.name}, ${c.grp}</div>
+            <div style="font-size:12px;color:#6b7280;">${c.co} · ${c.ein}</div>
+          </div>
+        </div>
+        <button onclick="closeModal()" style="background:none;border:none;font-size:18px;color:#9ca3af;cursor:pointer;">✕</button>
+      </div>
+      <!-- Tabs -->
+      <div style="display:flex;border-bottom:2px solid #e5e7eb;margin-bottom:18px;gap:0;" id="cprof-tabs">
+        <div class="cprof-tab active" onclick="showCProfTab('docs')" style="padding:8px 16px;font-size:13px;font-weight:700;color:var(--gold);border-bottom:2px solid var(--gold);margin-bottom:-2px;cursor:pointer;">Documents</div>
+        <div class="cprof-tab" onclick="showCProfTab('payroll')" style="padding:8px 16px;font-size:13px;color:#6b7280;cursor:pointer;">Payroll</div>
+        <div class="cprof-tab" onclick="showCProfTab('licenses')" style="padding:8px 16px;font-size:13px;color:#6b7280;cursor:pointer;">Licenses</div>
+        <div class="cprof-tab" onclick="showCProfTab('profile')" style="padding:8px 16px;font-size:13px;color:#6b7280;cursor:pointer;">Profile</div>
+      </div>
+      <!-- Documents tab -->
+      <div id="cprof-docs">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-size:12px;color:#6b7280;">Admin can upload and manage documents for this contractor.</div>
+          <button class="btn btn-gold" style="font-size:11px;padding:5px 12px;" onclick="showToast('File picker — select document type then upload')"><i class="fas fa-upload"></i> Upload Doc</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${docs.map(d => `
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;background:${d.status==='missing'?'#fef2f2':'#fff'};">
+              <div style="width:36px;height:36px;border-radius:8px;background:${d.status==='missing'?'rgba(239,68,68,0.1)':d.status==='verified'?'rgba(16,185,129,0.1)':'rgba(201,168,76,0.1)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fas ${d.icon}" style="color:${d.status==='missing'?'#ef4444':d.status==='verified'?'#10b981':'#C9A84C'};font-size:14px;"></i>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;color:#111827;">${d.label}</div>
+                ${d.status==='missing'
+                  ? `<div style="font-size:11px;color:#ef4444;"><i class="fas fa-exclamation-circle" style="margin-right:3px;"></i>Missing — upload required</div>`
+                  : `<div style="font-size:11px;color:#6b7280;">${d.file} · ${d.date} · ${d.size}</div>`
+                }
+              </div>
+              <div style="display:flex;gap:6px;">
+                ${d.status==='missing'
+                  ? `<button class="btn btn-gold" style="font-size:11px;padding:4px 10px;" onclick="showToast('Upload ${d.label}')"><i class="fas fa-upload"></i> Upload</button>`
+                  : `<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="showToast('Downloading ${d.file}…')"><i class="fas fa-download"></i></button>
+                     <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="showToast('Replace ${d.label}')"><i class="fas fa-sync-alt"></i></button>`
+                }
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <!-- Payroll tab -->
+      <div id="cprof-payroll" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div style="background:#f9fafb;border-radius:10px;padding:14px;text-align:center;"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Total Earned</div><div style="font-size:20px;font-weight:900;color:#111827;margin-top:4px;">$184,200</div></div>
+          <div style="background:#f9fafb;border-radius:10px;padding:14px;text-align:center;"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Total Cases</div><div style="font-size:20px;font-weight:900;color:#111827;margin-top:4px;">18,420</div></div>
+          <div style="background:#f9fafb;border-radius:10px;padding:14px;text-align:center;"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Periods</div><div style="font-size:20px;font-weight:900;color:#111827;margin-top:4px;">8</div></div>
+        </div>
+        <div style="font-size:12px;color:#6b7280;text-align:center;padding:20px;">Full payroll history available in Contractor Payroll screen</div>
+      </div>
+      <!-- Licenses tab -->
+      <div id="cprof-licenses" style="display:none;">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${['FL · NP License · #NP12345 · Exp 12/2027','TX · NP License · #TX98765 · Exp 06/2026','GA · NP License · #GA55432 · Exp 03/2027'].map(l=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;">
+              <div><i class="fas fa-map-marker-alt" style="color:var(--gold);margin-right:8px;"></i><span style="font-size:13px;font-weight:600;">${l}</span></div>
+              <span class="badge-pill badge-green">Active</span>
+            </div>`).join('')}
+          <button class="btn btn-outline" style="margin-top:4px;" onclick="showToast('Add license form')"><i class="fas fa-plus"></i> Add License</button>
+        </div>
+      </div>
+      <!-- Profile tab -->
+      <div id="cprof-profile" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
+          <div><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">Email</div><div>${c.email}</div></div>
+          <div><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">Group</div><div>${c.grp}</div></div>
+          <div><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">Company</div><div>${c.co}</div></div>
+          <div><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">EIN / SSN</div><div style="font-family:monospace;">${c.ein}</div></div>
+          <div><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:3px;">Status</div><div><span class="badge-pill ${c.active?'badge-green':'badge-gray'}">${c.active?'Active':'Inactive'}</span></div></div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function showCProfTab(tab) {
+  ['docs','payroll','licenses','profile'].forEach(t => {
+    const el = document.getElementById('cprof-'+t);
+    if (el) el.style.display = t===tab ? '' : 'none';
+  });
+  document.querySelectorAll('.cprof-tab').forEach((el,i) => {
+    const tabs = ['docs','payroll','licenses','profile'];
+    const active = tabs[i] === tab;
+    el.style.color = active ? 'var(--gold)' : '#6b7280';
+    el.style.borderBottom = active ? '2px solid var(--gold)' : 'none';
+    el.style.marginBottom = active ? '-2px' : '0';
+    el.style.fontWeight = active ? '700' : '400';
+  });
+}
+
+function openCandidateFile(name, stage) {
+  const candidateDocs = [
+    { icon:'fa-file-alt',      label:'Application Form',        file:'Application_' + name.split(' ')[1] + '.pdf', date:'5/10/2026', size:'120 KB', status:'uploaded' },
+    { icon:'fa-search',        label:'Background Check',        file:'',   date:'', size:'', status:'missing' },
+    { icon:'fa-handshake',     label:'Offer Letter',            file:'',   date:'', size:'', status: stage==='Offer Sent'||stage==='Hired' ? 'uploaded' : 'missing' },
+    { icon:'fa-clipboard-check',label:'Credentialing Checklist',file:'',   date:'', size:'', status:'missing' },
+    { icon:'fa-file-contract', label:'W-9 / Tax Form',          file:'',   date:'', size:'', status: stage==='Hired' ? 'uploaded' : 'missing' },
+    { icon:'fa-id-badge',      label:'NPI Certificate',         file:'',   date:'', size:'', status: stage==='Hired' ? 'uploaded' : 'missing' },
+  ];
+  document.getElementById('modal-content').innerHTML = `
+    <div style="max-width:540px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+        <div>
+          <div style="font-size:16px;font-weight:800;color:#111827;">${name}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <span style="font-size:12px;color:#6b7280;">Candidate</span>
+            <span class="badge-pill badge-${stage==='Hired'?'green':stage==='Offer Sent'?'blue':stage==='Interview'?'gold':'gray'}">${stage}</span>
+          </div>
+        </div>
+        <button onclick="closeModal()" style="background:none;border:none;font-size:18px;color:#9ca3af;cursor:pointer;">✕</button>
+      </div>
+      <!-- Tabs -->
+      <div style="display:flex;border-bottom:2px solid #e5e7eb;margin-bottom:18px;">
+        <div style="padding:8px 16px;font-size:13px;font-weight:700;color:var(--gold);border-bottom:2px solid var(--gold);margin-bottom:-2px;cursor:pointer;">Documents</div>
+        <div style="padding:8px 16px;font-size:13px;color:#6b7280;cursor:pointer;" onclick="showToast('Application form details for ${name}')">Application</div>
+        <div style="padding:8px 16px;font-size:13px;color:#6b7280;cursor:pointer;" onclick="showToast('Notes for ${name}')">Notes</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:12px;color:#6b7280;">${candidateDocs.filter(d=>d.status==='missing').length} document(s) still needed</div>
+        <button class="btn btn-gold" style="font-size:11px;padding:5px 12px;" onclick="showToast('Select document type and upload file')"><i class="fas fa-upload"></i> Upload Doc</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${candidateDocs.map(d => `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;background:${d.status==='missing'?'#fef2f2':'#fff'};">
+            <div style="width:34px;height:34px;border-radius:8px;background:${d.status==='missing'?'rgba(239,68,68,0.1)':d.status==='verified'?'rgba(16,185,129,0.1)':'rgba(201,168,76,0.1)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas ${d.icon}" style="color:${d.status==='missing'?'#ef4444':d.status==='verified'?'#10b981':'#C9A84C'};font-size:13px;"></i>
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;color:#111827;">${d.label}</div>
+              ${d.status==='missing'
+                ? `<div style="font-size:11px;color:#ef4444;"><i class="fas fa-exclamation-circle" style="margin-right:3px;"></i>Not yet uploaded</div>`
+                : `<div style="font-size:11px;color:#6b7280;">${d.file||d.label.replace(/ /g,'_')+'_'+name.split(' ')[1]+'.pdf'} · Uploaded</div>`
+              }
+            </div>
+            ${d.status==='missing'
+              ? `<button class="btn btn-gold" style="font-size:11px;padding:4px 10px;" onclick="showToast('Upload ${d.label} for ${name}')"><i class="fas fa-upload"></i> Upload</button>`
+              : `<button class="btn btn-outline" style="font-size:11px;padding:4px 10px;" onclick="showToast('Downloading…')"><i class="fas fa-download"></i></button>`
+            }
+          </div>`).join('')}
+      </div>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
 }
